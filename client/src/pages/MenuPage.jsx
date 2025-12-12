@@ -10,22 +10,37 @@ export default function MenuPage() {
   const totalItems = getTotalItems();
   const [searchParams] = useSearchParams();
   const searchQuery = searchParams.get('search') || '';
+  const [activeFilter, setActiveFilter] = useState('all');
 
   const filteredItems = useMemo(() => {
-    if (!searchQuery) return MENU_ITEMS;
-    const lowerQuery = searchQuery.toLowerCase();
-    return MENU_ITEMS.filter(item => 
-      item.name.toLowerCase().includes(lowerQuery) || 
-      item.description.toLowerCase().includes(lowerQuery) ||
-      item.category.toLowerCase().includes(lowerQuery)
-    );
-  }, [searchQuery]);
+    let items = MENU_ITEMS;
+
+    // Apply category filter
+    if (activeFilter !== 'all') {
+      items = items.filter(item => item.category === activeFilter);
+    }
+
+    // Apply search filter
+    if (searchQuery) {
+      const lowerQuery = searchQuery.toLowerCase();
+      items = items.filter(item => 
+        item.name.toLowerCase().includes(lowerQuery) || 
+        item.description.toLowerCase().includes(lowerQuery) ||
+        item.category.toLowerCase().includes(lowerQuery)
+      );
+    }
+
+    return items;
+  }, [searchQuery, activeFilter]);
 
   return (
-    <div className="px-4 md:px-6 py-6 pb-24">
+    <div className="px-4 md:px-6 py-6 pb-32">
       {/* Filter Chips */}
       <div className="mb-6 animate-fade-in-up">
-        <FilterChips />
+        <FilterChips 
+          activeFilter={activeFilter} 
+          onFilterChange={setActiveFilter} 
+        />
       </div>
 
       {/* Menu Grid */}
@@ -37,7 +52,11 @@ export default function MenuPage() {
         </div>
       ) : (
         <div className="text-center py-12">
-          <p className="text-gray-500 text-lg">No items found matching "{searchQuery}"</p>
+          <p className="text-gray-500 text-lg">
+            {searchQuery 
+              ? `No items found matching "${searchQuery}"` 
+              : 'No items in this category'}
+          </p>
         </div>
       )}
     </div>

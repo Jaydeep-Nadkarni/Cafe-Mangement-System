@@ -20,9 +20,9 @@ export default function BottomOrderBar() {
 
   return (
     <>
-      {/* Bottom Order Bar */}
+      {/* Bottom Order Bar - positioned above nav bar */}
       <div
-        className={`fixed bottom-6 left-4 right-4 z-50 transition-all duration-500 transform ${
+        className={`fixed bottom-20 left-4 right-4 z-50 transition-all duration-500 transform ${
           hasItems
             ? 'translate-y-0 opacity-100'
             : 'translate-y-24 opacity-0 pointer-events-none'
@@ -30,11 +30,11 @@ export default function BottomOrderBar() {
       >
         <button
           onClick={() => navigate('/order-summary')}
-          className="w-full bg-[var(--color-charcoal)]/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl shadow-gray-900/20 flex items-center justify-between group hover:bg-black transition-all duration-300 border border-white/10"
+          className="w-full bg-gray-900 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between group hover:bg-gray-800 transition-all duration-300"
         >
           <div className="flex items-center gap-4">
-            <div className="bg-white/10 p-2.5 rounded-xl group-hover:bg-primary group-hover:text-gray-900 transition-colors duration-300">
-              <ShoppingBag className="w-5 h-5" />
+            <div className="bg-primary p-2.5 rounded-xl">
+              <ShoppingBag className="w-5 h-5 text-gray-900" />
             </div>
             <div className="flex flex-col items-start">
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">Total</span>
