@@ -1,0 +1,382 @@
+[
+  {
+    "id": "1",
+    "name": "Espresso",
+    "category": "coffee",
+    "price": 2.99,
+    "image": "/images/espresso.jpg",
+    "description": "Rich and bold shot of authentic Italian espresso",
+    "ingredients": ["Espresso beans", "Water"],
+    "allergens": [],
+    "nutritionalInfo": {
+      "calories": 5,
+      "protein": "0.2g",
+      "carbs": "1g",
+      "fat": "0g",
+      "caffeine": "64mg"
+    },
+    "available": true,
+    "preparationTime": 2
+  },
+  {
+    "id": "2",
+    "name": "Cappuccino",
+    "category": "coffee",
+    "price": 4.49,
+    "image": "/images/cappuccino.jpg",
+    "description": "Classic Italian coffee with steamed milk and foam",
+    "ingredients": ["Espresso", "Steamed milk", "Milk foam"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 120,
+      "protein": "6g",
+      "carbs": "12g",
+      "fat": "4g",
+      "caffeine": "64mg"
+    },
+    "available": true,
+    "preparationTime": 4
+  },
+  {
+    "id": "3",
+    "name": "Latte",
+    "category": "coffee",
+    "price": 4.99,
+    "image": "/images/latte.jpg",
+    "description": "Smooth espresso with plenty of steamed milk",
+    "ingredients": ["Espresso", "Steamed milk", "Light foam"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 190,
+      "protein": "9g",
+      "carbs": "18g",
+      "fat": "7g",
+      "caffeine": "64mg"
+    },
+    "available": true,
+    "preparationTime": 4
+  },
+  {
+    "id": "4",
+    "name": "Americano",
+    "category": "coffee",
+    "price": 3.49,
+    "image": "/images/americano.jpg",
+    "description": "Espresso diluted with hot water for a smooth taste",
+    "ingredients": ["Espresso", "Hot water"],
+    "allergens": [],
+    "nutritionalInfo": {
+      "calories": 10,
+      "protein": "0.5g",
+      "carbs": "2g",
+      "fat": "0g",
+      "caffeine": "96mg"
+    },
+    "available": true,
+    "preparationTime": 3
+  },
+  {
+    "id": "5",
+    "name": "Mocha",
+    "category": "coffee",
+    "price": 5.49,
+    "image": "/images/mocha.jpg",
+    "description": "Espresso with chocolate, steamed milk, and whipped cream",
+    "ingredients": ["Espresso", "Chocolate syrup", "Steamed milk", "Whipped cream"],
+    "allergens": ["Dairy", "Soy"],
+    "nutritionalInfo": {
+      "calories": 290,
+      "protein": "10g",
+      "carbs": "38g",
+      "fat": "11g",
+      "caffeine": "95mg"
+    },
+    "available": true,
+    "preparationTime": 5
+  },
+  {
+    "id": "6",
+    "name": "Caramel Macchiato",
+    "category": "coffee",
+    "price": 5.99,
+    "image": "/images/caramel-macchiato.jpg",
+    "description": "Vanilla-flavored drink with espresso and caramel drizzle",
+    "ingredients": ["Vanilla syrup", "Steamed milk", "Espresso", "Caramel sauce"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 250,
+      "protein": "8g",
+      "carbs": "34g",
+      "fat": "9g",
+      "caffeine": "75mg"
+    },
+    "available": true,
+    "preparationTime": 5
+  },
+  {
+    "id": "7",
+    "name": "Green Tea Latte",
+    "category": "tea",
+    "price": 4.99,
+    "image": "/images/green-tea-latte.jpg",
+    "description": "Premium matcha green tea with steamed milk",
+    "ingredients": ["Matcha powder", "Steamed milk", "Sugar"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 210,
+      "protein": "7g",
+      "carbs": "28g",
+      "fat": "6g",
+      "caffeine": "35mg"
+    },
+    "available": true,
+    "preparationTime": 4
+  },
+  {
+    "id": "8",
+    "name": "Chai Latte",
+    "category": "tea",
+    "price": 4.79,
+    "image": "/images/chai-latte.jpg",
+    "description": "Spiced black tea with steamed milk and honey",
+    "ingredients": ["Chai tea concentrate", "Steamed milk", "Honey", "Spices"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 240,
+      "protein": "8g",
+      "carbs": "42g",
+      "fat": "5g",
+      "caffeine": "50mg"
+    },
+    "available": true,
+    "preparationTime": 4
+  },
+  {
+    "id": "9",
+    "name": "Iced Coffee",
+    "category": "cold-drinks",
+    "price": 3.99,
+    "image": "/images/iced-coffee.jpg",
+    "description": "Chilled coffee served over ice",
+    "ingredients": ["Coffee", "Ice", "Milk", "Simple syrup"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 80,
+      "protein": "2g",
+      "carbs": "15g",
+      "fat": "2g",
+      "caffeine": "165mg"
+    },
+    "available": true,
+    "preparationTime": 3
+  },
+  {
+    "id": "10",
+    "name": "Frappuccino",
+    "category": "cold-drinks",
+    "price": 5.99,
+    "image": "/images/frappuccino.jpg",
+    "description": "Blended ice coffee with whipped cream",
+    "ingredients": ["Coffee", "Milk", "Ice", "Sugar", "Whipped cream"],
+    "allergens": ["Dairy"],
+    "nutritionalInfo": {
+      "calories": 420,
+      "protein": "6g",
+      "carbs": "66g",
+      "fat": "15g",
+      "caffeine": "100mg"
+    },
+    "available": true,
+    "preparationTime": 5
+  },
+  {
+    "id": "11",
+    "name": "Smoothie Bowl",
+    "category": "food",
+    "price": 8.99,
+    "image": "/images/smoothie-bowl.jpg",
+    "description": "Acai berry smoothie topped with granola and fresh fruits",
+    "ingredients": ["Acai", "Banana", "Berries", "Granola", "Honey", "Coconut"],
+    "allergens": ["Nuts", "Gluten"],
+    "nutritionalInfo": {
+      "calories": 380,
+      "protein": "8g",
+      "carbs": "72g",
+      "fat": "10g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 6
+  },
+  {
+    "id": "12",
+    "name": "Avocado Toast",
+    "category": "food",
+    "price": 7.99,
+    "image": "/images/avocado-toast.jpg",
+    "description": "Smashed avocado on sourdough with cherry tomatoes and feta",
+    "ingredients": ["Sourdough bread", "Avocado", "Cherry tomatoes", "Feta cheese", "Olive oil", "Seasoning"],
+    "allergens": ["Gluten", "Dairy"],
+    "nutritionalInfo": {
+      "calories": 420,
+      "protein": "12g",
+      "carbs": "38g",
+      "fat": "26g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 7
+  },
+  {
+    "id": "13",
+    "name": "Croissant",
+    "category": "pastries",
+    "price": 3.49,
+    "image": "/images/croissant.jpg",
+    "description": "Buttery, flaky French pastry",
+    "ingredients": ["Wheat flour", "Butter", "Milk", "Yeast", "Sugar", "Salt"],
+    "allergens": ["Gluten", "Dairy", "Eggs"],
+    "nutritionalInfo": {
+      "calories": 270,
+      "protein": "5g",
+      "carbs": "30g",
+      "fat": "14g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 2
+  },
+  {
+    "id": "14",
+    "name": "Blueberry Muffin",
+    "category": "pastries",
+    "price": 3.99,
+    "image": "/images/blueberry-muffin.jpg",
+    "description": "Fresh-baked muffin loaded with blueberries",
+    "ingredients": ["Flour", "Blueberries", "Sugar", "Butter", "Eggs", "Milk"],
+    "allergens": ["Gluten", "Dairy", "Eggs"],
+    "nutritionalInfo": {
+      "calories": 350,
+      "protein": "6g",
+      "carbs": "52g",
+      "fat": "13g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 2
+  },
+  {
+    "id": "15",
+    "name": "Chocolate Chip Cookie",
+    "category": "pastries",
+    "price": 2.99,
+    "image": "/images/chocolate-cookie.jpg",
+    "description": "Classic homemade cookie with chocolate chips",
+    "ingredients": ["Flour", "Chocolate chips", "Butter", "Sugar", "Eggs", "Vanilla"],
+    "allergens": ["Gluten", "Dairy", "Eggs", "Soy"],
+    "nutritionalInfo": {
+      "calories": 220,
+      "protein": "3g",
+      "carbs": "28g",
+      "fat": "11g",
+      "caffeine": "5mg"
+    },
+    "available": true,
+    "preparationTime": 1
+  },
+  {
+    "id": "16",
+    "name": "Club Sandwich",
+    "category": "food",
+    "price": 9.99,
+    "image": "/images/club-sandwich.jpg",
+    "description": "Triple-decker sandwich with turkey, bacon, lettuce, and tomato",
+    "ingredients": ["Bread", "Turkey", "Bacon", "Lettuce", "Tomato", "Cheese", "Mayo"],
+    "allergens": ["Gluten", "Dairy", "Eggs"],
+    "nutritionalInfo": {
+      "calories": 580,
+      "protein": "32g",
+      "carbs": "45g",
+      "fat": "28g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 8
+  },
+  {
+    "id": "17",
+    "name": "Caesar Salad",
+    "category": "food",
+    "price": 8.49,
+    "image": "/images/caesar-salad.jpg",
+    "description": "Crisp romaine lettuce with Caesar dressing and croutons",
+    "ingredients": ["Romaine lettuce", "Caesar dressing", "Parmesan cheese", "Croutons", "Lemon"],
+    "allergens": ["Gluten", "Dairy", "Eggs", "Fish"],
+    "nutritionalInfo": {
+      "calories": 320,
+      "protein": "12g",
+      "carbs": "18g",
+      "fat": "22g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 6
+  },
+  {
+    "id": "18",
+    "name": "Fresh Orange Juice",
+    "category": "cold-drinks",
+    "price": 4.49,
+    "image": "/images/orange-juice.jpg",
+    "description": "Freshly squeezed orange juice",
+    "ingredients": ["Fresh oranges"],
+    "allergens": [],
+    "nutritionalInfo": {
+      "calories": 110,
+      "protein": "2g",
+      "carbs": "26g",
+      "fat": "0g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 3
+  },
+  {
+    "id": "19",
+    "name": "Hot Chocolate",
+    "category": "hot-drinks",
+    "price": 4.29,
+    "image": "/images/hot-chocolate.jpg",
+    "description": "Rich hot chocolate with whipped cream and marshmallows",
+    "ingredients": ["Milk", "Chocolate", "Sugar", "Whipped cream", "Marshmallows"],
+    "allergens": ["Dairy", "Soy"],
+    "nutritionalInfo": {
+      "calories": 380,
+      "protein": "10g",
+      "carbs": "48g",
+      "fat": "16g",
+      "caffeine": "15mg"
+    },
+    "available": true,
+    "preparationTime": 4
+  },
+  {
+    "id": "20",
+    "name": "Bagel with Cream Cheese",
+    "category": "food",
+    "price": 4.99,
+    "image": "/images/bagel.jpg",
+    "description": "Toasted bagel with cream cheese spread",
+    "ingredients": ["Bagel", "Cream cheese"],
+    "allergens": ["Gluten", "Dairy"],
+    "nutritionalInfo": {
+      "calories": 310,
+      "protein": "11g",
+      "carbs": "52g",
+      "fat": "7g",
+      "caffeine": "0mg"
+    },
+    "available": true,
+    "preparationTime": 3
+  }
+]
