@@ -6,3 +6,4 @@ export { default as FilterChips } from './FilterChips';
 export { default as MenuCard } from './MenuCard';
 export { default as MobileNumberModal } from './MobileNumberModal';
 export { default as PageTransition } from './PageTransition';
+export { default as AIOptionsModal } from './AIOptionsModal';
