@@ -2,22 +2,8 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import MobileNumberModal from '../components/MobileNumberModal';
-
-// Mock menu data with prices
-const MENU_DATA = {
-  1: { name: 'Espresso', price: 3.99 },
-  2: { name: 'Cappuccino', price: 4.49 },
-  3: { name: 'Croissant', price: 3.50 },
-  4: { name: 'Chocolate Muffin', price: 3.99 },
-  5: { name: 'Latte', price: 4.99 },
-  6: { name: 'Avocado Toast', price: 6.99 },
-  7: { name: 'Cheesecake', price: 5.99 },
-  8: { name: 'Club Sandwich', price: 7.99 },
-  9: { name: 'Macchiato', price: 4.49 },
-  10: { name: 'Blueberry Muffin', price: 3.99 },
-  11: { name: 'Tiramisu', price: 5.99 },
-  12: { name: 'Panini', price: 6.99 }
-};
+import { ShoppingCart, Check, X, Lightbulb, ArrowRight, Tag } from 'lucide-react';
+import { MENU_ITEMS } from '../data/menuItems';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
@@ -30,14 +16,18 @@ export default function OrderSummaryPage() {
   if (Object.keys(cart).length === 0) {
     return (
       <div className="px-4 py-12 text-center animate-fade-in-up">
-        <div className="text-6xl mb-4">🛒</div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Your cart is empty</h2>
-        <p className="text-gray-600 mb-6">Add items to proceed with checkout</p>
+        <div className="flex justify-center mb-4">
+          <div className="bg-gray-100 p-6 rounded-full">
+            <ShoppingCart className="w-12 h-12 text-gray-400" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2 font-display">Your cart is empty</h2>
+        <p className="text-gray-500 mb-8 font-body">Add some delicious items to proceed</p>
         <button
           onClick={() => navigate('/menu')}
-          className="bg-primary hover:bg-primary-dark text-gray-900 font-semibold px-8 py-3 rounded-2xl transition-colors"
+          className="bg-primary hover:bg-primary-dark text-white font-bold px-8 py-3 rounded-xl transition-all duration-300 shadow-lg hover:shadow-yellow"
         >
-          Continue Shopping
+          Browse Menu
         </button>
       </div>
     );
@@ -45,10 +35,11 @@ export default function OrderSummaryPage() {
 
   // Calculate pricing
   const subtotal = Object.entries(cart).reduce((sum, [itemId, qty]) => {
-    return sum + (MENU_DATA[itemId]?.price || 0) * qty;
+    const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
+    return sum + (item ? item.price * qty : 0);
   }, 0);
 
-  const taxRate = 0.08; // 8% tax
+  const taxRate = 0.05; // 5% GST
   const tax = subtotal * taxRate;
 
   // Coupon discount - simple mock coupons
@@ -84,138 +75,124 @@ export default function OrderSummaryPage() {
     <div className="px-4 md:px-6 py-6 max-w-2xl mx-auto pb-32">
       {/* Page Header */}
       <div className="mb-8 animate-fade-in-up">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Order Summary</h1>
-        <p className="text-gray-600">Review your order before payment</p>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2 font-display">Order Summary</h1>
+        <p className="text-gray-500 font-body">Review your order before payment</p>
       </div>
 
       {/* Items List */}
-      <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8 mb-6 animate-fade-in-up">
-        <h2 className="text-lg font-bold text-gray-900 mb-6">Your Items</h2>
-        <div className="space-y-4">
+      <div className="bg-white rounded-3xl shadow-card p-6 md:p-8 mb-6 animate-fade-in-up border border-gray-100">
+        <h2 className="text-lg font-bold text-gray-900 mb-6 font-display">Your Items</h2>
+        <div className="space-y-6">
           {Object.entries(cart).map(([itemId, quantity]) => {
-            const item = MENU_DATA[itemId];
+            const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
+            if (!item) return null;
             const itemTotal = item.price * quantity;
+            
             return (
-              <div
-                key={itemId}
-                className="flex items-center justify-between pb-4 border-b border-gray-100 last:border-b-0 last:pb-0"
-              >
-                <div className="flex-1">
-                  <h3 className="font-semibold text-gray-900">{item.name}</h3>
-                  <p className="text-sm text-gray-500">Qty: {quantity}</p>
+              <div key={itemId} className="flex items-start justify-between group">
+                <div className="flex gap-4">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                    <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 font-display">{item.name}</h3>
+                    <p className="text-sm text-gray-500 font-mono mt-1">
+                      {quantity} x ₹{item.price}
+                    </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="font-bold text-gray-900">${itemTotal.toFixed(2)}</p>
-                  <p className="text-xs text-gray-500">
-                    ${item.price.toFixed(2)} each
-                  </p>
-                </div>
+                <span className="font-bold text-gray-900 font-mono">₹{itemTotal}</span>
               </div>
             );
           })}
         </div>
-      </div>
+        
+        <div className="my-6 border-t border-gray-100" />
 
-      {/* Coupon Section */}
-      <div className="bg-gradient-to-br from-primary/10 to-primary-light/10 rounded-3xl p-6 border border-primary/20 mb-6 animate-fade-in-up">
-        <h3 className="text-sm font-bold text-primary-dark mb-4 uppercase tracking-wider">
-          Apply Coupon or Reward
-        </h3>
-        {!appliedCoupon ? (
-          <div className="flex gap-3">
-            <input
-              type="text"
-              placeholder="Enter coupon code"
-              value={couponInput}
-              onChange={(e) => setCouponInput(e.target.value.toUpperCase())}
-              className="flex-1 bg-white border border-primary/30 rounded-2xl px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
-            />
-            <button
-              onClick={handleApplyCoupon}
-              className="px-6 py-3 bg-primary hover:bg-primary-dark text-gray-900 font-semibold rounded-2xl transition-colors text-sm whitespace-nowrap"
-            >
-              Apply
-            </button>
-          </div>
-        ) : (
-          <div className="flex items-center justify-between bg-white rounded-2xl px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="text-lg">✓</span>
-              <span className="font-semibold text-primary-dark">{appliedCoupon}</span>
-              <span className="text-sm text-gray-600">Applied</span>
+        {/* Coupon Section */}
+        <div className="mb-6">
+          {!appliedCoupon ? (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Enter coupon code"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono text-sm uppercase"
+                />
+              </div>
+              <button
+                onClick={handleApplyCoupon}
+                disabled={!couponInput}
+                className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Apply
+              </button>
             </div>
-            <button
-              onClick={handleRemoveCoupon}
-              className="text-gray-500 hover:text-gray-700 transition-colors"
-            >
-              ✕
-            </button>
-          </div>
-        )}
-        <p className="text-xs text-gray-600 mt-3">
-          💡 Try: SAVE10 (10%), SAVE20 (20%), or WELCOME5 (5%)
-        </p>
-      </div>
-
-      {/* Price Breakdown */}
-      <div className="bg-white rounded-3xl shadow-sm p-6 md:p-8 animate-fade-in-up">
-        {/* Subtotal */}
-        <div className="flex justify-between items-center pb-4 border-b border-gray-100">
-          <span className="text-gray-600">Subtotal</span>
-          <span className="font-semibold text-gray-900">${subtotal.toFixed(2)}</span>
+          ) : (
+            <div className="flex items-center justify-between bg-green-50 border border-green-100 p-4 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Check className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="font-bold text-green-800 text-sm">Coupon Applied</p>
+                  <p className="text-xs text-green-600 font-mono">{appliedCoupon}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRemoveCoupon}
+                className="p-2 hover:bg-green-100 rounded-lg text-green-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* Tax */}
-        <div className="flex justify-between items-center py-4 border-b border-gray-100">
-          <span className="text-gray-600">Tax (8%)</span>
-          <span className="font-semibold text-gray-900">${tax.toFixed(2)}</span>
-        </div>
-
-        {/* Discount */}
-        {discountAmount > 0 && (
-          <div className="flex justify-between items-center py-4 border-b border-gray-100">
-            <span className="text-green-600 font-medium">
-              Discount ({(discountRate * 100).toFixed(0)}%)
-            </span>
-            <span className="font-semibold text-green-600">
-              -${discountAmount.toFixed(2)}
-            </span>
+        {/* Bill Details */}
+        <div className="space-y-3 text-sm">
+          <div className="flex justify-between text-gray-600">
+            <span>Subtotal</span>
+            <span className="font-mono">₹{subtotal.toFixed(2)}</span>
           </div>
-        )}
-
-        {/* Total Payable */}
-        <div className="flex justify-between items-center pt-6">
-          <span className="text-lg font-bold text-gray-900">Total Payable</span>
-          <div className="text-right">
-            <p className="text-3xl font-bold bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent">
-              ${total.toFixed(2)}
-            </p>
-            <p className="text-xs text-gray-500 mt-1">
-              {Object.values(cart).reduce((sum, qty) => sum + qty, 0)} items
-            </p>
+          <div className="flex justify-between text-gray-600">
+            <span>Tax (5%)</span>
+            <span className="font-mono">₹{tax.toFixed(2)}</span>
+          </div>
+          {appliedCoupon && (
+            <div className="flex justify-between text-green-600 font-medium">
+              <span>Discount</span>
+              <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+            </div>
+          )}
+          <div className="border-t border-dashed border-gray-200 my-3 pt-3 flex justify-between items-end">
+            <span className="font-bold text-gray-900 text-lg font-display">Total</span>
+            <span className="font-bold text-primary text-2xl font-mono">₹{total.toFixed(2)}</span>
           </div>
         </div>
       </div>
 
-      {/* Pay Now Button */}
+      {/* Gamification Tip */}
+      <div className="bg-gradient-to-r from-primary/10 to-primary-light/10 border border-primary/20 rounded-2xl p-4 mb-8 flex items-start gap-3 animate-fade-in-up delay-100">
+        <div className="bg-white p-2 rounded-full shadow-sm">
+          <Lightbulb className="w-5 h-5 text-primary" />
+        </div>
+        <div>
+          <h4 className="font-bold text-gray-900 text-sm mb-1">Did you know?</h4>
+          <p className="text-xs text-gray-600 leading-relaxed">
+            You can play mini-games while waiting for your order to win exclusive discounts on your next visit!
+          </p>
+        </div>
+      </div>
+
+      {/* Pay Button */}
       <button
         onClick={handlePayNow}
-        className="w-full mt-8 bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 animate-fade-in-up flex items-center justify-center gap-2 group"
+        className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-yellow transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group"
       >
-        <span>Pay Now</span>
-        <svg
-          className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth={2.5}
-            d="M13 7l5 5m0 0l-5 5m5-5H6"
-          />
-        </svg>
+        <span>Proceed to Payment</span>
+        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
       </button>
 
       {/* Mobile Number Modal */}

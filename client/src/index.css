@@ -1,9 +1,17 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #FDD835;
-  --color-primary-dark: #F9A825;
-  --color-primary-light: #FEE082;
+  --color-primary: #F4B400;
+  --color-primary-dark: #D97706;
+  --color-primary-light: #FEF3C7;
+  --color-accent: #FF6B6B;
+  --color-bg-cream: #FAFAFA;
+  --color-text-main: #2D2424;
+  --color-text-body: #5D534A;
+  
+  --font-sans: "Inter", sans-serif;
+  --font-heading: "Outfit", sans-serif;
+  --font-mono: "Space Grotesk", monospace;
 }
 
 @layer base {
@@ -12,13 +20,21 @@
   }
   
   body {
-    @apply antialiased;
+    @apply antialiased bg-bg-cream text-text-body font-sans;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-heading text-text-main;
   }
 }
 
 @layer utilities {
-  .shadow-yellow {
-    @apply shadow-lg shadow-primary/30;
+  .shadow-soft {
+    box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
+  }
+  
+  .shadow-card {
+    box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
   }
   
   .animate-fade-in-up {

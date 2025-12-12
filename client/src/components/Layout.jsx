@@ -1,7 +1,7 @@
 import { useLocation } from 'react-router-dom';
 import Header from './Header';
-import BottomNav from './BottomNav';
 import BottomOrderBar from './BottomOrderBar';
+import BottomNav from './BottomNav';
 
 export default function Layout({ children }) {
   const location = useLocation();
@@ -10,7 +10,7 @@ export default function Layout({ children }) {
   const hideNav = ['/order-summary', '/payment-success'].includes(location.pathname);
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="min-h-screen bg-bg-cream flex flex-col font-sans">
       {/* Header */}
       <Header />
 
@@ -19,11 +19,11 @@ export default function Layout({ children }) {
         {children}
       </main>
 
-      {/* Bottom Order Bar */}
-      {!hideNav && <BottomOrderBar />}
-
       {/* Bottom Navigation */}
       {!hideNav && <BottomNav />}
+
+      {/* Bottom Order Bar */}
+      {!hideNav && <BottomOrderBar />}
     </div>
   );
 }

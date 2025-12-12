@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
+import { Check, AlertCircle, Loader2, Lock, ArrowRight } from 'lucide-react';
 
 export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData }) {
   const navigate = useNavigate();
@@ -141,7 +142,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
               </label>
               <div className="flex gap-2">
                 <div className="px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">
-                  🇮🇳 +91
+                  +91
                 </div>
                 <input
                   type="tel"
@@ -162,14 +163,17 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             <div className="flex justify-between items-center text-xs text-gray-500">
               <span>{mobileNumber.length}/10 digits</span>
               {mobileNumber.length === 10 && (
-                <span className="text-green-600 font-medium">✓ Valid</span>
+                <span className="text-green-600 font-medium flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Valid
+                </span>
               )}
             </div>
 
             {/* Error Message */}
             {error && (
-              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 animate-fade-in-up">
-                <p className="text-red-700 text-sm font-medium">⚠️ {error}</p>
+              <div className="bg-red-50 border border-red-200 rounded-2xl px-4 py-3 animate-fade-in-up flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 text-red-700" />
+                <p className="text-red-700 text-sm font-medium">{error}</p>
               </div>
             )}
 
@@ -181,25 +185,13 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             >
               {isSubmitting ? (
                 <>
-                  <span className="animate-spin">⏳</span>
+                  <Loader2 className="w-5 h-5 animate-spin" />
                   <span>Opening Payment...</span>
                 </>
               ) : (
                 <>
-                  <span>Proceed to Payment</span>
-                  <svg
-                    className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2.5}
-                      d="M13 7l5 5m0 0l-5 5m5-5H6"
-                    />
-                  </svg>
+                  <span>Pay ₹{orderData?.totalAmount?.toFixed(2)}</span>
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </>
               )}
             </button>
@@ -216,8 +208,9 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
           </form>
 
           {/* Info */}
-          <div className="mt-6 pt-6 border-t border-gray-100 text-xs text-gray-500 text-center">
-            <p>🔒 Your payment is secured by Razorpay. We never store card details.</p>
+          <div className="mt-6 pt-6 border-t border-gray-100 text-xs text-gray-500 text-center flex items-center justify-center gap-1">
+            <Lock className="w-3 h-3" />
+            <p>Your payment is secured by Razorpay. We never store card details.</p>
           </div>
         </div>
       </div>

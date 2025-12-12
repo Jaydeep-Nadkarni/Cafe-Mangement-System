@@ -1,93 +1,87 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
+import { Coffee, Search, X, Filter } from 'lucide-react';
 
 export default function Header() {
-  const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const handleSearch = (e) => {
+  // Sync local state with URL param when on menu page
+  useEffect(() => {
+    if (location.pathname === '/menu') {
+      const query = searchParams.get('search') || '';
+      setSearchQuery(query);
+    }
+  }, [location.pathname, searchParams]);
+
+  const handleSearchChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+
+    // If on menu page, update URL immediately for live filtering
+    if (location.pathname === '/menu') {
+      if (query) {
+        setSearchParams({ search: query });
+      } else {
+        setSearchParams({});
+      }
+    }
+  };
+
+  const handleSearchSubmit = (e) => {
     e.preventDefault();
-    if (searchQuery.trim()) {
+    if (location.pathname !== '/menu' && searchQuery.trim()) {
       navigate(`/menu?search=${encodeURIComponent(searchQuery)}`);
-      setIsSearchOpen(false);
-      setSearchQuery('');
     }
   };
 
   return (
-    <header className="sticky top-0 z-40 bg-white shadow-sm border-b border-gray-100">
-      <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-        {/* Logo */}
-        <div className="flex-shrink-0">
-          <h1 className="text-2xl font-bold text-primary">☕ Cafe</h1>
+    <header className="sticky top-0 z-40 bg-bg-cream/80 backdrop-blur-md border-b border-gray-100 shadow-soft">
+      <div className="max-w-7xl mx-auto px-4 py-4">
+        {/* Row 1: Logo */}
+        <div className="flex justify-center mb-4">
+          <div className="flex items-center gap-2">
+            <div className="bg-primary p-2 rounded-xl">
+              <Coffee className="w-6 h-6 text-white" />
+            </div>
+            <h1 className="text-2xl font-bold text-text-main tracking-tight font-heading">Cafe</h1>
+          </div>
         </div>
 
-        {/* Search Bar - Animated */}
-        <form
-          onSubmit={handleSearch}
-          className={`flex-1 mx-4 transition-all duration-300 ${
-            isSearchOpen ? 'max-w-md' : 'max-w-xs'
-          }`}
-        >
-          <div className="relative">
+        {/* Row 2: Search & Filter */}
+        <div className="flex gap-3">
+          <form onSubmit={handleSearchSubmit} className="flex-1 relative">
             <input
               type="text"
-              placeholder="Search menu..."
+              placeholder="Search for food, coffee..."
               value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => setIsSearchOpen(true)}
-              onBlur={() => {
-                if (!searchQuery) setIsSearchOpen(false);
-              }}
-              className={`w-full bg-gray-100 rounded-full px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 transition-all duration-300 ${
-                isSearchOpen ? 'py-3 pl-12' : 'py-2.5 pl-4'
-              }`}
+              onChange={handleSearchChange}
+              className="w-full bg-white border border-gray-200 rounded-2xl pl-11 pr-4 py-3 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all shadow-sm font-sans"
             />
-            <svg
-              className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400 pointer-events-none transition-opacity duration-300"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
             {searchQuery && (
               <button
                 type="button"
-                onClick={() => setSearchQuery('')}
-                className="absolute right-3.5 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
+                onClick={() => {
+                  setSearchQuery('');
+                  if (location.pathname === '/menu') setSearchParams({});
+                }}
+                className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
               >
-                ✕
+                <X className="w-4 h-4" />
               </button>
             )}
-          </div>
-        </form>
+          </form>
 
-        {/* Filter Button */}
-        <button
-          className="flex-shrink-0 p-2.5 hover:bg-gray-100 rounded-full transition-colors duration-200 ml-2"
-          title="Filters"
-        >
-          <svg
-            className="w-6 h-6 text-gray-600"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
+          <button
+            className="flex-shrink-0 bg-white border border-gray-200 p-3 rounded-2xl hover:border-primary hover:text-primary transition-colors shadow-sm"
+            title="Filters"
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
-            />
-          </svg>
-        </button>
+            <Filter className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
       </div>
     </header>
   );

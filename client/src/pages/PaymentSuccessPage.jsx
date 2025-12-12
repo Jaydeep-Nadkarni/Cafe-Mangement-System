@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { AlertTriangle, Check, ClipboardList, Bell, Clock, Phone, Home } from 'lucide-react';
 
 export default function PaymentSuccessPage() {
   const navigate = useNavigate();
@@ -44,7 +45,9 @@ export default function PaymentSuccessPage() {
   if (!paymentData) {
     return (
       <div className="px-4 py-12 text-center animate-fade-in-up">
-        <div className="text-6xl mb-4">⚠️</div>
+        <div className="flex justify-center mb-4">
+          <AlertTriangle className="w-16 h-16 text-yellow-500" />
+        </div>
         <h2 className="text-2xl font-bold text-gray-900 mb-2">Payment Data Not Found</h2>
         <p className="text-gray-600 mb-6">Redirecting you back to home...</p>
       </div>
@@ -64,7 +67,7 @@ export default function PaymentSuccessPage() {
               
               {/* Inner circle */}
               <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-primary-light/20 flex items-center justify-center">
-                <div className="text-6xl animate-bounce">✓</div>
+                <Check className="w-12 h-12 text-primary-dark animate-bounce" />
               </div>
             </div>
           </div>
@@ -97,7 +100,7 @@ export default function PaymentSuccessPage() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Amount Paid</span>
               <span className="font-bold text-gray-900 text-lg">
-                ${paymentData.amount.toFixed(2)}
+                ₹{paymentData.amount.toFixed(2)}
               </span>
             </div>
 
@@ -138,18 +141,20 @@ export default function PaymentSuccessPage() {
 
         {/* Next Steps */}
         <div className="bg-primary/10 border border-primary/20 rounded-3xl p-6 mb-8 animate-fade-in-up">
-          <h3 className="font-bold text-primary-dark mb-4">📋 What's Next?</h3>
+          <h3 className="font-bold text-primary-dark mb-4 flex items-center gap-2">
+            <ClipboardList className="w-5 h-5" /> What's Next?
+          </h3>
           <ul className="space-y-3 text-sm text-gray-700">
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 text-lg">🔔</span>
+            <li className="flex gap-3 items-center">
+              <Bell className="w-4 h-4 text-primary-dark" />
               <span>You'll receive an SMS with order details</span>
             </li>
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 text-lg">⏱️</span>
+            <li className="flex gap-3 items-center">
+              <Clock className="w-4 h-4 text-primary-dark" />
               <span>Your order will be prepared and delivered soon</span>
             </li>
-            <li className="flex gap-3">
-              <span className="flex-shrink-0 text-lg">📞</span>
+            <li className="flex gap-3 items-center">
+              <Phone className="w-4 h-4 text-primary-dark" />
               <span>You can track your order in the app</span>
             </li>
           </ul>
@@ -161,19 +166,7 @@ export default function PaymentSuccessPage() {
           className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group animate-fade-in-up"
         >
           <span>Back to Home</span>
-          <svg
-            className="w-5 h-5 group-hover:-rotate-45 transition-transform duration-300"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2.5}
-              d="M3 12l2.259-2.259a4 4 0 015.657 0L12 11m0 0l2.259-2.259a4 4 0 015.657 0L21 12m-2.75-7.25A6 6 0 0012 3m0 18a6 6 0 01-4.243-10.243m12.486 0A6 6 0 0121 12m-6 0v6m0-6v-6"
-            />
-          </svg>
+          <Home className="w-5 h-5 group-hover:-rotate-45 transition-transform duration-300" />
         </button>
 
         {/* Support Link */}
