@@ -126,7 +126,7 @@ export default function OrderSummaryPage() {
               <button
                 onClick={handleApplyCoupon}
                 disabled={!couponInput}
-                className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="bg-gray-200 text-[var(--color-charcoal)] px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 Apply
               </button>
@@ -168,7 +168,7 @@ export default function OrderSummaryPage() {
           )}
           <div className="border-t border-dashed border-gray-200 my-3 pt-3 flex justify-between items-end">
             <span className="font-bold text-gray-900 text-lg font-display">Total</span>
-            <span className="font-bold text-primary text-2xl font-mono">₹{total.toFixed(2)}</span>
+            <span className="font-bold text-[var(--color-charcoal)] text-2xl font-mono">₹{total.toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -189,7 +189,7 @@ export default function OrderSummaryPage() {
       {/* Pay Button */}
       <button
         onClick={handlePayNow}
-        className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-white font-bold py-4 rounded-2xl shadow-lg hover:shadow-yellow transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group"
+        className="w-full bg-[var(--color-charcoal)] hover:bg-black text-white font-bold py-4 rounded-2xl shadow-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group"
       >
         <span>Proceed to Payment</span>
         <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />

@@ -44,9 +44,9 @@ export default function Header() {
         <div className="flex justify-center mb-4">
           <div className="flex items-center gap-2">
             <div className="bg-primary p-2 rounded-xl">
-              <Coffee className="w-6 h-6 text-white" />
+              <Coffee className="w-6 h-6 text-[var(--color-charcoal)]" />
             </div>
-            <h1 className="text-2xl font-bold text-text-main tracking-tight font-heading">Cafe</h1>
+            <h1 className="text-2xl font-bold text-[var(--color-charcoal)] tracking-tight font-heading">Cafe</h1>
           </div>
         </div>
 

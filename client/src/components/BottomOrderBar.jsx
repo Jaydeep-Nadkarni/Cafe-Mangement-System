@@ -30,7 +30,7 @@ export default function BottomOrderBar() {
       >
         <button
           onClick={() => navigate('/order-summary')}
-          className="w-full bg-gray-900/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl shadow-gray-900/20 flex items-center justify-between group hover:bg-gray-800 transition-all duration-300 border border-white/10"
+          className="w-full bg-[var(--color-charcoal)]/95 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl shadow-gray-900/20 flex items-center justify-between group hover:bg-black transition-all duration-300 border border-white/10"
         >
           <div className="flex items-center gap-4">
             <div className="bg-white/10 p-2.5 rounded-xl group-hover:bg-primary group-hover:text-gray-900 transition-colors duration-300">

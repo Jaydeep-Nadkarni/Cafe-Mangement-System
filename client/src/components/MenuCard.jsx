@@ -47,7 +47,7 @@ export default function MenuCard({ item }) {
         {/* Name and Description */}
         <div className="mb-3">
           <div className="flex justify-between items-start gap-2 mb-1">
-            <h3 className="font-display font-bold text-gray-900 text-xl leading-tight line-clamp-2">
+            <h3 className="font-display font-bold text-[var(--color-charcoal)] text-xl leading-tight line-clamp-2">
               {item.name}
             </h3>
           </div>
@@ -58,7 +58,7 @@ export default function MenuCard({ item }) {
         <div className="mt-auto flex items-center justify-between gap-4">
           <div className="flex flex-col">
             <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Price</span>
-            <span className="text-2xl font-bold text-gray-900 font-mono">₹{item.price}</span>
+            <span className="text-2xl font-bold text-[var(--color-charcoal)] font-mono">₹{item.price}</span>
           </div>
 
           {/* Quantity Selector */}
@@ -66,23 +66,23 @@ export default function MenuCard({ item }) {
             {quantity === 0 ? (
               <button
                 onClick={() => addItem(item)}
-                className="bg-gray-900 hover:bg-primary hover:text-gray-900 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-sm hover:shadow-yellow active:scale-95 flex items-center gap-2"
+                className="bg-[var(--color-charcoal)] hover:bg-black text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-sm active:scale-95 flex items-center gap-2"
               >
                 <Plus className="w-4 h-4" />
                 Add
               </button>
             ) : (
-              <div className="flex items-center bg-gray-900 rounded-xl p-1 shadow-lg shadow-gray-900/20">
+              <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1">
                 <button
                   onClick={() => removeItem(item.id)}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-[var(--color-charcoal)] hover:bg-gray-100 transition-colors"
                 >
                   <Minus className="w-4 h-4" />
                 </button>
-                <span className="w-8 text-center font-bold text-white font-mono">{quantity}</span>
+                <span className="w-8 text-center font-bold text-[var(--color-charcoal)] font-mono">{quantity}</span>
                 <button
                   onClick={() => addItem(item)}
-                  className="w-9 h-9 flex items-center justify-center rounded-lg text-white hover:bg-white/10 transition-colors"
+                  className="w-9 h-9 flex items-center justify-center rounded-lg text-[var(--color-charcoal)] hover:bg-gray-100 transition-colors"
                 >
                   <Plus className="w-4 h-4" />
                 </button>
