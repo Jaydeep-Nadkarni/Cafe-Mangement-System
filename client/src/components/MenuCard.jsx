@@ -62,7 +62,7 @@ export default function MenuCard({ item }) {
               {quantity === 0 ? (
                 <button
                   onClick={() => addItem(item)}
-                  className="bg-gray-900 hover:bg-gray-800 text-white px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-sm active:scale-95 flex items-center gap-2"
+                  className="bg-primary hover:bg-primary-dark text-gray-900 px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-sm active:scale-95 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
                   Add

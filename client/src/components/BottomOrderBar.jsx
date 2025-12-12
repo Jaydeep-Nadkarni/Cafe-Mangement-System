@@ -22,7 +22,7 @@ export default function BottomOrderBar() {
     <>
       {/* Bottom Order Bar - positioned above nav bar */}
       <div
-        className={`fixed bottom-20 left-4 right-4 z-50 transition-all duration-500 transform ${
+        className={`fixed bottom-20 left-4 right-4 z-50 transition-all duration-500 transform mb-6 ${
           hasItems
             ? 'translate-y-0 opacity-100'
             : 'translate-y-24 opacity-0 pointer-events-none'
@@ -30,7 +30,7 @@ export default function BottomOrderBar() {
       >
         <button
           onClick={() => navigate('/order-summary')}
-          className="w-full bg-gray-900 backdrop-blur-md text-white p-4 rounded-2xl shadow-2xl flex items-center justify-between group hover:bg-gray-800 transition-all duration-300"
+          className="w-full bg-white backdrop-blur-md border border-gray-200 text-gray-900 p-4 rounded-2xl shadow-2xl flex items-center justify-between group hover:bg-gray-200 transition-all duration-300"
         >
           <div className="flex items-center gap-4">
             <div className="bg-primary p-2.5 rounded-xl">
@@ -43,7 +43,7 @@ export default function BottomOrderBar() {
           </div>
 
           <div className="flex items-center gap-3">
-            <span className="text-sm font-medium text-gray-300 group-hover:text-white transition-colors">
+            <span className="text-sm font-medium text-gray-900 group-hover:text-gray-700 transition-colors">
               View Cart ({totalItems})
             </span>
             <ChevronRight className="w-5 h-5 text-primary group-hover:translate-x-1 transition-transform duration-300" />
