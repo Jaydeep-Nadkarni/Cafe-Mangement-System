@@ -48,6 +48,12 @@ cafe-management-system/
 - Node.js 16+
 - npm or yarn
 
+## Getting Started
+
+### Prerequisites
+- Node.js 16+
+- npm or yarn
+
 ### Installation
 
 1. **Install client dependencies**:
@@ -63,19 +69,23 @@ npm install
 ```
 
 3. **Configure environment variables**:
-   - Create `.env` file in `server/` with `OPENAI_API_KEY`
+   - Client: Create `.env` in `client/` (optional, has defaults)
+   - Server: Create `.env` in `server/` based on `.env.example` with Razorpay keys
 
 ### Running the Application
 
-**Development**:
+**Development** (open 2 terminals):
+
+Terminal 1 - Start client (Vite dev server on port 3000):
 ```bash
-# Terminal 1 - Start client (Vite dev server on port 3000)
 cd client
 npm run dev
+```
 
-# Terminal 2 - Start server (Express on port 5000)
+Terminal 2 - Start server (Express on port 5000):
+```bash
 cd server
-npm start
+npm run dev
 ```
 
 **Production Build**:
@@ -84,15 +94,37 @@ npm start
 cd client
 npm run build
 
-# Server deployment depends on your hosting platform
+# Server (deploy based on your hosting platform)
+cd server
+npm start
 ```
+
+The application will be available at `http://localhost:3000`
 
 ## Features
 - Menu management and display
-- AI-powered product assistant
-- Order and payment processing
+- Shopping cart with real-time quantity updates
+- Order and payment processing with Razorpay
+- Payment success confirmation page
 - Mobile-responsive design
-- Modern UI with Tailwind CSS
+- Smooth page transitions
+- Coming soon games section
+
+## API Endpoints
+
+### Menu
+- `GET /api/menu` - Get all menu items
+- `GET /api/menu/:id` - Get single menu item
+
+### Orders
+- `POST /api/orders` - Create new order
+- `GET /api/orders/:orderId` - Get order details
+
+### Razorpay Payment
+- `POST /api/razorpay/create-order` - Create Razorpay order
+- `POST /api/razorpay/verify-payment` - Verify payment signature
+
+See `server/API_TESTING.md` for detailed endpoint documentation and testing examples.
 
 ## Customization
 
