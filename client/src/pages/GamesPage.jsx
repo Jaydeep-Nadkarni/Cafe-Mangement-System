@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
+import WordleGame from '../components/WordleGame';
 
 export default function GamesPage() {
   const navigate = useNavigate();
