@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { X, Trophy, AlertCircle, Volume2, VolumeX, Copy, Check, Keyboard } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { X, Trophy, AlertCircle, Volume2, VolumeX, Copy, Check, Sparkles, Coffee } from 'lucide-react';
 
 const WORDS = [
   'LATTE', 'MOCHA', 'BAGEL', 'DONUT', 'CREAM', 
@@ -21,6 +21,7 @@ export default function WordleGame({ onClose }) {
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [couponCode, setCouponCode] = useState('');
   const [copied, setCopied] = useState(false);
+  const inputRef = useRef(null);
 
   // Initialize Game
   useEffect(() => {
@@ -121,10 +122,38 @@ export default function WordleGame({ onClose }) {
     }
   };
 
-  // Keyboard Input (Physical + Mobile)
+  // Focus input on mount for mobile keyboard
+  useEffect(() => {
+    if (gameState === 'playing' && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [gameState]);
+
+  // Handle input from hidden field (mobile)
+  const handleInputChange = (e) => {
+    if (gameState !== 'playing') return;
+    const value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
+    if (value.length <= 5) {
+      setCurrentGuess(value);
+      if (value.length > currentGuess.length) playSound('tap');
+    }
+  };
+
+  // Handle key events from hidden input
+  const handleInputKeyDown = (e) => {
+    if (gameState !== 'playing') return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      submitGuess();
+    }
+  };
+
+  // Keyboard Input (Physical keyboard fallback)
   useEffect(() => {
     const handleKeydown = (e) => {
       if (gameState !== 'playing') return;
+      // Only handle if not from our input
+      if (e.target === inputRef.current) return;
 
       const key = e.key.toUpperCase();
       if (key === 'ENTER') submitGuess();
@@ -135,6 +164,13 @@ export default function WordleGame({ onClose }) {
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
   }, [currentGuess, gameState, solution]);
+
+  // Focus input when tapping game area
+  const focusInput = () => {
+    if (inputRef.current && gameState === 'playing') {
+      inputRef.current.focus();
+    }
+  };
 
   const handleKeyPress = (letter) => {
     if (currentGuess.length < 5 && gameState === 'playing') {
@@ -249,8 +285,27 @@ export default function WordleGame({ onClose }) {
           </div>
         </div>
 
+        {/* Hidden Input for Mobile Keyboard */}
+        <input
+          ref={inputRef}
+          type="text"
+          value={currentGuess}
+          onChange={handleInputChange}
+          onKeyDown={handleInputKeyDown}
+          className="absolute opacity-0 w-0 h-0 pointer-events-none"
+          autoComplete="off"
+          autoCorrect="off"
+          autoCapitalize="characters"
+          spellCheck="false"
+          maxLength={5}
+        />
+
         {/* Game Board */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-linear-to-b from-gray-50 to-white">{message && (
+        <div 
+          className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white cursor-text"
+          onClick={focusInput}
+        >
+          {message && (
             <div className="absolute top-16 md:top-24 z-20 bg-gray-900/90 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
               {message}
             </div>
@@ -324,62 +379,116 @@ export default function WordleGame({ onClose }) {
           </div>
 
           {/* Instruction Footer */}
-          <div className="flex items-center gap-2 text-gray-400 text-xs md:text-sm font-medium bg-gray-100 px-3 md:px-4 py-2 rounded-full">
-            <Keyboard className="w-3 md:w-4 h-3 md:h-4" />
-            <span>Type using your keyboard</span>
-          </div>
+          {gameState === 'playing' && (
+            <button 
+              onClick={focusInput}
+              className="flex items-center gap-2 text-gray-500 text-xs md:text-sm font-medium bg-gray-100 hover:bg-gray-200 px-4 md:px-5 py-2.5 rounded-full transition-colors active:scale-95"
+            >
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              <span>Tap here to type</span>
+            </button>
+          )}
         </div>
 
         {/* Result Modal */}
         {(gameState === 'won' || gameState === 'lost') && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in z-30">
-            <div className="text-center w-full bg-white p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-2xl border border-gray-100 transform animate-pop max-h-[90vh] overflow-y-auto">
-              <div className="mb-4 md:mb-6 flex justify-center shrink-0">
-                {gameState === 'won' ? (
-                  <div className="w-20 md:w-24 h-20 md:h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short shadow-inner">
-                    <Trophy className="w-10 md:w-12 h-10 md:h-12" />
-                  </div>
-                ) : (
-                  <div className="w-20 md:w-24 h-20 md:h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 shadow-inner">
-                    <AlertCircle className="w-10 md:w-12 h-10 md:h-12" />
-                  </div>
+          <div className="absolute inset-0 bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6 animate-fade-in z-30">
+            <div className="text-center w-full max-w-sm mx-auto">
+              
+              {/* Icon with decoration */}
+              <div className="relative mb-6">
+                {gameState === 'won' && (
+                  <>
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-1">
+                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
+                      <Sparkles className="w-3 h-3 text-yellow-500 animate-pulse delay-100" />
+                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse delay-200" />
+                    </div>
+                  </>
                 )}
+                <div className={`
+                  w-20 h-20 mx-auto rounded-2xl flex items-center justify-center shadow-lg
+                  ${gameState === 'won' 
+                    ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white' 
+                    : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'}
+                `}>
+                  {gameState === 'won' 
+                    ? <Trophy className="w-10 h-10" /> 
+                    : <Coffee className="w-10 h-10" />}
+                </div>
               </div>
               
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 font-display">
-                {gameState === 'won' ? 'Splendid!' : 'Game Over'}
+              {/* Title */}
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 font-display">
+                {gameState === 'won' ? 'Brilliant!' : 'Nice Try!'}
               </h3>
               
-              <p className="text-sm md:text-base text-gray-600 mb-6 leading-relaxed">
+              {/* Subtitle */}
+              <p className="text-gray-500 text-sm mb-6">
                 {gameState === 'won' 
-                  ? 'You solved the daily word!' 
-                  : <span>The word was <strong className="text-gray-900">{solution}</strong>.<br/>Come back tomorrow!</span>}
+                  ? 'You cracked today\'s word' 
+                  : <span>The word was <span className="font-bold text-gray-700">{solution}</span></span>}
               </p>
 
+              {/* Stats row */}
+              <div className="flex justify-center gap-6 mb-6">
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{guesses.length}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Tries</div>
+                </div>
+                <div className="w-px bg-gray-200"></div>
+                <div className="text-center">
+                  <div className="text-2xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
+                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Discount</div>
+                </div>
+              </div>
+
+              {/* Coupon Card */}
               {gameState === 'won' && (
-                <div className="bg-linear-to-br from-primary/10 to-primary/5 p-4 md:p-5 rounded-xl md:rounded-2xl mb-6 md:mb-8 border border-primary/20 relative overflow-hidden group">
-                  <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
-                  
-                  <p className="text-xs font-bold text-primary-dark uppercase tracking-wider mb-2 md:mb-3">Your Reward Code</p>
-                  <div className="flex items-center justify-between gap-2 md:gap-3 bg-white p-2 md:p-3 rounded-lg md:rounded-xl border border-primary/30 shadow-sm">
-                    <code className="font-mono font-bold text-base md:text-lg text-gray-900 tracking-widest break-all">{couponCode}</code>
+                <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-3">
+                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reward Code</span>
+                    <span className="text-[10px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">10% OFF</span>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-xl">
+                    <code className="font-mono font-bold text-lg text-gray-900 tracking-wider">{couponCode}</code>
                     <button 
                       onClick={copyToClipboard}
-                      className="shrink-0 p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary-dark active:scale-95"
-                      title="Copy coupon code"
+                      className={`
+                        flex-shrink-0 px-3 py-1.5 rounded-lg font-medium text-xs transition-all active:scale-95
+                        ${copied 
+                          ? 'bg-green-500 text-white' 
+                          : 'bg-gray-900 text-white hover:bg-gray-800'}
+                      `}
                     >
-                      {copied ? <Check className="w-4 md:w-5 h-4 md:h-5" /> : <Copy className="w-4 md:w-5 h-4 md:h-5" />}
+                      {copied ? 'Copied!' : 'Copy'}
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-2 md:mt-3 font-medium">Valid for today only. Show at checkout.</p>
+                  <p className="text-[10px] text-gray-400 mt-2">Use at checkout • Valid today only</p>
                 </div>
               )}
 
+              {/* Lost state message */}
+              {gameState === 'lost' && (
+                <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100">
+                  <p className="text-sm text-gray-600">Don't worry! Come back tomorrow for a new word and another chance to win.</p>
+                </div>
+              )}
+
+              {/* Close Button */}
               <button 
                 onClick={onClose}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 md:py-4 rounded-lg md:rounded-xl font-bold transition-all duration-300 shadow-lg shadow-gray-900/20 active:scale-95 text-sm md:text-base"
+                className={`
+                  w-full py-3.5 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-sm
+                  ${gameState === 'won'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/25'
+                    : 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg shadow-gray-900/20'}
+                `}
               >
-                Close Game
+                {gameState === 'won' ? 'Claim & Close' : 'Close Game'}
               </button>
             </div>
           </div>
