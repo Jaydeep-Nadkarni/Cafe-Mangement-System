@@ -4,9 +4,24 @@ import { Plus, Minus, Sparkles } from 'lucide-react';
 import AIOptionsModal from './AIOptionsModal';
 
 export default function MenuCard({ item }) {
-  const { addItem, removeItem, getQuantity } = useCart();
-  const quantity = getQuantity(item.id);
+  const { addItem, removeItem, getQuantity, getItemPrice, getTotalQuantityForItem } = useCart();
+  const [selectedSize, setSelectedSize] = useState(item.sizes ? item.sizes[0].name : null);
   const [showAIModal, setShowAIModal] = useState(false);
+  
+  // Get quantity for current selection (with size if applicable)
+  const quantity = getQuantity(item.id, selectedSize);
+  const totalQuantity = item.sizes ? getTotalQuantityForItem(item.id) : quantity;
+  
+  // Get current price based on size
+  const currentPrice = getItemPrice(item, selectedSize);
+
+  const handleAdd = () => {
+    addItem(item, selectedSize);
+  };
+
+  const handleRemove = () => {
+    removeItem(item.id, selectedSize);
+  };
 
   return (
     <>
@@ -36,6 +51,13 @@ export default function MenuCard({ item }) {
               <Sparkles className="w-4 h-4 text-gray-900" />
             </button>
           </div>
+
+          {/* Total quantity badge for items with sizes */}
+          {item.sizes && totalQuantity > 0 && (
+            <div className="absolute bottom-3 right-3 bg-primary text-gray-900 font-bold text-sm w-7 h-7 rounded-full flex items-center justify-center shadow-md">
+              {totalQuantity}
+            </div>
+          )}
         </div>
 
         {/* Content */}
@@ -50,18 +72,42 @@ export default function MenuCard({ item }) {
             <p className="text-sm text-gray-500 line-clamp-2 font-body leading-relaxed">{item.description}</p>
           </div>
 
+          {/* Size Selector */}
+          {item.sizes && (
+            <div className="mb-3">
+              <div className="flex gap-2">
+                {item.sizes.map((size) => (
+                  <button
+                    key={size.name}
+                    onClick={() => setSelectedSize(size.name)}
+                    className={`flex-1 py-2 px-3 rounded-xl text-sm font-semibold transition-all duration-200 ${
+                      selectedSize === size.name
+                        ? 'bg-primary text-gray-900 shadow-sm'
+                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                  >
+                    <div className="flex flex-col items-center">
+                      <span>{size.label}</span>
+                      <span className="text-xs opacity-75">₹{size.price}</span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Price and Actions */}
           <div className="mt-auto flex items-center justify-between gap-4">
             <div className="flex flex-col">
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Price</span>
-              <span className="text-2xl font-bold text-gray-900 font-mono">₹{item.price}</span>
+              <span className="text-2xl font-bold text-gray-900 font-mono">₹{currentPrice}</span>
             </div>
 
             {/* Quantity Selector */}
-            <div className="flex-shrink-0">
+            <div className="shrink-0">
               {quantity === 0 ? (
                 <button
-                  onClick={() => addItem(item)}
+                  onClick={handleAdd}
                   className="bg-primary hover:bg-primary-dark text-gray-900 px-6 py-3 rounded-xl font-bold transition-all duration-300 shadow-sm active:scale-95 flex items-center gap-2"
                 >
                   <Plus className="w-4 h-4" />
@@ -70,14 +116,14 @@ export default function MenuCard({ item }) {
               ) : (
                 <div className="flex items-center bg-white border border-gray-200 rounded-xl p-1">
                   <button
-                    onClick={() => removeItem(item.id)}
+                    onClick={handleRemove}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-900 hover:bg-gray-100 transition-colors"
                   >
                     <Minus className="w-4 h-4" />
                   </button>
                   <span className="w-8 text-center font-bold text-gray-900 font-mono">{quantity}</span>
                   <button
-                    onClick={() => addItem(item)}
+                    onClick={handleAdd}
                     className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-900 hover:bg-gray-100 transition-colors"
                   >
                     <Plus className="w-4 h-4" />

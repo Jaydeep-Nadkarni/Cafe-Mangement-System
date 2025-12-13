@@ -415,17 +415,40 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
     doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
     doc.moveDown(1.5);
 
-    // Items
+    // Items - Handle both old format {itemId: qty} and new format {key: {item, quantity, size, price}}
     let y = doc.y;
     if (items) {
-        Object.entries(items).forEach(([itemId, qty]) => {
-            const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
-            if (item) {
-                const lineTotal = item.price * qty;
-                doc.text(item.name, 50, y);
+        Object.entries(items).forEach(([key, value]) => {
+            let itemName, qty, price, lineTotal;
+            
+            // New format: value is an object with item, quantity, size, price
+            if (typeof value === 'object' && value.item) {
+                itemName = value.item.name;
+                if (value.size && value.item.sizes) {
+                    const sizeInfo = value.item.sizes.find(s => s.name === value.size);
+                    itemName += ` (${sizeInfo?.label || value.size})`;
+                    price = sizeInfo?.price || value.item.price;
+                } else {
+                    price = value.item.price;
+                }
+                qty = value.quantity;
+                lineTotal = price * qty;
+            } else {
+                // Old format: key is itemId, value is quantity
+                const item = MENU_ITEMS.find(i => i.id === parseInt(key));
+                if (item) {
+                    itemName = item.name;
+                    price = item.price;
+                    qty = value;
+                    lineTotal = price * qty;
+                }
+            }
+            
+            if (itemName) {
+                doc.text(itemName, 50, y);
                 doc.text(qty.toString(), 300, y);
-                doc.text(`$${item.price.toFixed(2)}`, 350, y);
-                doc.text(`$${lineTotal.toFixed(2)}`, 450, y);
+                doc.text(`₹${price.toFixed(2)}`, 350, y);
+                doc.text(`₹${lineTotal.toFixed(2)}`, 450, y);
                 y += 20;
             }
         });
@@ -436,7 +459,7 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
     
     // Total
     doc.fontSize(14).font('Helvetica-Bold');
-    doc.text(`Total Amount: $${amount.toFixed(2)}`, 350, y);
+    doc.text(`Total Amount: ₹${amount.toFixed(2)}`, 350, y);
     
     // Footer
     doc.fontSize(10).font('Helvetica');

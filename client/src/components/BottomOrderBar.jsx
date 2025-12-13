@@ -1,21 +1,14 @@
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingBag } from 'lucide-react';
-import { MENU_ITEMS } from '../data/menuItems';
 
 export default function BottomOrderBar({ isVisible = true }) {
   const navigate = useNavigate();
-  const { cart } = useCart();
+  const { getCartItems, getTotalItems } = useCart();
   
-  const calculateTotal = () => {
-    return Object.entries(cart).reduce((total, [itemId, quantity]) => {
-      const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
-      return total + (item ? item.price * quantity : 0);
-    }, 0);
-  };
-
-  const totalPrice = calculateTotal();
-  const totalItems = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  const cartItems = getCartItems();
+  const totalPrice = cartItems.reduce((total, item) => total + (item.price * item.quantity), 0);
+  const totalItems = getTotalItems();
   const hasItems = totalItems > 0;
   const shouldShow = hasItems && isVisible;
 

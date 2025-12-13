@@ -118,7 +118,7 @@ export default function AIChatPage() {
             }`}
           >
             <div
-              className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
+              className={`shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
                 message.role === 'user'
                   ? 'bg-gray-900 text-white'
                   : 'bg-primary text-gray-900'
@@ -144,7 +144,7 @@ export default function AIChatPage() {
 
         {isTyping && (
           <div className="flex gap-3 animate-fade-in-up">
-            <div className="flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary text-gray-900">
+            <div className="shrink-0 w-8 h-8 rounded-full flex items-center justify-center bg-primary text-gray-900">
               <Bot className="w-4 h-4" />
             </div>
             <div className="bg-white border border-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm shadow-sm">

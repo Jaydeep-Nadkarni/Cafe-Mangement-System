@@ -171,7 +171,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 Mobile Number
               </label>
               <div className="flex gap-2">
-                <div className="flex-shrink-0 px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">
+                <div className="shrink-0 px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">
                   +91
                 </div>
                 <input
@@ -211,7 +211,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             <button
               type="submit"
               disabled={isSubmitting || mobileNumber.length !== 10 || !customerName.trim()}
-              className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-bold py-4 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group mt-6"
+              className="w-full bg-linear-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary disabled:opacity-50 disabled:cursor-not-allowed text-gray-900 font-bold py-4 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group mt-6"
             >
               {isSubmitting ? (
                 <>
