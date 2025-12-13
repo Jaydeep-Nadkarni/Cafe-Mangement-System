@@ -294,21 +294,22 @@ export default function WordleGame({ onClose }) {
         </div>
 
         {/* Hidden Input for Mobile Keyboard */}
-        <input
+        {/* Hidden Input for Mobile Keyboard */}
+        <textarea
           ref={inputRef}
-          type="text"
           value={currentGuess}
-          onKeyDown={handleKeyDown}
-          onChange={() => {}} // Controlled by keyDown events only
-          className="absolute opacity-0 w-0 h-0 pointer-events-none"
+          onChange={(e) => {
+            // Filter to only A-Z and limit to 5 characters
+            const filtered = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
+            setCurrentGuess(filtered);
+          }}
+          className="fixed inset-0 opacity-0 pointer-events-none"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="characters"
           spellCheck="false"
-          maxLength={5}
           onFocus={focusInput}
           autoFocus
-          inputMode="none"
         />
 
         {/* Game Board */}
