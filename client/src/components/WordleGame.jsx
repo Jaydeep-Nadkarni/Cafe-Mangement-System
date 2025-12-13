@@ -122,6 +122,46 @@ export default function WordleGame({ onClose }) {
     }
   };
 
+  // Global keyboard handler - works for both physical and virtual keyboards
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (gameState !== 'playing') return;
+
+      const key = e.key.toUpperCase();
+
+      // Handle letter input (A-Z)
+      if (/^[A-Z]$/.test(key)) {
+        e.preventDefault();
+        if (currentGuess.length < 5) {
+          setCurrentGuess(prev => prev + key);
+          playSound('tap');
+        }
+        return;
+      }
+
+      // Handle backspace
+      if (e.key === 'Backspace') {
+        e.preventDefault();
+        if (currentGuess.length > 0) {
+          setCurrentGuess(prev => prev.slice(0, -1));
+          playSound('tap');
+        }
+        return;
+      }
+
+      // Handle enter/submit
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        submitGuess();
+        return;
+      }
+    };
+
+    // Attach to window for global keyboard capture
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [gameState, currentGuess, solution, guesses]);
+
   // Focus input on mount for mobile keyboard
   useEffect(() => {
     if (gameState === 'playing' && inputRef.current) {
@@ -129,70 +169,15 @@ export default function WordleGame({ onClose }) {
     }
   }, [gameState]);
 
-  // Handle physical/mobile keyboard input - capture keys directly
-  const handleKeyDown = (e) => {
-    if (gameState !== 'playing') return;
-
-    const key = e.key.toUpperCase();
-
-    // Handle letter input (A-Z)
-    if (/^[A-Z]$/.test(key) && currentGuess.length < 5) {
-      e.preventDefault();
-      const newGuess = currentGuess + key;
-      setCurrentGuess(newGuess);
-      // Update hidden input to stay in sync
-      if (inputRef.current) {
-        inputRef.current.value = newGuess;
-      }
-      playSound('tap');
-      return;
-    }
-
-    // Handle backspace
-    if (e.key === 'Backspace') {
-      e.preventDefault();
-      if (currentGuess.length > 0) {
-        const newGuess = currentGuess.slice(0, -1);
-        setCurrentGuess(newGuess);
-        // Update hidden input to stay in sync
-        if (inputRef.current) {
-          inputRef.current.value = newGuess;
-        }
-        playSound('tap');
-      }
-      return;
-    }
-
-    // Handle enter/submit
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      submitGuess();
-      return;
-    }
-  };
-
-  // Keyboard Input (Physical keyboard fallback)
-  useEffect(() => {
-    const handleKeydown = (e) => {
-      if (gameState !== 'playing') return;
-      // Only handle if not from our input
-      if (e.target === inputRef.current) return;
-
-      const key = e.key.toUpperCase();
-      if (key === 'ENTER') submitGuess();
-      else if (key === 'BACKSPACE') handleDelete();
-      else if (/^[A-Z]$/.test(key)) handleKeyPress(key);
-    };
-
-    window.addEventListener('keydown', handleKeydown);
-    return () => window.removeEventListener('keydown', handleKeydown);
-  }, [currentGuess, gameState, solution]);
-
-  // Focus input when tapping game area
+  // Tap anywhere on game to focus input (mobile UX improvement)
   const focusInput = () => {
     if (inputRef.current && gameState === 'playing') {
       inputRef.current.focus();
     }
+  };
+
+  const handleGameBoardClick = () => {
+    focusInput();
   };
 
   const handleKeyPress = (letter) => {
@@ -283,7 +268,7 @@ export default function WordleGame({ onClose }) {
   if (gameState === 'loading') return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-2 md:p-4 animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-2 md:p-4 animate-fade-in" onClick={handleGameBoardClick}>
       <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] relative border border-white/20">
         
         {/* Header */}
