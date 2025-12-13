@@ -228,14 +228,14 @@ export default function WordleGame({ onClose }) {
       <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] relative border border-white/20">
         
         {/* Header */}
-        <div className="p-3 md:p-5 border-b border-gray-100 flex items-center justify-between bg-white/50 flex-shrink-0">
+        <div className="p-3 md:p-5 border-b border-gray-100 flex items-center justify-between bg-white/50 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
-            <div className="bg-primary/10 p-2 rounded-lg flex-shrink-0">
+            <div className="bg-primary/10 p-2 rounded-lg shrink-0">
               <Trophy className="w-4 md:w-5 h-4 md:h-5 text-primary-dark" />
             </div>
             <h2 className="text-lg md:text-xl font-bold font-display text-gray-900 truncate">Cafe Wordle</h2>
           </div>
-          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button 
               onClick={() => setSoundEnabled(!soundEnabled)}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
@@ -250,7 +250,7 @@ export default function WordleGame({ onClose }) {
         </div>
 
         {/* Game Board */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white">{message && (
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-linear-to-b from-gray-50 to-white">{message && (
             <div className="absolute top-16 md:top-24 z-20 bg-gray-900/90 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
               {message}
             </div>
@@ -309,7 +309,7 @@ export default function WordleGame({ onClose }) {
                       <div
                         key={colIndex}
                         className={`
-                          w-12 h-12 md:w-14 md:h-14 border-2 rounded-xl flex items-center justify-center text-2xl font-bold uppercase transition-all duration-300
+                          w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 border-2 rounded-lg md:rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-300
                           ${bgColor} ${borderColor} ${textColor} ${animation} ${shadow}
                         `}
                         style={{ animationDelay: guess ? `${colIndex * 100}ms` : '0ms' }}
@@ -324,8 +324,8 @@ export default function WordleGame({ onClose }) {
           </div>
 
           {/* Instruction Footer */}
-          <div className="flex items-center gap-2 text-gray-400 text-sm font-medium bg-gray-100 px-4 py-2 rounded-full">
-            <Keyboard className="w-4 h-4" />
+          <div className="flex items-center gap-2 text-gray-400 text-xs md:text-sm font-medium bg-gray-100 px-3 md:px-4 py-2 rounded-full">
+            <Keyboard className="w-3 md:w-4 h-3 md:h-4" />
             <span>Type using your keyboard</span>
           </div>
         </div>
@@ -334,23 +334,23 @@ export default function WordleGame({ onClose }) {
         {(gameState === 'won' || gameState === 'lost') && (
           <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in z-30">
             <div className="text-center max-w-xs w-full bg-white p-8 rounded-3xl shadow-2xl border border-gray-100 transform animate-pop">
-              <div className="mb-6 flex justify-center">
+              <div className="mb-4 md:mb-6 flex justify-center flex-shrink-0">
                 {gameState === 'won' ? (
-                  <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short shadow-inner">
-                    <Trophy className="w-12 h-12" />
+                  <div className="w-20 md:w-24 h-20 md:h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short shadow-inner">
+                    <Trophy className="w-10 md:w-12 h-10 md:h-12" />
                   </div>
                 ) : (
-                  <div className="w-24 h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 shadow-inner">
-                    <AlertCircle className="w-12 h-12" />
+                  <div className="w-20 md:w-24 h-20 md:h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 shadow-inner">
+                    <AlertCircle className="w-10 md:w-12 h-10 md:h-12" />
                   </div>
                 )}
               </div>
               
-              <h3 className="text-3xl font-bold text-gray-900 mb-2 font-display">
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 font-display">
                 {gameState === 'won' ? 'Splendid!' : 'Game Over'}
               </h3>
               
-              <p className="text-gray-600 mb-8 leading-relaxed">
+              <p className="text-sm md:text-base text-gray-600 mb-6 leading-relaxed">
                 {gameState === 'won' 
                   ? 'You solved the daily word!' 
                   : <span>The word was <strong className="text-gray-900">{solution}</strong>.<br/>Come back tomorrow!</span>}
