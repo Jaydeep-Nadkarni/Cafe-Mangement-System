@@ -287,15 +287,8 @@ export default function WordleGame({ onClose }) {
 
               {/* Results Card */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-100">
-                {/* Icon with decoration */}
-                <div className="relative mb-6">
-                  {gameState === 'won' && (
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-1">
-                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
-                      <Sparkles className="w-3 h-3 text-yellow-500 animate-pulse" />
-                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
-                    </div>
-                  )}
+                {/* Icon */}
+                <div className="mb-6">
                   <div className={`
                     w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-lg
                     ${gameState === 'won' 
@@ -319,20 +312,7 @@ export default function WordleGame({ onClose }) {
                     ? 'You cracked today\'s word' 
                     : <span>The word was <span className="font-bold text-gray-700">{solution}</span></span>}
                 </p>
-
-                {/* Stats row */}
-                <div className="flex justify-center gap-8 mb-8">
-                  <div className="text-center">
-                    <div className="text-3xl md:text-4xl font-bold text-gray-900">{guesses.length}</div>
-                    <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Tries</div>
-                  </div>
-                  <div className="w-px bg-gray-200"></div>
-                  <div className="text-center">
-                    <div className="text-3xl md:text-4xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
-                    <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Discount</div>
-                  </div>
-                </div>
-
+                
                 {/* Coupon Card */}
                 {gameState === 'won' && (
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-green-100">
@@ -345,13 +325,14 @@ export default function WordleGame({ onClose }) {
                       <button 
                         onClick={copyToClipboard}
                         className={`
-                          flex-shrink-0 px-4 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95
+                          flex-shrink-0 p-2.5 rounded-lg transition-all active:scale-95
                           ${copied 
                             ? 'bg-green-500 text-white' 
                             : 'bg-gray-900 text-white hover:bg-gray-800'}
                         `}
+                        title={copied ? 'Copied!' : 'Copy code'}
                       >
-                        {copied ? '✓ Copied' : 'Copy'}
+                        {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                       </button>
                     </div>
                     <p className="text-xs text-gray-500 text-center">Use at checkout • Valid today only</p>
