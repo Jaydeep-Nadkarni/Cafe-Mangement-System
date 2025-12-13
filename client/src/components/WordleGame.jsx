@@ -334,7 +334,7 @@ export default function WordleGame({ onClose }) {
         {(gameState === 'won' || gameState === 'lost') && (
           <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in z-30">
             <div className="text-center w-full bg-white p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-2xl border border-gray-100 transform animate-pop max-h-[90vh] overflow-y-auto">
-              <div className="mb-4 md:mb-6 flex justify-center flex-shrink-0">
+              <div className="mb-4 md:mb-6 flex justify-center shrink-0">
                 {gameState === 'won' ? (
                   <div className="w-20 md:w-24 h-20 md:h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short shadow-inner">
                     <Trophy className="w-10 md:w-12 h-10 md:h-12" />
@@ -357,7 +357,7 @@ export default function WordleGame({ onClose }) {
               </p>
 
               {gameState === 'won' && (
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-4 md:p-5 rounded-xl md:rounded-2xl mb-6 md:mb-8 border border-primary/20 relative overflow-hidden group">
+                <div className="bg-linear-to-br from-primary/10 to-primary/5 p-4 md:p-5 rounded-xl md:rounded-2xl mb-6 md:mb-8 border border-primary/20 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
                   
                   <p className="text-xs font-bold text-primary-dark uppercase tracking-wider mb-2 md:mb-3">Your Reward Code</p>
@@ -365,7 +365,7 @@ export default function WordleGame({ onClose }) {
                     <code className="font-mono font-bold text-base md:text-lg text-gray-900 tracking-widest break-all">{couponCode}</code>
                     <button 
                       onClick={copyToClipboard}
-                      className="flex-shrink-0 p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary-dark active:scale-95"
+                      className="shrink-0 p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary-dark active:scale-95"
                       title="Copy coupon code"
                     >
                       {copied ? <Check className="w-4 md:w-5 h-4 md:h-5" /> : <Copy className="w-4 md:w-5 h-4 md:h-5" />}
