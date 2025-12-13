@@ -6,6 +6,11 @@ import WordleGame from '../components/WordleGame';
 export default function GamesPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('single');
+  const [isWordleOpen, setIsWordleOpen] = useState(false);
+
+  const handlePlayClick = (gameId) => {
+    if (gameId === 'wordle') setIsWordleOpen(true);
+  };
 
   const games = [
     {
@@ -105,7 +110,10 @@ export default function GamesPage() {
                     </div>
 
                     {/* Play Button */}
-                    <button className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3.5 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95 flex items-center justify-center gap-2 group/btn">
+                    <button 
+                      onClick={() => handlePlayClick(game.id)}
+                      className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3.5 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95 flex items-center justify-center gap-2 group/btn"
+                    >
                       <Play className="w-5 h-5 fill-current" />
                       <span>Play Now</span>
                     </button>
@@ -138,6 +146,8 @@ export default function GamesPage() {
           </div>
         )}
       </div>
+
+      {isWordleOpen && <WordleGame onClose={() => setIsWordleOpen(false)} />}
     </div>
   );
 }
