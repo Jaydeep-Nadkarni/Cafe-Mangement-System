@@ -275,77 +275,77 @@ export default function WordleGame({ onClose }) {
     return (
       <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-50 via-white to-gray-50 animate-fade-in">
         <div className="h-full overflow-y-auto">
-          <div className="min-h-full flex flex-col items-center justify-center p-4 md:p-8">
-            <div className="w-full max-w-lg">
-              {/* Close button */}
+          <div className="min-h-full flex flex-col items-center justify-center p-4 py-8 md:p-8">
+            <div className="w-full max-w-md relative">
+              {/* Close button - positioned absolutely */}
               <button
                 onClick={onClose}
-                className="mb-6 p-2 hover:bg-gray-100 rounded-full transition-colors ml-auto block"
+                className="absolute -top-4 right-0 p-2 hover:bg-white/80 rounded-full transition-all z-10 bg-white shadow-sm"
               >
-                <X className="w-6 h-6 text-gray-500" />
+                <X className="w-5 h-5 text-gray-500" />
               </button>
 
               {/* Results Card */}
-              <div className="bg-white rounded-3xl p-8 md:p-12 shadow-2xl border border-gray-100">
+              <div className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-100">
                 {/* Icon with decoration */}
-                <div className="relative mb-8">
+                <div className="relative mb-6">
                   {gameState === 'won' && (
-                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1">
-                      <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
-                      <Sparkles className="w-4 h-4 text-yellow-500 animate-pulse" />
-                      <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-1">
+                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
+                      <Sparkles className="w-3 h-3 text-yellow-500 animate-pulse" />
+                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
                     </div>
                   )}
                   <div className={`
-                    w-28 h-28 mx-auto rounded-3xl flex items-center justify-center shadow-xl
+                    w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-lg
                     ${gameState === 'won' 
                       ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white' 
                       : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'}
                   `}>
                     {gameState === 'won' 
-                      ? <Trophy className="w-14 h-14" /> 
-                      : <Coffee className="w-14 h-14" />}
+                      ? <Trophy className="w-12 h-12" /> 
+                      : <Coffee className="w-12 h-12" />}
                   </div>
                 </div>
                 
                 {/* Title */}
-                <h3 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3 font-display text-center">
+                <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 font-display text-center">
                   {gameState === 'won' ? 'Brilliant!' : 'Nice Try!'}
                 </h3>
                 
                 {/* Subtitle */}
-                <p className="text-gray-500 text-lg mb-10 text-center">
+                <p className="text-gray-500 text-base mb-8 text-center">
                   {gameState === 'won' 
                     ? 'You cracked today\'s word' 
                     : <span>The word was <span className="font-bold text-gray-700">{solution}</span></span>}
                 </p>
 
                 {/* Stats row */}
-                <div className="flex justify-center gap-12 mb-10">
+                <div className="flex justify-center gap-8 mb-8">
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-gray-900">{guesses.length}</div>
-                    <div className="text-sm uppercase tracking-wider text-gray-400 font-medium mt-2">Tries</div>
+                    <div className="text-3xl md:text-4xl font-bold text-gray-900">{guesses.length}</div>
+                    <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Tries</div>
                   </div>
                   <div className="w-px bg-gray-200"></div>
                   <div className="text-center">
-                    <div className="text-4xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
-                    <div className="text-sm uppercase tracking-wider text-gray-400 font-medium mt-2">Discount</div>
+                    <div className="text-3xl md:text-4xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
+                    <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Discount</div>
                   </div>
                 </div>
 
                 {/* Coupon Card */}
                 {gameState === 'won' && (
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-6 mb-8 border border-green-100">
-                    <div className="flex items-center justify-between mb-5">
-                      <span className="text-sm font-bold text-gray-600 uppercase tracking-wider">Reward Code</span>
-                      <span className="text-sm text-green-600 font-bold bg-white px-4 py-1.5 rounded-full shadow-sm">10% OFF</span>
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-green-100">
+                    <div className="flex items-center justify-between mb-4">
+                      <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Reward Code</span>
+                      <span className="text-xs text-green-600 font-bold bg-white px-3 py-1 rounded-full shadow-sm">10% OFF</span>
                     </div>
-                    <div className="flex items-center justify-between gap-4 bg-white p-5 rounded-xl mb-4 shadow-sm">
-                      <code className="font-mono font-bold text-xl text-gray-900 tracking-wider">{couponCode}</code>
+                    <div className="flex items-center justify-between gap-3 bg-white p-4 rounded-xl mb-3 shadow-sm">
+                      <code className="font-mono font-bold text-lg text-gray-900 tracking-wider">{couponCode}</code>
                       <button 
                         onClick={copyToClipboard}
                         className={`
-                          flex-shrink-0 px-5 py-2.5 rounded-lg font-semibold text-sm transition-all active:scale-95
+                          flex-shrink-0 px-4 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95
                           ${copied 
                             ? 'bg-green-500 text-white' 
                             : 'bg-gray-900 text-white hover:bg-gray-800'}
@@ -354,14 +354,14 @@ export default function WordleGame({ onClose }) {
                         {copied ? '✓ Copied' : 'Copy'}
                       </button>
                     </div>
-                    <p className="text-sm text-gray-500 text-center">Use at checkout • Valid today only</p>
+                    <p className="text-xs text-gray-500 text-center">Use at checkout • Valid today only</p>
                   </div>
                 )}
 
                 {/* Lost state message */}
                 {gameState === 'lost' && (
-                  <div className="bg-gray-50 rounded-2xl p-6 mb-8 border border-gray-100">
-                    <p className="text-base text-gray-600 text-center leading-relaxed">
+                  <div className="bg-gray-50 rounded-2xl p-5 mb-6 border border-gray-100">
+                    <p className="text-sm text-gray-600 text-center leading-relaxed">
                       Don't worry! Come back tomorrow for a new word and another chance to win.
                     </p>
                   </div>
@@ -371,7 +371,7 @@ export default function WordleGame({ onClose }) {
                 <button 
                   onClick={onClose}
                   className={`
-                    w-full py-4 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-lg
+                    w-full py-3.5 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-base
                     ${gameState === 'won'
                       ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/30'
                       : 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg shadow-gray-900/20'}
