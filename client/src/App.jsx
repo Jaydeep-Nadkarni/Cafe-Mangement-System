@@ -4,7 +4,12 @@ import { MenuPage, OrderSummaryPage, PaymentSuccessPage, GamesPage, AIChatPage }
 
 export default function App() {
   return (
-    <Router>
+    <Router
+      future={{
+        v7_startTransition: true,
+        v7_relativeSplatPath: true,
+      }}
+    >
       <Layout>
         <Routes>
           <Route path="/menu" element={<PageTransition><MenuPage /></PageTransition>} />

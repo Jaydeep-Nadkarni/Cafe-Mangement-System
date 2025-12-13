@@ -33,25 +33,16 @@ export const initiatePayment = async ({
   }
 
   try {
-    // Create order on backend (mock for now - integrate with your API)
-    // const response = await fetch('/api/payments/create-order', {
-    //   method: 'POST',
-    //   headers: { 'Content-Type': 'application/json' },
-    //   body: JSON.stringify({ amount, orderId })
-    // });
-    // const { razorpayOrderId } = await response.json();
+    // Get Razorpay key from environment variables (Vite uses import.meta.env)
+    const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_Rr3Tw4ut1jLQJc';
 
-    // Mock razorpay order ID for demo
-    const razorpayOrderId = `order_${Date.now()}`;
-
-    // Razorpay configuration
+    // Razorpay configuration - using simplified checkout (no backend order required)
     const options = {
-      key: process.env.REACT_APP_RAZORPAY_KEY || 'rzp_test_1DP5MMOlF23iry', // Use test key from .env
+      key: razorpayKey,
       amount: amount * 100, // Razorpay expects amount in paise
       currency: 'INR',
       name: 'Cafe Management System',
       description: `Order #${orderId}`,
-      order_id: razorpayOrderId,
       
       // Customer details
       prefill: {
@@ -70,8 +61,6 @@ export const initiatePayment = async ({
         console.log('Payment successful:', response);
         onSuccess({
           razorpayPaymentId: response.razorpay_payment_id,
-          razorpayOrderId: response.razorpay_order_id,
-          razorpaySignature: response.razorpay_signature,
           orderId: orderId,
           amount: amount,
           timestamp: new Date().toISOString(),
@@ -84,12 +73,6 @@ export const initiatePayment = async ({
           console.log('Payment modal closed');
           onFailure(new Error('Payment cancelled by user'));
         },
-      },
-
-      // Retry enabled
-      retry: {
-        enabled: true,
-        max_count: 3,
       },
 
       // Additional notes
