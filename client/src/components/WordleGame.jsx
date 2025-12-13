@@ -9,12 +9,6 @@ const WORDS = [
   'COCOA', 'MILKY', 'TASTY', 'SPICE', 'HONEY'
 ];
 
-const KEYBOARD_ROWS = [
-  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-  ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK']
-];
-
 const getDailyWord = () => {
   const date = new Date();
   const seed = date.getFullYear() * 10000 + (date.getMonth() + 1) * 100 + date.getDate();
@@ -152,25 +146,6 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
-  // Helper for keyboard key colors
-  const getKeyStatus = (key) => {
-    let status = 'initial';
-    
-    guesses.forEach(guess => {
-      const rowColors = getRowColors(guess);
-      guess.split('').forEach((letter, i) => {
-        if (letter === key) {
-          const currentStatus = rowColors[i];
-          if (currentStatus === 'correct') status = 'correct';
-          else if (currentStatus === 'present' && status !== 'correct') status = 'present';
-          else if (currentStatus === 'absent' && status === 'initial') status = 'absent';
-        }
-      });
-    });
-    
-    return status;
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -252,38 +227,9 @@ export default function WordleGame({ onClose }) {
           </div>
         </div>
 
-        {/* Keyboard */}
-        <div className="p-2 md:p-4 bg-white border-t border-gray-100">
-          {KEYBOARD_ROWS.map((row, i) => (
-            <div key={i} className="flex justify-center gap-1 mb-2">
-              {row.map((key) => {
-                const status = getKeyStatus(key);
-                let bgClass = 'bg-gray-200 hover:bg-gray-300 text-gray-900';
-                
-                if (status === 'correct') bgClass = 'bg-green-500 text-white';
-                else if (status === 'present') bgClass = 'bg-primary text-gray-900';
-                else if (status === 'absent') bgClass = 'bg-gray-400 text-white';
-
-                return (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      if (key === 'ENTER') submitGuess();
-                      else if (key === 'BACK') handleDelete();
-                      else handleKeyPress(key);
-                    }}
-                    className={`
-                      ${key.length > 1 ? 'px-3 md:px-4 text-xs' : 'w-8 md:w-10'} 
-                      h-12 rounded-lg font-bold transition-colors duration-150 flex items-center justify-center
-                      ${bgClass}
-                    `}
-                  >
-                    {key === 'BACK' ? '⌫' : key}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+        {/* Footer Instruction */}
+        <div className="p-4 bg-white border-t border-gray-100 text-center text-gray-500 text-sm">
+          Type using your keyboard to play
         </div>
 
         {/* Game Over Modal Overlay */}
