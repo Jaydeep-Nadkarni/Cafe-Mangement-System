@@ -121,7 +121,7 @@ export default function WordleGame({ onClose }) {
     }
   };
 
-  // Keyboard Input
+  // Keyboard Input (Physical + Mobile)
   useEffect(() => {
     const handleKeydown = (e) => {
       if (gameState !== 'playing') return;
@@ -134,7 +134,7 @@ export default function WordleGame({ onClose }) {
 
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [currentGuess, gameState]);
+  }, [currentGuess, gameState, solution]);
 
   const handleKeyPress = (letter) => {
     if (currentGuess.length < 5 && gameState === 'playing') {
@@ -224,40 +224,39 @@ export default function WordleGame({ onClose }) {
   if (gameState === 'loading') return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-4 animate-fade-in">
-      <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative border border-white/20">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-2 md:p-4 animate-fade-in">
+      <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] relative border border-white/20">
         
         {/* Header */}
-        <div className="p-5 border-b border-gray-100 flex items-center justify-between bg-white/50">
-          <div className="flex items-center gap-2">
-            <div className="bg-primary/10 p-2 rounded-lg">
-              <Trophy className="w-5 h-5 text-primary-dark" />
+        <div className="p-3 md:p-5 border-b border-gray-100 flex items-center justify-between bg-white/50 flex-shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="bg-primary/10 p-2 rounded-lg flex-shrink-0">
+              <Trophy className="w-4 md:w-5 h-4 md:h-5 text-primary-dark" />
             </div>
-            <h2 className="text-xl font-bold font-display text-gray-900">Cafe Wordle</h2>
+            <h2 className="text-lg md:text-xl font-bold font-display text-gray-900 truncate">Cafe Wordle</h2>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 md:gap-2 flex-shrink-0">
             <button 
               onClick={() => setSoundEnabled(!soundEnabled)}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
               title={soundEnabled ? "Mute Sounds" : "Enable Sounds"}
             >
-              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              {soundEnabled ? <Volume2 className="w-4 md:w-5 h-4 md:h-5" /> : <VolumeX className="w-4 md:w-5 h-4 md:h-5" />}
             </button>
             <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
-              <X className="w-5 h-5 text-gray-500" />
+              <X className="w-4 md:w-5 h-4 md:h-5 text-gray-500" />
             </button>
           </div>
         </div>
 
         {/* Game Board */}
-        <div className="flex-1 overflow-y-auto p-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white">
-          {message && (
-            <div className="absolute top-24 z-20 bg-gray-900/90 text-white px-6 py-3 rounded-xl text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white">{message && (
+            <div className="absolute top-16 md:top-24 z-20 bg-gray-900/90 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
               {message}
             </div>
           )}
 
-          <div className="grid grid-rows-6 gap-3 mb-8">
+          <div className="grid grid-rows-6 gap-2 md:gap-3 mb-4 md:mb-8">
             {[...Array(6)].map((_, rowIndex) => {
               const isCurrentRow = rowIndex === guesses.length;
               const guess = guesses[rowIndex];
@@ -358,15 +357,16 @@ export default function WordleGame({ onClose }) {
               </p>
 
               {gameState === 'won' && (
-                <div className="bg-gradient-to-br from-primary/10 to-primary/5 p-5 rounded-2xl mb-8 border border-primary/20 relative overflow-hidden group">
+                <div className="bg-linear-to-br from-primary/10 to-primary/5 p-5 rounded-2xl mb-8 border border-primary/20 relative overflow-hidden group">
                   <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
                   
                   <p className="text-xs font-bold text-primary-dark uppercase tracking-wider mb-3">Your Reward Code</p>
-                  <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-primary/30 shadow-sm">
-                    <code className="flex-1 font-mono font-bold text-xl text-gray-900 tracking-wider">{couponCode}</code>
+                  <div className="flex items-center justify-between gap-3 bg-white p-3 rounded-xl border border-primary/30 shadow-sm">
+                    <code className="font-mono font-bold text-lg text-gray-900 tracking-widest">{couponCode}</code>
                     <button 
                       onClick={copyToClipboard}
-                      className="p-2.5 hover:bg-gray-50 rounded-lg transition-colors text-primary-dark active:scale-95"
+                      className="shrink-0 p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary-dark active:scale-95"
+                      title="Copy coupon code"
                     >
                       {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
                     </button>
@@ -377,7 +377,7 @@ export default function WordleGame({ onClose }) {
 
               <button 
                 onClick={onClose}
-                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-4 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-gray-900/20 active:scale-95"
+                className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-4 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95"
               >
                 Close Game
               </button>
