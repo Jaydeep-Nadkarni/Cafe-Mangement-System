@@ -166,6 +166,9 @@ export default function WordleGame({ onClose }) {
   useEffect(() => {
     if (gameState === 'playing' && inputRef.current) {
       inputRef.current.focus();
+    } else if ((gameState === 'won' || gameState === 'lost') && inputRef.current) {
+      // Blur and hide keyboard when game ends
+      inputRef.current.blur();
     }
   }, [gameState]);
 
@@ -409,7 +412,7 @@ export default function WordleGame({ onClose }) {
         {/* Result Modal */}
         {(gameState === 'won' || gameState === 'lost') && (
           <div className="absolute inset-0 bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6 animate-fade-in z-30 overflow-y-auto">
-            <div className="text-center w-full max-w-lg mx-auto bg-white rounded-3xl p-8 md:p-10 shadow-2xl border border-gray-100 my-4">
+            <div className="text-center w-full max-w-lg mx-auto bg-white rounded-3xl p-6 md:p-10 shadow-2xl border border-gray-100 my-auto min-h-[75vh] md:min-h-0 flex flex-col justify-center">
               {/* Icon with decoration */}
               <div className="relative mb-8">
                 {gameState === 'won' && (
