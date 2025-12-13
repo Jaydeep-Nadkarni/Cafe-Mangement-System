@@ -2,17 +2,16 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import MobileNumberModal from '../components/MobileNumberModal';
-import PaymentSelectionModal from '../components/PaymentSelectionModal';
-import { ShoppingCart, Lightbulb, ArrowRight } from 'lucide-react';
+import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote } from 'lucide-react';
 import { MENU_ITEMS } from '../data/menuItems';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
   const { cart } = useCart();
   const [showMobileModal, setShowMobileModal] = useState(false);
-  const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
-  const [finalAmount, setFinalAmount] = useState(0);
+  const [appliedCoupon, setAppliedCoupon] = useState(null);
+  const [couponInput, setCouponInput] = useState('');
 
   // Redirect if no items in cart
   if (Object.keys(cart).length === 0) {
@@ -43,16 +42,34 @@ export default function OrderSummaryPage() {
 
   const taxRate = 0.05; // 5% GST
   const tax = subtotal * taxRate;
-  const totalBeforeDiscount = subtotal + tax;
 
-  const handlePlaceOrder = () => {
-    setShowPaymentModal(true);
+  // Coupon discount - simple mock coupons
+  const couponDiscounts = {
+    'SAVE10': 0.10,
+    'SAVE20': 0.20,
+    'WELCOME5': 0.05
   };
 
-  const handlePaymentSelect = (method, amount) => {
+  const discountRate = appliedCoupon ? couponDiscounts[appliedCoupon] || 0 : 0;
+  const discountAmount = subtotal * discountRate;
+  const total = subtotal + tax - discountAmount;
+
+  const handleApplyCoupon = () => {
+    if (couponInput.toUpperCase() in couponDiscounts) {
+      setAppliedCoupon(couponInput.toUpperCase());
+      setCouponInput('');
+    } else {
+      alert('Invalid coupon code');
+      setCouponInput('');
+    }
+  };
+
+  const handleRemoveCoupon = () => {
+    setAppliedCoupon(null);
+  };
+
+  const handlePaymentSelect = (method) => {
     setPaymentMethod(method);
-    setFinalAmount(amount);
-    setShowPaymentModal(false);
     setShowMobileModal(true);
   };
 
@@ -94,6 +111,47 @@ export default function OrderSummaryPage() {
         
         <div className="my-6 border-t border-gray-100" />
 
+        {/* Coupon Section */}
+        <div className="mb-6">
+          {!appliedCoupon ? (
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Enter coupon code"
+                  value={couponInput}
+                  onChange={(e) => setCouponInput(e.target.value)}
+                  className="w-full pl-10 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono text-sm uppercase"
+                />
+              </div>
+              <button
+                onClick={handleApplyCoupon}
+                disabled={!couponInput}
+                className="bg-gray-900 text-white px-6 py-3 rounded-xl font-bold text-sm hover:bg-gray-800 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                Apply
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between bg-green-50 border border-green-100 p-4 rounded-xl">
+              <div className="flex items-center gap-2">
+                <Check className="w-5 h-5 text-green-600" />
+                <div>
+                  <p className="font-bold text-green-800 text-sm">Coupon Applied</p>
+                  <p className="text-xs text-green-600 font-mono">{appliedCoupon}</p>
+                </div>
+              </div>
+              <button
+                onClick={handleRemoveCoupon}
+                className="p-2 hover:bg-green-100 rounded-lg text-green-700 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Bill Details */}
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-gray-600">
@@ -104,9 +162,15 @@ export default function OrderSummaryPage() {
             <span>Tax (5%)</span>
             <span className="font-mono">₹{tax.toFixed(2)}</span>
           </div>
+          {appliedCoupon && (
+            <div className="flex justify-between text-green-600 font-medium">
+              <span>Discount</span>
+              <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+            </div>
+          )}
           <div className="border-t border-dashed border-gray-200 my-3 pt-3 flex justify-between items-end">
             <span className="font-bold text-gray-900 text-lg font-display">Total</span>
-            <span className="font-bold text-gray-900 text-2xl font-mono">₹{totalBeforeDiscount.toFixed(2)}</span>
+            <span className="font-bold text-gray-900 text-2xl font-mono">₹{total.toFixed(2)}</span>
           </div>
         </div>
       </div>
@@ -124,30 +188,38 @@ export default function OrderSummaryPage() {
         </div>
       </div>
 
-      {/* Place Order Button */}
-      <button
-        onClick={handlePlaceOrder}
-        className="w-full bg-gray-900 hover:bg-gray-800 text-white font-bold py-4 rounded-2xl shadow-lg transition-all duration-300 active:scale-95 flex items-center justify-center gap-2 group"
-      >
-        <span>Place Order</span>
-        <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
-      </button>
+      {/* Action Buttons */}
+      <div className="space-y-3">
+        <button
+          onClick={() => handlePaymentSelect('online')}
+          className="w-full bg-primary hover:bg-primary-dark text-gray-900 font-bold py-4 rounded-2xl shadow-lg shadow-yellow/20 transition-all active:scale-95 flex items-center justify-between px-6 group"
+        >
+          <div className="flex items-center gap-3">
+            <CreditCard className="w-5 h-5" />
+            <span>Pay Now</span>
+          </div>
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />
+        </button>
 
-      {/* Modals */}
-      <PaymentSelectionModal 
-        isOpen={showPaymentModal}
-        onClose={() => setShowPaymentModal(false)}
-        subtotal={subtotal}
-        tax={tax}
-        onPaymentSelect={handlePaymentSelect}
-      />
+        <button
+          onClick={() => handlePaymentSelect('cash')}
+          className="w-full bg-white border-2 border-gray-100 hover:border-gray-200 text-gray-700 font-bold py-4 rounded-2xl transition-all active:scale-95 flex items-center justify-between px-6 group"
+        >
+          <div className="flex items-center gap-3">
+            <Banknote className="w-5 h-5" />
+            <span>Pay at Counter Later</span>
+          </div>
+          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform text-gray-400" />
+        </button>
+      </div>
 
+      {/* Mobile Number Modal */}
       {showMobileModal && (
         <MobileNumberModal
           isOpen={showMobileModal}
           onClose={() => setShowMobileModal(false)}
           orderData={{
-            totalAmount: finalAmount,
+            totalAmount: total,
             orderId: `ORD_${Date.now()}`,
           }}
           paymentMethod={paymentMethod}

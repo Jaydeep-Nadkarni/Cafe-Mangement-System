@@ -199,12 +199,12 @@ export default function PaymentSuccessPage() {
           </ul>
         </div>
 
-        {/* Back to Home Button */}
+        {/* Order More Button */}
         <button
           onClick={handleBackToHome}
           className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group animate-fade-in-up"
         >
-          <span>Back to Home</span>
+          <span>Order More</span>
           <Home className="w-5 h-5 group-hover:-rotate-45 transition-transform duration-300" />
         </button>
 
