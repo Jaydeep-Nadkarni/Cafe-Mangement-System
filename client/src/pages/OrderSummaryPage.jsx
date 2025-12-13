@@ -51,13 +51,23 @@ export default function OrderSummaryPage() {
     'WELCOME5': 0.05
   };
 
-  const discountRate = appliedCoupon ? couponDiscounts[appliedCoupon] || 0 : 0;
+  let discountRate = 0;
+  if (appliedCoupon) {
+    if (appliedCoupon.startsWith('WT')) {
+      discountRate = 0.10; // 10% for Wordle coupons
+    } else {
+      discountRate = couponDiscounts[appliedCoupon] || 0;
+    }
+  }
+
   const discountAmount = subtotal * discountRate;
   const total = subtotal + tax - discountAmount;
 
   const handleApplyCoupon = () => {
-    if (couponInput.toUpperCase() in couponDiscounts) {
-      setAppliedCoupon(couponInput.toUpperCase());
+    const code = couponInput.toUpperCase();
+    // Accept predefined coupons OR Wordle coupons (starting with WT)
+    if (code in couponDiscounts || (code.startsWith('WT') && code.length > 2)) {
+      setAppliedCoupon(code);
       setCouponInput('');
     } else {
       alert('Invalid coupon code');

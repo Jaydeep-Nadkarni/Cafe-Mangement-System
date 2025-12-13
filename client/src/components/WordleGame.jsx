@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { X, Trophy, AlertCircle, Volume2, VolumeX, Copy, Check } from 'lucide-react';
+import { X, Trophy, AlertCircle, Volume2, VolumeX, Copy, Check, Keyboard } from 'lucide-react';
 
 const WORDS = [
   'LATTE', 'MOCHA', 'BAGEL', 'DONUT', 'CREAM', 
@@ -9,12 +9,6 @@ const WORDS = [
   'COCOA', 'MILKY', 'TASTY', 'SPICE', 'HONEY',
   'BLEND', 'GRIND', 'STEAM', 'FROTH', 'BEANS',
   'AROMA', 'TASTE', 'DRINK', 'ORDER', 'TABLE'
-];
-
-const KEYBOARD_ROWS = [
-  ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
-  ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
-  ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK']
 ];
 
 export default function WordleGame({ onClose }) {
@@ -82,7 +76,52 @@ export default function WordleGame({ onClose }) {
     }));
   }, [guesses, gameState, solution, couponCode]);
 
-  // Keyboard Input
+  // Sound System (Web Audio API)
+  const playSound = (type) => {
+    if (!soundEnabled) return;
+    try {
+      const AudioContext = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContext) return;
+      
+      const ctx = new AudioContext();
+      const now = ctx.currentTime;
+      
+      const createOsc = (freq, type, duration, delay = 0, vol = 0.1) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, now + delay);
+        gain.gain.setValueAtTime(vol, now + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + delay + duration);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + delay);
+        osc.stop(now + delay + duration);
+      };
+
+      if (type === 'tap') {
+        createOsc(600, 'sine', 0.1);
+      } else if (type === 'flip') {
+        createOsc(300, 'triangle', 0.05, 0, 0.05);
+      } else if (type === 'error') {
+        createOsc(150, 'sawtooth', 0.2, 0, 0.1);
+        createOsc(100, 'sawtooth', 0.2, 0.1, 0.1);
+      } else if (type === 'win') {
+        createOsc(523.25, 'sine', 0.2, 0); // C5
+        createOsc(659.25, 'sine', 0.2, 0.1); // E5
+        createOsc(783.99, 'sine', 0.4, 0.2); // G5
+        createOsc(1046.50, 'sine', 0.8, 0.3); // C6
+      } else if (type === 'lose') {
+        createOsc(300, 'triangle', 0.3, 0);
+        createOsc(200, 'triangle', 0.3, 0.2);
+        createOsc(100, 'triangle', 0.5, 0.4);
+      }
+    } catch (e) {
+      console.error("Audio play failed", e);
+    }
+  };
+
+  // Keyboard Input (Physical + Mobile)
   useEffect(() => {
     const handleKeydown = (e) => {
       if (gameState !== 'playing') return;
@@ -95,14 +134,7 @@ export default function WordleGame({ onClose }) {
 
     window.addEventListener('keydown', handleKeydown);
     return () => window.removeEventListener('keydown', handleKeydown);
-  }, [currentGuess, gameState]);
-
-  const playSound = (type) => {
-    if (!soundEnabled) return;
-    // Placeholder for sound logic
-    // const audio = new Audio(`/sounds/${type}.mp3`);
-    // audio.play().catch(() => {});
-  };
+  }, [currentGuess, gameState, solution]);
 
   const handleKeyPress = (letter) => {
     if (currentGuess.length < 5 && gameState === 'playing') {
@@ -139,8 +171,6 @@ export default function WordleGame({ onClose }) {
       setTimeout(() => setShakeRow(false), 500);
       return;
     }
-
-    // In a real app, validate word existence here
     
     const newGuesses = [...guesses, currentGuess];
     setGuesses(newGuesses);
@@ -185,22 +215,6 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
-  const getKeyStatus = (key) => {
-    let status = 'initial';
-    guesses.forEach(guess => {
-      const rowColors = getRowColors(guess);
-      guess.split('').forEach((l, i) => {
-        if (l === key) {
-          const s = rowColors[i];
-          if (s === 'correct') status = 'correct';
-          else if (s === 'present' && status !== 'correct') status = 'present';
-          else if (s === 'absent' && status === 'initial') status = 'absent';
-        }
-      });
-    });
-    return status;
-  };
-
   const copyToClipboard = () => {
     navigator.clipboard.writeText(couponCode);
     setCopied(true);
@@ -210,34 +224,39 @@ export default function WordleGame({ onClose }) {
   if (gameState === 'loading') return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-fade-in">
-      <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh] relative">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-2 md:p-4 animate-fade-in">
+      <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] relative border border-white/20">
         
         {/* Header */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between bg-white">
-          <h2 className="text-xl font-bold font-display text-gray-900">Cafe Wordle</h2>
-          <div className="flex items-center gap-2">
+        <div className="p-3 md:p-5 border-b border-gray-100 flex items-center justify-between bg-white/50 shrink-0">
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="bg-primary/10 p-2 rounded-lg shrink-0">
+              <Trophy className="w-4 md:w-5 h-4 md:h-5 text-primary-dark" />
+            </div>
+            <h2 className="text-lg md:text-xl font-bold font-display text-gray-900 truncate">Cafe Wordle</h2>
+          </div>
+          <div className="flex items-center gap-1 md:gap-2 shrink-0">
             <button 
               onClick={() => setSoundEnabled(!soundEnabled)}
               className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
+              title={soundEnabled ? "Mute Sounds" : "Enable Sounds"}
             >
-              {soundEnabled ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              {soundEnabled ? <Volume2 className="w-4 md:w-5 h-4 md:h-5" /> : <VolumeX className="w-4 md:w-5 h-4 md:h-5" />}
             </button>
-            <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-full transition-colors">
-              <X className="w-5 h-5 text-gray-500" />
+            <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
+              <X className="w-4 md:w-5 h-4 md:h-5 text-gray-500" />
             </button>
           </div>
         </div>
 
         {/* Game Board */}
-        <div className="flex-1 overflow-y-auto p-4 flex flex-col items-center justify-center bg-gray-50">
-          {message && (
-            <div className="absolute top-20 z-20 bg-gray-900 text-white px-4 py-2 rounded-lg text-sm font-bold animate-fade-in-up shadow-lg">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 flex flex-col items-center justify-center bg-linear-to-b from-gray-50 to-white">{message && (
+            <div className="absolute top-16 md:top-24 z-20 bg-gray-900/90 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
               {message}
             </div>
           )}
 
-          <div className="grid grid-rows-6 gap-2 mb-4">
+          <div className="grid grid-rows-6 gap-2 md:gap-3 mb-4 md:mb-8">
             {[...Array(6)].map((_, rowIndex) => {
               const isCurrentRow = rowIndex === guesses.length;
               const guess = guesses[rowIndex];
@@ -246,7 +265,7 @@ export default function WordleGame({ onClose }) {
               return (
                 <div 
                   key={rowIndex} 
-                  className={`grid grid-cols-5 gap-2 ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
+                  className={`grid grid-cols-5 gap-3 ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
                 >
                   {[...Array(5)].map((_, colIndex) => {
                     const letter = guess 
@@ -254,39 +273,44 @@ export default function WordleGame({ onClose }) {
                       : (isCurrentRow ? currentGuess[colIndex] : '');
                     
                     let bgColor = 'bg-white';
-                    let borderColor = 'border-gray-300';
+                    let borderColor = 'border-gray-200';
                     let textColor = 'text-gray-900';
                     let animation = '';
+                    let shadow = 'shadow-sm';
 
                     if (guess) {
                       const status = rowColors[colIndex];
                       animation = 'animate-flip';
                       
                       if (status === 'correct') {
-                        bgColor = 'bg-[#6aaa64]'; // Wordle Green
-                        borderColor = 'border-[#6aaa64]';
+                        bgColor = 'bg-gradient-to-br from-green-500 to-green-600';
+                        borderColor = 'border-green-600';
                         textColor = 'text-white';
+                        shadow = 'shadow-green-200';
                       } else if (status === 'present') {
-                        bgColor = 'bg-[#c9b458]'; // Wordle Yellow
-                        borderColor = 'border-[#c9b458]';
+                        bgColor = 'bg-gradient-to-br from-yellow-400 to-yellow-500';
+                        borderColor = 'border-yellow-500';
                         textColor = 'text-white';
+                        shadow = 'shadow-yellow-200';
                       } else {
-                        bgColor = 'bg-[#787c7e]'; // Wordle Gray
-                        borderColor = 'border-[#787c7e]';
+                        bgColor = 'bg-gradient-to-br from-gray-400 to-gray-500';
+                        borderColor = 'border-gray-500';
                         textColor = 'text-white';
+                        shadow = 'shadow-gray-200';
                       }
                     } else if (letter) {
-                      borderColor = 'border-gray-500';
+                      borderColor = 'border-gray-400';
                       textColor = 'text-gray-900';
                       animation = 'animate-pop';
+                      shadow = 'shadow-md';
                     }
 
                     return (
                       <div
                         key={colIndex}
                         className={`
-                          w-12 h-12 md:w-14 md:h-14 border-2 rounded-lg flex items-center justify-center text-2xl font-bold uppercase transition-all duration-300
-                          ${bgColor} ${borderColor} ${textColor} ${animation}
+                          w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 border-2 rounded-lg md:rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-300
+                          ${bgColor} ${borderColor} ${textColor} ${animation} ${shadow}
                         `}
                         style={{ animationDelay: guess ? `${colIndex * 100}ms` : '0ms' }}
                       >
@@ -298,89 +322,64 @@ export default function WordleGame({ onClose }) {
               );
             })}
           </div>
-        </div>
 
-        {/* Keyboard */}
-        <div className="p-2 md:p-4 bg-white border-t border-gray-100">
-          {KEYBOARD_ROWS.map((row, i) => (
-            <div key={i} className="flex justify-center gap-1 mb-2">
-              {row.map((key) => {
-                const status = getKeyStatus(key);
-                let bgClass = 'bg-gray-200 hover:bg-gray-300 text-gray-900';
-                
-                if (status === 'correct') bgClass = 'bg-[#6aaa64] text-white';
-                else if (status === 'present') bgClass = 'bg-[#c9b458] text-white';
-                else if (status === 'absent') bgClass = 'bg-[#787c7e] text-white';
-
-                return (
-                  <button
-                    key={key}
-                    onClick={() => {
-                      if (key === 'ENTER') submitGuess();
-                      else if (key === 'BACK') handleDelete();
-                      else handleKeyPress(key);
-                    }}
-                    className={`
-                      ${key.length > 1 ? 'px-3 md:px-4 text-xs' : 'w-8 md:w-10'} 
-                      h-12 rounded-lg font-bold transition-colors duration-150 flex items-center justify-center
-                      ${bgClass}
-                    `}
-                  >
-                    {key === 'BACK' ? '⌫' : key}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+          {/* Instruction Footer */}
+          <div className="flex items-center gap-2 text-gray-400 text-xs md:text-sm font-medium bg-gray-100 px-3 md:px-4 py-2 rounded-full">
+            <Keyboard className="w-3 md:w-4 h-3 md:h-4" />
+            <span>Type using your keyboard</span>
+          </div>
         </div>
 
         {/* Result Modal */}
         {(gameState === 'won' || gameState === 'lost') && (
-          <div className="absolute inset-0 bg-white/90 backdrop-blur-sm flex items-center justify-center p-6 animate-fade-in z-30">
-            <div className="text-center max-w-xs w-full">
-              <div className="mb-4 flex justify-center">
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in z-30">
+            <div className="text-center w-full bg-white p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-2xl border border-gray-100 transform animate-pop max-h-[90vh] overflow-y-auto">
+              <div className="mb-4 md:mb-6 flex justify-center shrink-0">
                 {gameState === 'won' ? (
-                  <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short">
-                    <Trophy className="w-10 h-10" />
+                  <div className="w-20 md:w-24 h-20 md:h-24 bg-green-100 rounded-full flex items-center justify-center text-green-600 animate-bounce-short shadow-inner">
+                    <Trophy className="w-10 md:w-12 h-10 md:h-12" />
                   </div>
                 ) : (
-                  <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center text-red-600">
-                    <AlertCircle className="w-10 h-10" />
+                  <div className="w-20 md:w-24 h-20 md:h-24 bg-red-100 rounded-full flex items-center justify-center text-red-600 shadow-inner">
+                    <AlertCircle className="w-10 md:w-12 h-10 md:h-12" />
                   </div>
                 )}
               </div>
               
-              <h3 className="text-2xl font-bold text-gray-900 mb-2 font-display">
+              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 font-display">
                 {gameState === 'won' ? 'Splendid!' : 'Game Over'}
               </h3>
               
-              <p className="text-gray-600 mb-6">
+              <p className="text-sm md:text-base text-gray-600 mb-6 leading-relaxed">
                 {gameState === 'won' 
                   ? 'You solved the daily word!' 
-                  : `The word was ${solution}. Come back tomorrow!`}
+                  : <span>The word was <strong className="text-gray-900">{solution}</strong>.<br/>Come back tomorrow!</span>}
               </p>
 
               {gameState === 'won' && (
-                <div className="bg-primary/10 p-4 rounded-xl mb-6 border border-primary/20">
-                  <p className="text-xs font-bold text-primary-dark uppercase tracking-wider mb-2">Your Reward Code</p>
-                  <div className="flex items-center gap-2 bg-white p-2 rounded-lg border border-primary/30">
-                    <code className="flex-1 font-mono font-bold text-lg text-gray-900 tracking-wider">{couponCode}</code>
+                <div className="bg-linear-to-br from-primary/10 to-primary/5 p-4 md:p-5 rounded-xl md:rounded-2xl mb-6 md:mb-8 border border-primary/20 relative overflow-hidden group">
+                  <div className="absolute top-0 right-0 w-16 h-16 bg-primary/10 rounded-bl-full -mr-8 -mt-8 transition-transform group-hover:scale-110" />
+                  
+                  <p className="text-xs font-bold text-primary-dark uppercase tracking-wider mb-2 md:mb-3">Your Reward Code</p>
+                  <div className="flex items-center justify-between gap-2 md:gap-3 bg-white p-2 md:p-3 rounded-lg md:rounded-xl border border-primary/30 shadow-sm">
+                    <code className="font-mono font-bold text-base md:text-lg text-gray-900 tracking-widest break-all">{couponCode}</code>
                     <button 
                       onClick={copyToClipboard}
-                      className="p-2 hover:bg-gray-100 rounded-md transition-colors text-primary-dark"
+                      className="shrink-0 p-2 hover:bg-primary/10 rounded-lg transition-colors text-primary-dark active:scale-95"
+                      title="Copy coupon code"
                     >
-                      {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+                      {copied ? <Check className="w-4 md:w-5 h-4 md:h-5" /> : <Copy className="w-4 md:w-5 h-4 md:h-5" />}
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-500 mt-2">Valid for today only. Use at checkout.</p>
+                  <p className="text-[10px] text-gray-500 mt-2 md:mt-3 font-medium">Valid for today only. Show at checkout.</p>
                 </div>
               )}
 
               <button 
                 onClick={onClose}
-                className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95"
+                className="w-full bg-gray-900 hover:bg-gray-800 text-white py-3 md:py-4 rounded-lg md:rounded-xl font-bold transition-all duration-300 shadow-lg shadow-gray-900/20 active:scale-95 text-sm md:text-base"
               >
-                Close
+                Close Game
               </button>
             </div>
           </div>
@@ -398,11 +397,11 @@ export default function WordleGame({ onClose }) {
         }
         @keyframes pop {
           0% { transform: scale(0.8); opacity: 0; }
-          40% { transform: scale(1.1); opacity: 1; }
+          40% { transform: scale(1.05); opacity: 1; }
           100% { transform: scale(1); opacity: 1; }
         }
         .animate-pop {
-          animation: pop 0.1s ease-in-out forwards;
+          animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
         }
       `}</style>
     </div>
