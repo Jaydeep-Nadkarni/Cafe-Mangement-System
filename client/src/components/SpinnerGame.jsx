@@ -214,7 +214,7 @@ export default function SpinnerGame({ onClose }) {
                     <p className="text-lg text-primary-dark font-bold mb-4">{result.label}</p>
                     <button
                       onClick={handleApplyCoupon}
-                      className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors shadow-lg"
+                      className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95"
                     >
                       Apply to Cart
                     </button>
