@@ -146,6 +146,19 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
+  const generateSecureCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let randomPart = '';
+    const array = new Uint32Array(2);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < 8; i++) {
+      const index = array[i % 2] % chars.length;
+      randomPart += chars[index];
+      array[i % 2] = Math.floor(array[i % 2] / chars.length);
+    }
+    return `WORDLE-${randomPart.slice(0, 4)}-${randomPart.slice(4)}`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -261,15 +274,16 @@ export default function WordleGame({ onClose }) {
               {gameState === 'won' && (
                 <div className="bg-primary/10 p-4 rounded-xl mb-6 border border-primary/20">
                   <p className="text-sm font-bold text-primary-dark uppercase tracking-wider mb-1">Reward Unlocked</p>
-                  <p className="text-lg font-bold text-gray-900">10% Off Coupon: CAFE{Math.floor(Math.random() * 1000)}</p>
+                  <p className="text-lg font-bold text-gray-900 select-all">{generateSecureCode()}</p>
+                  <p className="text-xs text-gray-500 mt-1">Use this code at checkout</p>
                 </div>
               )}
 
               <button 
                 onClick={onClose}
-                className="w-full bg-gray-900 text-white py-3 rounded-xl font-bold hover:bg-gray-800 transition-colors"
+                className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95"
               >
-                Close Game
+                {gameState === 'won' ? 'Claim & Close' : 'Close Game'}
               </button>
             </div>
           </div>
