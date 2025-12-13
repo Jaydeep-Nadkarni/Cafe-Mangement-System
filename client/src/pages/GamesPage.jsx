@@ -1,116 +1,153 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2, Check, Mail, Rocket, ArrowRight } from 'lucide-react';
+import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
+import WordleGame from '../components/WordleGame';
 
 export default function GamesPage() {
   const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('single');
+  const [isWordleOpen, setIsWordleOpen] = useState(false);
+
+  const handlePlayClick = (gameId) => {
+    if (gameId === 'wordle') setIsWordleOpen(true);
+  };
+
+  const games = [
+    {
+      id: 'wordle',
+      name: 'Cafe Wordle',
+      description: 'Guess the daily cafe-themed word in 6 tries to win exclusive discounts.',
+      image: 'https://images.unsplash.com/photo-1632516643720-e7f5d7d6ecc9?w=800&h=600&fit=crop',
+      reward: 'Win 10% Off Coupon',
+      tag: 'Daily Challenge',
+      color: 'bg-green-100 text-green-800'
+    },
+    {
+      id: 'spinner',
+      name: 'Daily Spin',
+      description: 'Spin the wheel for a chance to win free items, discounts, and more!',
+      image: 'https://images.unsplash.com/photo-1605020420620-20c943cc4669?w=800&h=600&fit=crop',
+      reward: 'Win Free Coffee/Pastry',
+      tag: 'Popular',
+      color: 'bg-purple-100 text-purple-800'
+    }
+  ];
 
   return (
-    <div className="px-4 md:px-6 py-12 flex items-center justify-center min-h-[70vh]">
-      <div className="w-full max-w-md text-center animate-fade-in-up">
-        {/* Animated Icon */}
-        <div className="mb-8 flex justify-center">
-          <div className="relative">
-            {/* Spinning background */}
-            <div className="absolute inset-0 w-24 h-24 bg-linear-to-r from-primary/20 to-primary-light/20 rounded-full animate-spin opacity-30" style={{ animationDuration: '3s' }} />
-            
-            {/* Static game icon */}
-            <div className="relative w-24 h-24 flex items-center justify-center text-primary-dark">
-              <Gamepad2 className="w-12 h-12" />
-            </div>
-          </div>
-        </div>
-
-        {/* Coming Soon Message */}
-        <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4">
-          Coming Soon!
+    <div className="px-4 md:px-6 py-8 max-w-4xl mx-auto min-h-[80vh]">
+      {/* Header */}
+      <div className="text-center mb-8 animate-fade-in-up">
+        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 font-display">
+          Games & Rewards
         </h1>
-        
-        <p className="text-lg text-gray-600 mb-2">
-          Exciting games and rewards are on their way
-        </p>
-        
-        <p className="text-sm text-gray-500 mb-8">
-          We're working hard to bring you an amazing gaming experience. Stay tuned!
-        </p>
+        <p className="text-gray-500 font-body">Play games, win rewards, and enjoy!</p>
+      </div>
 
-        {/* Feature Preview */}
-        <div className="bg-linear-to-br from-primary/10 to-primary-light/10 rounded-3xl p-8 mb-8 border border-primary/20">
-          <h3 className="text-lg font-bold text-primary-dark mb-6">What's Coming?</h3>
-          
-          <ul className="space-y-4 text-left">
-            <li className="flex gap-4 items-start">
-              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
-                <Check className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="font-semibold text-gray-900">Daily Spin & Win</p>
-                <p className="text-xs text-gray-600">Spin daily and earn rewards</p>
+      {/* Toggle Switch */}
+      <div className="max-w-xs mx-auto mb-10 bg-gray-100 p-1.5 rounded-full flex relative animate-fade-in-up delay-100">
+        <button
+          onClick={() => setActiveTab('single')}
+          className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
+            activeTab === 'single'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Gamepad2 className="w-4 h-4" />
+          Single Player
+        </button>
+        <button
+          onClick={() => setActiveTab('multi')}
+          className={`flex-1 py-2.5 rounded-full text-sm font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
+            activeTab === 'multi'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-500 hover:text-gray-700'
+          }`}
+        >
+          <Users className="w-4 h-4" />
+          Multiplayer
+        </button>
+      </div>
+
+      {/* Content Area */}
+      <div className="animate-fade-in-up delay-200">
+        {activeTab === 'single' ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {games.map((game) => (
+              <div 
+                key={game.id}
+                className="bg-white rounded-3xl shadow-card hover:shadow-lg transition-all duration-300 overflow-hidden group border border-gray-100 flex flex-col h-full"
+              >
+                {/* Image Container */}
+                <div className="relative h-48 overflow-hidden">
+                  <div className="absolute inset-0 bg-gray-900/10 group-hover:bg-gray-900/0 transition-colors z-10" />
+                  <img 
+                    src={game.image} 
+                    alt={game.name}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
+                  />
+                  
+                  {/* Tag */}
+                  <div className="absolute top-4 left-4 z-20">
+                    <span className="bg-white/90 backdrop-blur-sm px-3 py-1 rounded-full text-xs font-bold text-gray-900 uppercase tracking-wider shadow-sm">
+                      {game.tag}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Content */}
+                <div className="p-6 flex-1 flex flex-col">
+                  <div className="mb-4">
+                    <h3 className="text-2xl font-bold text-gray-900 font-display mb-2">{game.name}</h3>
+                    <p className="text-gray-500 text-sm leading-relaxed">{game.description}</p>
+                  </div>
+
+                  <div className="mt-auto space-y-4">
+                    {/* Reward Badge */}
+                    <div className={`flex items-center gap-2 px-3 py-2 rounded-xl ${game.color} w-fit`}>
+                      <Trophy className="w-4 h-4" />
+                      <span className="text-xs font-bold">{game.reward}</span>
+                    </div>
+
+                    {/* Play Button */}
+                    <button 
+                      onClick={() => handlePlayClick(game.id)}
+                      className="w-full bg-primary hover:bg-primary-dark text-gray-900 py-3.5 rounded-xl font-bold transition-all duration-300 shadow-lg shadow-primary/20 active:scale-95 flex items-center justify-center gap-2 group/btn"
+                    >
+                      <Play className="w-5 h-5 fill-current" />
+                      <span>Play Now</span>
+                    </button>
+                  </div>
+                </div>
               </div>
-            </li>
-
-            <li className="flex gap-4 items-start">
-              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
-                <Check className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="font-semibold text-gray-900">Scratch Cards</p>
-                <p className="text-xs text-gray-600">Instant rewards and discounts</p>
+            ))}
+          </div>
+        ) : (
+          /* Multiplayer Coming Soon State */
+          <div className="text-center py-12 bg-white rounded-3xl border border-gray-100 shadow-sm">
+            <div className="mb-6 flex justify-center">
+              <div className="relative">
+                <div className="absolute inset-0 bg-primary/20 rounded-full animate-ping opacity-20" />
+                <div className="relative bg-gray-50 p-6 rounded-full">
+                  <Lock className="w-12 h-12 text-gray-400" />
+                </div>
               </div>
-            </li>
-
-            <li className="flex gap-4 items-start">
-              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
-                <Check className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="font-semibold text-gray-900">Leaderboards</p>
-                <p className="text-xs text-gray-600">Compete and win prizes</p>
-              </div>
-            </li>
-
-            <li className="flex gap-4 items-start">
-              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
-                <Check className="w-4 h-4" />
-              </span>
-              <div>
-                <p className="font-semibold text-gray-900">Loyalty Points</p>
-                <p className="text-xs text-gray-600">Earn points on every order</p>
-              </div>
-            </li>
-          </ul>
-        </div>
-
-        {/* Notification Signup */}
-        <div className="bg-white rounded-3xl shadow-sm p-6 mb-8 border border-gray-100">
-          <p className="text-sm text-gray-600 mb-4 flex items-center justify-center gap-2">
-            <Mail className="w-4 h-4" /> Be the first to know when games launch
-          </p>
-          <div className="flex gap-2">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 bg-gray-100 border-2 border-transparent rounded-2xl px-4 py-3 text-sm focus:outline-none focus:border-primary focus:bg-white transition-all duration-200"
-            />
-            <button className="px-4 py-3 bg-primary hover:bg-primary-dark text-gray-900 font-semibold rounded-2xl transition-colors whitespace-nowrap">
-              Notify
+            </div>
+            <h3 className="text-2xl font-bold text-gray-900 mb-2 font-display">Coming Soon</h3>
+            <p className="text-gray-500 max-w-xs mx-auto mb-8">
+              Challenge your friends in real-time! We're building something awesome.
+            </p>
+            <button 
+              onClick={() => setActiveTab('single')}
+              className="text-primary-dark font-bold hover:underline"
+            >
+              Play Single Player Games &rarr;
             </button>
           </div>
-        </div>
-
-        {/* Back to Menu Button */}
-        <button
-          onClick={() => navigate('/menu')}
-          className="w-full bg-linear-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group"
-        >
-          <span>Browse Menu Instead</span>
-          <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
-        </button>
-
-        {/* Fun Footer Message */}
-        <p className="text-xs text-gray-400 mt-8 flex items-center justify-center gap-1">
-          <Rocket className="w-3 h-3" /> Launching in Q4 2025
-        </p>
+        )}
       </div>
+
+      {isWordleOpen && <WordleGame onClose={() => setIsWordleOpen(false)} />}
     </div>
   );
 }
