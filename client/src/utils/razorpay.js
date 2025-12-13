@@ -42,7 +42,7 @@ export const initiatePayment = async ({
     // const { razorpayOrderId } = await response.json();
 
     // Mock razorpay order ID for demo
-    const razorpayOrderId = `order_${Date.now()}`;
+    // const razorpayOrderId = `order_${Date.now()}`;
 
     // Get Razorpay key from environment variables (Vite uses import.meta.env)
     const razorpayKey = import.meta.env.VITE_RAZORPAY_KEY_ID || 'rzp_test_1DP5MMOlF23iry';
@@ -54,7 +54,7 @@ export const initiatePayment = async ({
       currency: 'INR',
       name: 'Cafe Management System',
       description: `Order #${orderId}`,
-      order_id: razorpayOrderId,
+      // order_id: razorpayOrderId, // REMOVED: Do not pass invalid order_id. Only pass if created via API.
       
       // Customer details
       prefill: {
