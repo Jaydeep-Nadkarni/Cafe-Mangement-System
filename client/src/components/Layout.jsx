@@ -8,8 +8,9 @@ export default function Layout({ children }) {
   
   // Only hide nav on payment success page
   const hideNav = ['/payment-success'].includes(location.pathname);
-  // Hide order bar on order-summary and payment-success pages
-  const hideOrderBar = ['/order-summary', '/payment-success', '/ai'].includes(location.pathname);
+  
+  // Show order bar only on menu page
+  const showOrderBar = location.pathname === '/menu';
 
   return (
     <div className="min-h-screen bg-bg-cream flex flex-col font-sans">
@@ -25,7 +26,7 @@ export default function Layout({ children }) {
       {!hideNav && <BottomNav />}
 
       {/* Bottom Order Bar */}
-      {!hideNav && !hideOrderBar && <BottomOrderBar />}
+      {!hideNav && <BottomOrderBar isVisible={showOrderBar} />}
     </div>
   );
 }

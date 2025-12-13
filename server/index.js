@@ -1,6 +1,9 @@
 const express = require('express');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const PDFDocument = require('pdfkit');
+const axios = require('axios');
+const FormData = require('form-data');
 require('dotenv').config();
 
 const app = express();
@@ -362,6 +365,173 @@ app.post('/api/razorpay/verify-payment', (req, res) => {
       success: false,
       error: error.message
     });
+  }
+});
+
+// ==================== WHATSAPP & PDF ENDPOINTS ====================
+
+app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
+  try {
+    const { orderId, amount, method, customerName, customerPhone, items } = req.body;
+
+    if (!customerPhone) {
+      return res.status(400).json({ success: false, error: 'Customer phone number is required' });
+    }
+
+    console.log(`Generating bill for Order ${orderId} to ${customerPhone}`);
+
+    // 1. Generate PDF
+    const doc = new PDFDocument({ margin: 50 });
+    const buffers = [];
+    doc.on('data', buffers.push.bind(buffers));
+    
+    // Header
+    doc.fontSize(20).text('Cafe Management System', { align: 'center' });
+    doc.moveDown(0.5);
+    doc.fontSize(12).text('123 Coffee Street, Tech City', { align: 'center' });
+    doc.moveDown(1);
+    
+    // Receipt Details
+    doc.fontSize(16).text('ORDER RECEIPT', { align: 'center', underline: true });
+    doc.moveDown(1);
+    
+    doc.fontSize(10);
+    doc.text(`Order ID: ${orderId}`, { align: 'left' });
+    doc.text(`Date: ${new Date().toLocaleString()}`, { align: 'left' });
+    doc.text(`Customer: ${customerName || 'Guest'}`, { align: 'left' });
+    doc.text(`Phone: ${customerPhone}`, { align: 'left' });
+    doc.text(`Payment Method: ${method === 'online' ? 'Online Payment' : 'Cash at Counter'}`, { align: 'left' });
+    doc.moveDown(1);
+    
+    // Table Header
+    const tableTop = doc.y;
+    doc.font('Helvetica-Bold');
+    doc.text('Item', 50, tableTop);
+    doc.text('Qty', 300, tableTop);
+    doc.text('Price', 350, tableTop);
+    doc.text('Total', 450, tableTop);
+    doc.font('Helvetica');
+    
+    doc.moveTo(50, tableTop + 15).lineTo(550, tableTop + 15).stroke();
+    doc.moveDown(1.5);
+
+    // Items
+    let y = doc.y;
+    if (items) {
+        Object.entries(items).forEach(([itemId, qty]) => {
+            const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
+            if (item) {
+                const lineTotal = item.price * qty;
+                doc.text(item.name, 50, y);
+                doc.text(qty.toString(), 300, y);
+                doc.text(`$${item.price.toFixed(2)}`, 350, y);
+                doc.text(`$${lineTotal.toFixed(2)}`, 450, y);
+                y += 20;
+            }
+        });
+    }
+    
+    doc.moveTo(50, y).lineTo(550, y).stroke();
+    y += 10;
+    
+    // Total
+    doc.fontSize(14).font('Helvetica-Bold');
+    doc.text(`Total Amount: $${amount.toFixed(2)}`, 350, y);
+    
+    // Footer
+    doc.fontSize(10).font('Helvetica');
+    doc.text('Thank you for your visit!', 50, y + 50, { align: 'center' });
+    
+    doc.end();
+
+    // Wait for PDF to be generated
+    const pdfBuffer = await new Promise((resolve) => {
+        doc.on('end', () => {
+            const pdfData = Buffer.concat(buffers);
+            resolve(pdfData);
+        });
+    });
+
+    // 2. Send to WhatsApp
+    const whatsappToken = process.env.WHATSAPP_ACCESS_TOKEN;
+    const phoneId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+    const apiUrl = process.env.WHATSAPP_API_URL || 'https://graph.facebook.com/v17.0';
+
+    let whatsappStatus = 'simulated';
+
+    if (whatsappToken && phoneId && whatsappToken !== 'your_whatsapp_access_token_here') {
+        try {
+            // A. Upload Media
+            const form = new FormData();
+            form.append('file', pdfBuffer, { filename: `bill_${orderId}.pdf`, contentType: 'application/pdf' });
+            form.append('type', 'application/pdf');
+            form.append('messaging_product', 'whatsapp');
+
+            const uploadResponse = await axios.post(`${apiUrl}/${phoneId}/media`, form, {
+                headers: {
+                    'Authorization': `Bearer ${whatsappToken}`,
+                    ...form.getHeaders()
+                }
+            });
+
+            const mediaId = uploadResponse.data.id;
+
+            // B. Send Document Message
+            await axios.post(`${apiUrl}/${phoneId}/messages`, {
+                messaging_product: 'whatsapp',
+                to: customerPhone,
+                type: 'document',
+                document: {
+                    id: mediaId,
+                    caption: `Here is your bill for Order ${orderId}`,
+                    filename: `bill_${orderId}.pdf`
+                }
+            }, {
+                headers: {
+                    'Authorization': `Bearer ${whatsappToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            
+            whatsappStatus = 'sent';
+        } catch (waError) {
+            console.error('WhatsApp API Error:', waError.response?.data || waError.message);
+            whatsappStatus = 'failed';
+            
+            // Fallback to text message if media upload fails
+            try {
+                 await axios.post(`${apiUrl}/${phoneId}/messages`, {
+                    messaging_product: 'whatsapp',
+                    to: customerPhone,
+                    type: 'text',
+                    text: {
+                        body: `*Cafe Management System*\n\nHello ${customerName},\nHere is your bill for Order *${orderId}*.\n\nTotal Amount: *$${amount.toFixed(2)}*\n\n(PDF generation failed, but here is your summary)`
+                    }
+                }, {
+                    headers: {
+                        'Authorization': `Bearer ${whatsappToken}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                whatsappStatus = 'sent_text_fallback';
+            } catch (textError) {
+                console.error('WhatsApp Text Fallback Error:', textError.response?.data || textError.message);
+            }
+        }
+    } else {
+        console.log('WhatsApp credentials not configured. Skipping actual send.');
+    }
+
+    res.json({ 
+        success: true, 
+        message: 'Bill generated', 
+        whatsappStatus,
+        pdfGenerated: true 
+    });
+
+  } catch (error) {
+    console.error('Error processing bill:', error);
+    res.status(500).json({ success: false, error: 'Failed to process bill' });
   }
 });
 

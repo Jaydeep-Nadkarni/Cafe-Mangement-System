@@ -4,9 +4,9 @@ import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
 import { Check, AlertCircle, Loader2, Lock, ArrowRight } from 'lucide-react';
 
-export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData }) {
+export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData, paymentMethod }) {
   const navigate = useNavigate();
-  const { cart } = useCart();
+  const { cart, clearCart } = useCart();
   const [mobileNumber, setMobileNumber] = useState('');
   const [customerName, setCustomerName] = useState('');
   const [error, setError] = useState('');
@@ -45,9 +45,33 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
 
     setIsSubmitting(true);
 
+    const currentCart = { ...cart };
     const phoneNumber = mobileNumber.replace(/\D/g, '');
     const orderId = `ORD_${Date.now()}`;
     const totalAmount = orderData?.totalAmount || 0;
+
+    if (paymentMethod === 'cash') {
+      setTimeout(() => {
+        clearCart();
+        navigate('/payment-success', {
+          state: {
+            paymentData: {
+              paymentId: 'CASH_' + Date.now(),
+              orderId: orderId,
+              method: 'cash',
+              amount: totalAmount,
+              customerName: customerName,
+              customerPhone: phoneNumber
+            },
+            orderItems: currentCart
+          },
+        });
+        setMobileNumber('');
+        setCustomerName('');
+        onClose();
+      }, 1500);
+      return;
+    }
 
     try {
       // Initiate Razorpay payment
@@ -59,10 +83,16 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         customerPhone: phoneNumber,
         onSuccess: (paymentResponse) => {
           console.log('Payment successful:', paymentResponse);
+          clearCart();
           // Navigate to success page with payment data
           navigate('/payment-success', {
             state: {
-              paymentData: paymentResponse,
+              paymentData: {
+                ...paymentResponse,
+                customerName: customerName,
+                customerPhone: phoneNumber
+              },
+              orderItems: currentCart
             },
           });
           setMobileNumber('');
@@ -101,7 +131,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
       {/* Modal */}
       <div className="fixed inset-x-0 bottom-0 z-50 px-4 pb-4 animate-fade-in-up">
         <div
-          className="bg-white rounded-3xl shadow-2xl p-6 md:p-8 max-w-md mx-auto"
+          className="bg-white rounded-3xl shadow-2xl p-5 md:p-8 max-w-md mx-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
@@ -141,7 +171,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 Mobile Number
               </label>
               <div className="flex gap-2">
-                <div className="px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">
+                <div className="flex-shrink-0 px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">
                   +91
                 </div>
                 <input
@@ -153,7 +183,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                     setMobileNumber(value);
                     setError('');
                   }}
-                  className="flex-1 bg-gray-100 border-2 border-transparent rounded-2xl px-4 py-3 text-lg font-semibold focus:outline-none focus:border-primary focus:bg-white transition-all duration-200"
+                  className="flex-1 min-w-0 bg-gray-100 border-2 border-transparent rounded-2xl px-3 md:px-4 py-3 text-base md:text-lg font-semibold focus:outline-none focus:border-primary focus:bg-white transition-all duration-200"
                   disabled={isSubmitting}
                 />
               </div>
@@ -186,11 +216,11 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
               {isSubmitting ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>Opening Payment...</span>
+                  <span>{paymentMethod === 'cash' ? 'Placing Order...' : 'Opening Payment...'}</span>
                 </>
               ) : (
                 <>
-                  <span>Pay ₹{orderData?.totalAmount?.toFixed(2)}</span>
+                  <span>{paymentMethod === 'cash' ? 'Confirm Order' : `Pay ₹${orderData?.totalAmount?.toFixed(2)}`}</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </>
               )}

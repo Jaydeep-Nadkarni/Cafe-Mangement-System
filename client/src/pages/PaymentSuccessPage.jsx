@@ -9,6 +9,7 @@ export default function PaymentSuccessPage() {
   const { cart } = useCart();
   const [paymentData, setPaymentData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [billStatus, setBillStatus] = useState('pending'); // pending, sending, sent, failed
 
   useEffect(() => {
     // Get payment data from location state
@@ -16,13 +17,46 @@ export default function PaymentSuccessPage() {
     if (state?.paymentData) {
       setPaymentData(state.paymentData);
       setIsLoading(false);
+
+      // Send WhatsApp Bill
+      const sendBill = async () => {
+        if (billStatus !== 'pending') return;
+        setBillStatus('sending');
+        
+        try {
+          const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:5000'}/api/orders/send-whatsapp-bill`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              orderId: state.paymentData.orderId,
+              amount: state.paymentData.amount,
+              method: state.paymentData.method || 'online',
+              customerName: state.paymentData.customerName,
+              customerPhone: state.paymentData.customerPhone,
+              items: state.orderItems
+            })
+          });
+          
+          const result = await response.json();
+          console.log('Bill sending result:', result);
+          setBillStatus('sent');
+        } catch (error) {
+          console.error('Error sending bill:', error);
+          setBillStatus('failed');
+        }
+      };
+
+      sendBill();
     } else {
       // Redirect to home if no payment data
       setTimeout(() => {
         navigate('/');
       }, 2000);
     }
-  }, [location, navigate]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location, navigate]); // Removed billStatus from deps to avoid loop
 
   const handleBackToHome = () => {
     // Clear cart on successful payment
@@ -147,7 +181,12 @@ export default function PaymentSuccessPage() {
           <ul className="space-y-3 text-sm text-gray-700">
             <li className="flex gap-3 items-center">
               <Bell className="w-4 h-4 text-primary-dark" />
-              <span>You'll receive an SMS with order details</span>
+              <span>
+                {billStatus === 'sending' && 'Sending bill via WhatsApp...'}
+                {billStatus === 'sent' && 'Bill sent to your WhatsApp!'}
+                {billStatus === 'failed' && 'Could not send WhatsApp bill.'}
+                {billStatus === 'pending' && 'Preparing your bill...'}
+              </span>
             </li>
             <li className="flex gap-3 items-center">
               <Clock className="w-4 h-4 text-primary-dark" />

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingBag } from 'lucide-react';
 import { MENU_ITEMS } from '../data/menuItems';
 
-export default function BottomOrderBar() {
+export default function BottomOrderBar({ isVisible = true }) {
   const navigate = useNavigate();
   const { cart } = useCart();
   
@@ -17,13 +17,14 @@ export default function BottomOrderBar() {
   const totalPrice = calculateTotal();
   const totalItems = Object.values(cart).reduce((sum, qty) => sum + qty, 0);
   const hasItems = totalItems > 0;
+  const shouldShow = hasItems && isVisible;
 
   return (
     <>
       {/* Bottom Order Bar - positioned above nav bar */}
       <div
         className={`fixed bottom-20 left-4 right-4 z-50 transition-all duration-500 transform mb-6 ${
-          hasItems
+          shouldShow
             ? 'translate-y-0 opacity-100'
             : 'translate-y-24 opacity-0 pointer-events-none'
         }`}
