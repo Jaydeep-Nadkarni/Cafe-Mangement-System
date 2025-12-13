@@ -332,7 +332,7 @@ export default function WordleGame({ onClose }) {
 
         {/* Result Modal */}
         {(gameState === 'won' || gameState === 'lost') && (
-          <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-6 animate-fade-in z-30">
+          <div className="absolute inset-0 bg-white/80 backdrop-blur-md flex items-center justify-center p-3 md:p-6 animate-fade-in z-30">
             <div className="text-center w-full bg-white p-6 md:p-8 rounded-2xl md:rounded-3xl shadow-2xl border border-gray-100 transform animate-pop max-h-[90vh] overflow-y-auto">
               <div className="mb-4 md:mb-6 flex justify-center flex-shrink-0">
                 {gameState === 'won' ? (
