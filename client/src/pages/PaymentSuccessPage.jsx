@@ -21,6 +21,13 @@ export default function PaymentSuccessPage() {
       // Send WhatsApp Bill
       const sendBill = async () => {
         if (billStatus !== 'pending') return;
+        
+        // Skip WhatsApp bill for cash orders (no phone number)
+        if (state.paymentData.method === 'cash') {
+          setBillStatus('skipped');
+          return;
+        }
+
         setBillStatus('sending');
         
         try {
@@ -108,11 +115,17 @@ export default function PaymentSuccessPage() {
 
           {/* Thank You Message */}
           <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-3">
-            Thank You!
+            {paymentData.method === 'cash' ? 'Order Placed!' : 'Thank You!'}
           </h1>
-          <p className="text-gray-600 text-lg mb-2">Your order has been confirmed</p>
+          <p className="text-gray-600 text-lg mb-2">
+            {paymentData.method === 'cash' 
+              ? 'Your order is being prepared.' 
+              : 'Your order has been confirmed'}
+          </p>
           <p className="text-sm text-gray-500">
-            A confirmation has been sent to your registered mobile number
+            {paymentData.method === 'cash'
+              ? 'Please complete your payment at the counter.'
+              : 'A confirmation has been sent to your registered mobile number'}
           </p>
         </div>
 
@@ -141,15 +154,23 @@ export default function PaymentSuccessPage() {
             {/* Payment Method */}
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Payment Method</span>
-              <span className="font-semibold text-gray-900">Razorpay</span>
+              <span className="font-semibold text-gray-900">
+                {paymentData.method === 'cash' ? 'Pay at Counter' : 'Razorpay'}
+              </span>
             </div>
 
             {/* Status */}
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Status</span>
-              <span className="inline-flex items-center gap-2 px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm font-semibold">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                Successful
+              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-semibold ${
+                paymentData.method === 'cash' 
+                  ? 'bg-yellow-50 text-yellow-700' 
+                  : 'bg-green-50 text-green-700'
+              }`}>
+                <span className={`w-2 h-2 rounded-full animate-pulse ${
+                  paymentData.method === 'cash' ? 'bg-yellow-500' : 'bg-green-500'
+                }`} />
+                {paymentData.method === 'cash' ? 'Pending Payment' : 'Successful'}
               </span>
             </div>
 
@@ -162,15 +183,17 @@ export default function PaymentSuccessPage() {
             </div>
           </div>
 
-          {/* Transaction ID */}
-          <div>
-            <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">
-              Payment ID
-            </p>
-            <p className="text-xs font-mono text-gray-600 break-all bg-gray-50 rounded-lg p-3">
-              {paymentData.razorpayPaymentId}
-            </p>
-          </div>
+          {/* Transaction ID - Only for Online */}
+          {paymentData.method !== 'cash' && (
+            <div>
+              <p className="text-xs uppercase tracking-wider text-gray-500 font-semibold mb-2">
+                Payment ID
+              </p>
+              <p className="text-xs font-mono text-gray-600 break-all bg-gray-50 rounded-lg p-3">
+                {paymentData.razorpayPaymentId}
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Next Steps */}
@@ -179,15 +202,17 @@ export default function PaymentSuccessPage() {
             <ClipboardList className="w-5 h-5" /> What's Next?
           </h3>
           <ul className="space-y-3 text-sm text-gray-700">
-            <li className="flex gap-3 items-center">
-              <Bell className="w-4 h-4 text-primary-dark" />
-              <span>
-                {billStatus === 'sending' && 'Sending bill via WhatsApp...'}
-                {billStatus === 'sent' && 'Bill sent to your WhatsApp!'}
-                {billStatus === 'failed' && 'Could not send WhatsApp bill.'}
-                {billStatus === 'pending' && 'Preparing your bill...'}
-              </span>
-            </li>
+            {paymentData.method !== 'cash' && (
+              <li className="flex gap-3 items-center">
+                <Bell className="w-4 h-4 text-primary-dark" />
+                <span>
+                  {billStatus === 'sending' && 'Sending bill via WhatsApp...'}
+                  {billStatus === 'sent' && 'Bill sent to your WhatsApp!'}
+                  {billStatus === 'failed' && 'Could not send WhatsApp bill.'}
+                  {billStatus === 'pending' && 'Preparing your bill...'}
+                </span>
+              </li>
+            )}
             <li className="flex gap-3 items-center">
               <Clock className="w-4 h-4 text-primary-dark" />
               <span>Your order will be prepared and delivered soon</span>

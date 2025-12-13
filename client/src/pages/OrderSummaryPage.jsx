@@ -7,7 +7,7 @@ import { MENU_ITEMS } from '../data/menuItems';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
-  const { cart } = useCart();
+  const { cart, clearCart } = useCart();
   const [showMobileModal, setShowMobileModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [appliedCoupon, setAppliedCoupon] = useState(null);
@@ -69,6 +69,25 @@ export default function OrderSummaryPage() {
   };
 
   const handlePaymentSelect = (method) => {
+    if (method === 'cash') {
+      const currentCart = { ...cart };
+      const orderId = `ORD_${Date.now()}`;
+      
+      clearCart();
+      navigate('/payment-success', {
+        state: {
+          paymentData: {
+            orderId: orderId,
+            method: 'cash',
+            amount: total,
+            timestamp: new Date().toISOString()
+          },
+          orderItems: currentCart
+        },
+      });
+      return;
+    }
+
     setPaymentMethod(method);
     setShowMobileModal(true);
   };
