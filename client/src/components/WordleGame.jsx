@@ -129,22 +129,45 @@ export default function WordleGame({ onClose }) {
     }
   }, [gameState]);
 
-  // Handle input from hidden field (mobile)
-  const handleInputChange = (e) => {
+  // Handle physical/mobile keyboard input - capture keys directly
+  const handleKeyDown = (e) => {
     if (gameState !== 'playing') return;
-    const value = e.target.value.toUpperCase().replace(/[^A-Z]/g, '');
-    if (value.length <= 5) {
-      setCurrentGuess(value);
-      if (value.length > currentGuess.length) playSound('tap');
-    }
-  };
 
-  // Handle key events from hidden input
-  const handleInputKeyDown = (e) => {
-    if (gameState !== 'playing') return;
+    const key = e.key.toUpperCase();
+
+    // Handle letter input (A-Z)
+    if (/^[A-Z]$/.test(key) && currentGuess.length < 5) {
+      e.preventDefault();
+      const newGuess = currentGuess + key;
+      setCurrentGuess(newGuess);
+      // Update hidden input to stay in sync
+      if (inputRef.current) {
+        inputRef.current.value = newGuess;
+      }
+      playSound('tap');
+      return;
+    }
+
+    // Handle backspace
+    if (e.key === 'Backspace') {
+      e.preventDefault();
+      if (currentGuess.length > 0) {
+        const newGuess = currentGuess.slice(0, -1);
+        setCurrentGuess(newGuess);
+        // Update hidden input to stay in sync
+        if (inputRef.current) {
+          inputRef.current.value = newGuess;
+        }
+        playSound('tap');
+      }
+      return;
+    }
+
+    // Handle enter/submit
     if (e.key === 'Enter') {
       e.preventDefault();
       submitGuess();
+      return;
     }
   };
 
@@ -290,14 +313,17 @@ export default function WordleGame({ onClose }) {
           ref={inputRef}
           type="text"
           value={currentGuess}
-          onChange={handleInputChange}
-          onKeyDown={handleInputKeyDown}
+          onKeyDown={handleKeyDown}
+          onChange={() => {}} // Controlled by keyDown events only
           className="absolute opacity-0 w-0 h-0 pointer-events-none"
           autoComplete="off"
           autoCorrect="off"
           autoCapitalize="characters"
           spellCheck="false"
           maxLength={5}
+          onFocus={focusInput}
+          autoFocus
+          inputMode="none"
         />
 
         {/* Game Board */}
@@ -364,8 +390,9 @@ export default function WordleGame({ onClose }) {
                       <div
                         key={colIndex}
                         className={`
-                          w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 border-2 rounded-lg md:rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-300
+                          w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 border-2 rounded-lg md:rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-200
                           ${bgColor} ${borderColor} ${textColor} ${animation} ${shadow}
+                          ${letter && !guess ? 'scale-95' : 'scale-100'}
                         `}
                         style={{ animationDelay: guess ? `${colIndex * 100}ms` : '0ms' }}
                       >
@@ -395,85 +422,84 @@ export default function WordleGame({ onClose }) {
 
         {/* Result Modal */}
         {(gameState === 'won' || gameState === 'lost') && (
-          <div className="absolute inset-0 bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6 animate-fade-in z-30">
-            <div className="text-center w-full max-w-sm mx-auto">
-              
+          <div className="absolute inset-0 bg-gradient-to-br from-white/95 to-gray-50/95 backdrop-blur-xl flex items-center justify-center p-4 md:p-6 animate-fade-in z-30 overflow-y-auto">
+            <div className="text-center w-full max-w-lg mx-auto bg-white rounded-3xl p-8 md:p-10 shadow-2xl border border-gray-100 my-4">
               {/* Icon with decoration */}
-              <div className="relative mb-6">
+              <div className="relative mb-8">
                 {gameState === 'won' && (
                   <>
-                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 flex gap-1">
-                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse" />
-                      <Sparkles className="w-3 h-3 text-yellow-500 animate-pulse delay-100" />
-                      <Sparkles className="w-4 h-4 text-yellow-400 animate-pulse delay-200" />
+                    <div className="absolute -top-3 left-1/2 -translate-x-1/2 flex gap-1">
+                      <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
+                      <Sparkles className="w-4 h-4 text-yellow-500 animate-pulse" />
+                      <Sparkles className="w-5 h-5 text-yellow-400 animate-pulse" />
                     </div>
                   </>
                 )}
                 <div className={`
-                  w-20 h-20 mx-auto rounded-2xl flex items-center justify-center shadow-lg
+                  w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-xl
                   ${gameState === 'won' 
                     ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white' 
                     : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'}
                 `}>
                   {gameState === 'won' 
-                    ? <Trophy className="w-10 h-10" /> 
-                    : <Coffee className="w-10 h-10" />}
+                    ? <Trophy className="w-12 h-12" /> 
+                    : <Coffee className="w-12 h-12" />}
                 </div>
               </div>
               
               {/* Title */}
-              <h3 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1 font-display">
+              <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 font-display">
                 {gameState === 'won' ? 'Brilliant!' : 'Nice Try!'}
               </h3>
               
               {/* Subtitle */}
-              <p className="text-gray-500 text-sm mb-6">
+              <p className="text-gray-500 text-base mb-8">
                 {gameState === 'won' 
                   ? 'You cracked today\'s word' 
                   : <span>The word was <span className="font-bold text-gray-700">{solution}</span></span>}
               </p>
 
               {/* Stats row */}
-              <div className="flex justify-center gap-6 mb-6">
+              <div className="flex justify-center gap-8 mb-8">
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{guesses.length}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Tries</div>
+                  <div className="text-3xl font-bold text-gray-900">{guesses.length}</div>
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Tries</div>
                 </div>
                 <div className="w-px bg-gray-200"></div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
-                  <div className="text-[10px] uppercase tracking-wider text-gray-400 font-medium">Discount</div>
+                  <div className="text-3xl font-bold text-gray-900">{gameState === 'won' ? '10%' : '0%'}</div>
+                  <div className="text-xs uppercase tracking-wider text-gray-400 font-medium mt-1">Discount</div>
                 </div>
               </div>
 
               {/* Coupon Card */}
               {gameState === 'won' && (
-                <div className="bg-white rounded-2xl p-4 mb-6 shadow-sm border border-gray-100">
-                  <div className="flex items-center justify-between mb-3">
-                    <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">Reward Code</span>
-                    <span className="text-[10px] text-green-600 font-medium bg-green-50 px-2 py-0.5 rounded-full">10% OFF</span>
+                <div className="bg-white rounded-2xl p-5 mb-8 shadow-sm border border-gray-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Reward Code</span>
+                    <span className="text-xs text-green-600 font-bold bg-green-50 px-3 py-1 rounded-full">10% OFF</span>
                   </div>
-                  <div className="flex items-center justify-between gap-3 bg-gray-50 p-3 rounded-xl">
+                  <div className="flex items-center justify-between gap-3 bg-gray-50 p-4 rounded-xl mb-3">
                     <code className="font-mono font-bold text-lg text-gray-900 tracking-wider">{couponCode}</code>
                     <button 
                       onClick={copyToClipboard}
                       className={`
-                        flex-shrink-0 px-3 py-1.5 rounded-lg font-medium text-xs transition-all active:scale-95
+                        flex-shrink-0 px-4 py-2 rounded-lg font-semibold text-sm transition-all active:scale-95
                         ${copied 
                           ? 'bg-green-500 text-white' 
                           : 'bg-gray-900 text-white hover:bg-gray-800'}
                       `}
                     >
-                      {copied ? 'Copied!' : 'Copy'}
+                      {copied ? '✓ Copied' : 'Copy'}
                     </button>
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-2">Use at checkout • Valid today only</p>
+                  <p className="text-xs text-gray-400 text-center">Use at checkout • Valid today only</p>
                 </div>
               )}
 
               {/* Lost state message */}
               {gameState === 'lost' && (
-                <div className="bg-gray-50 rounded-2xl p-4 mb-6 border border-gray-100">
+                <div className="bg-gray-50 rounded-2xl p-5 mb-8 border border-gray-100">
                   <p className="text-sm text-gray-600">Don't worry! Come back tomorrow for a new word and another chance to win.</p>
                 </div>
               )}
@@ -482,9 +508,9 @@ export default function WordleGame({ onClose }) {
               <button 
                 onClick={onClose}
                 className={`
-                  w-full py-3.5 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-sm
+                  w-full py-4 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-base
                   ${gameState === 'won'
-                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/25'
+                    ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/30'
                     : 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg shadow-gray-900/20'}
                 `}
               >
@@ -511,6 +537,29 @@ export default function WordleGame({ onClose }) {
         }
         .animate-pop {
           animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes flip {
+          0% { transform: rotateX(0deg); }
+          45% { transform: rotateX(90deg); }
+          100% { transform: rotateX(0deg); }
+        }
+        .animate-flip {
+          animation: flip 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          transform-style: preserve-3d;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .animate-fade-in {
+          animation: fadeIn 0.3s ease-out forwards;
+        }
+        @keyframes fadeInUp {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-fade-in-up {
+          animation: fadeInUp 0.4s ease-out forwards;
         }
       `}</style>
     </div>
