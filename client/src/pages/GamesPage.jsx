@@ -2,17 +2,14 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
 import WordleGame from '../components/WordleGame';
-import SpinnerGame from '../components/SpinnerGame';
 
 export default function GamesPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
-  const [isSpinnerOpen, setIsSpinnerOpen] = useState(false);
 
   const handlePlayClick = (gameId) => {
     if (gameId === 'wordle') setIsWordleOpen(true);
-    if (gameId === 'spinner') setIsSpinnerOpen(true);
   };
 
   const games = [
@@ -24,15 +21,6 @@ export default function GamesPage() {
       reward: 'Win 10% Off Coupon',
       tag: 'Daily Challenge',
       color: 'bg-green-100 text-green-800'
-    },
-    {
-      id: 'spinner',
-      name: 'Daily Spin',
-      description: 'Spin the wheel for a chance to win free items, discounts, and more!',
-      image: 'https://images.unsplash.com/photo-1605020420620-20c943cc4669?w=800&h=600&fit=crop',
-      reward: 'Win Free Coffee/Pastry',
-      tag: 'Popular',
-      color: 'bg-purple-100 text-purple-800'
     }
   ];
 
@@ -151,7 +139,6 @@ export default function GamesPage() {
       </div>
 
       {isWordleOpen && <WordleGame onClose={() => setIsWordleOpen(false)} />}
-      {isSpinnerOpen && <SpinnerGame onClose={() => setIsSpinnerOpen(false)} />}
     </div>
   );
 }
