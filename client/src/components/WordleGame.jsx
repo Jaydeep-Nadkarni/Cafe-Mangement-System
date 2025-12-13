@@ -146,6 +146,19 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
+  const generateSecureCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let randomPart = '';
+    const array = new Uint32Array(2);
+    crypto.getRandomValues(array);
+    for (let i = 0; i < 8; i++) {
+      const index = array[i % 2] % chars.length;
+      randomPart += chars[index];
+      array[i % 2] = Math.floor(array[i % 2] / chars.length);
+    }
+    return `WORDLE-${randomPart.slice(0, 4)}-${randomPart.slice(4)}`;
+  };
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-fade-in">
       <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
