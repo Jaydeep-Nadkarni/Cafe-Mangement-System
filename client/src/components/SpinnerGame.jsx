@@ -22,6 +22,24 @@ export default function SpinnerGame({ onClose }) {
   // const spinSound = useRef(new Audio('/sounds/spin.mp3'));
   // const winSound = useRef(new Audio('/sounds/win.mp3'));
 
+  const generateSecureCode = (prefix = 'SPIN') => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Excludes confusing chars (I, 1, O, 0)
+    let randomPart = '';
+    const array = new Uint32Array(2);
+    crypto.getRandomValues(array);
+    
+    // Generate 8 character random string from crypto values
+    for (let i = 0; i < 8; i++) {
+      const index = array[i % 2] % chars.length;
+      randomPart += chars[index];
+      // Re-roll to avoid bias (simple version)
+      array[i % 2] = Math.floor(array[i % 2] / chars.length);
+    }
+    
+    // Format: PREFIX-XXXX-XXXX
+    return `${prefix}-${randomPart.slice(0, 4)}-${randomPart.slice(4)}`;
+  };
+
   const spinWheel = () => {
     if (isSpinning || hasSpun) return;
 
@@ -63,8 +81,9 @@ export default function SpinnerGame({ onClose }) {
 
   const handleApplyCoupon = () => {
     if (result && result.type !== 'none') {
+      const secureCode = generateSecureCode(result.type === 'discount' ? 'SAVE' : 'GIFT');
       applyCoupon({
-        code: `SPIN${Date.now().toString().slice(-4)}`,
+        code: secureCode,
         type: result.type,
         value: result.value,
         description: result.label
