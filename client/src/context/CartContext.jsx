@@ -7,6 +7,15 @@ const getCartKey = (itemId, size = null) => size ? `${itemId}-${size}` : `${item
 
 export function CartProvider({ children }) {
   const [cart, setCart] = useState({});
+  const [coupon, setCoupon] = useState(null);
+
+  const applyCoupon = (couponData) => {
+    setCoupon(couponData);
+  };
+
+  const removeCoupon = () => {
+    setCoupon(null);
+  };
 
   const addItem = (item, size = null) => {
     const key = getCartKey(item.id, size);
@@ -89,7 +98,10 @@ export function CartProvider({ children }) {
       getTotalQuantityForItem,
       getTotalItems,
       getItemPrice,
-      getCartItems
+      getCartItems,
+      coupon,
+      applyCoupon,
+      removeCoupon
     }}>
       {children}
     </CartContext.Provider>

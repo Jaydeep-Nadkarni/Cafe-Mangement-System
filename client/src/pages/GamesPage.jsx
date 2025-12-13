@@ -2,14 +2,17 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
 import WordleGame from '../components/WordleGame';
+import SpinnerGame from '../components/SpinnerGame';
 
 export default function GamesPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
+  const [isSpinnerOpen, setIsSpinnerOpen] = useState(false);
 
   const handlePlayClick = (gameId) => {
     if (gameId === 'wordle') setIsWordleOpen(true);
+    if (gameId === 'spinner') setIsSpinnerOpen(true);
   };
 
   const games = [
@@ -148,6 +151,7 @@ export default function GamesPage() {
       </div>
 
       {isWordleOpen && <WordleGame onClose={() => setIsWordleOpen(false)} />}
+      {isSpinnerOpen && <SpinnerGame onClose={() => setIsSpinnerOpen(false)} />}
     </div>
   );
 }
