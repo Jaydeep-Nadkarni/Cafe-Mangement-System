@@ -1,16 +1,38 @@
-import { useState } from 'react';
+import { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
+import { GameContext } from '../context/GameContext';
 import WordleGame from '../components/WordleGame';
 
 export default function GamesPage() {
   const navigate = useNavigate();
+  const { setIsWordleOpen: setGlobalIsWordleOpen } = useContext(GameContext);
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
 
   const handlePlayClick = (gameId) => {
-    if (gameId === 'wordle') setIsWordleOpen(true);
+    if (gameId === 'wordle') {
+      setIsWordleOpen(true);
+      setGlobalIsWordleOpen(true);
+    }
   };
+
+  const handleWordleClose = () => {
+    setIsWordleOpen(false);
+    setGlobalIsWordleOpen(false);
+  };
+
+  useEffect(() => {
+    // Prevent body scroll when game is open
+    if (isWordleOpen) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = 'auto';
+    }
+    return () => {
+      document.body.style.overflow = 'auto';
+    };
+  }, [isWordleOpen]);
 
   const games = [
     {
@@ -138,7 +160,7 @@ export default function GamesPage() {
         )}
       </div>
 
-      {isWordleOpen && <WordleGame onClose={() => setIsWordleOpen(false)} />}
+      {isWordleOpen && <WordleGame onClose={handleWordleClose} />}
     </div>
   );
 }
