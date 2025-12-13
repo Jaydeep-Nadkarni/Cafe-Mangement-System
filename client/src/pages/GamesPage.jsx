@@ -11,7 +11,7 @@ export default function GamesPage() {
         <div className="mb-8 flex justify-center">
           <div className="relative">
             {/* Spinning background */}
-            <div className="absolute inset-0 w-24 h-24 bg-gradient-to-r from-primary/20 to-primary-light/20 rounded-full animate-spin opacity-30" style={{ animationDuration: '3s' }} />
+            <div className="absolute inset-0 w-24 h-24 bg-linear-to-r from-primary/20 to-primary-light/20 rounded-full animate-spin opacity-30" style={{ animationDuration: '3s' }} />
             
             {/* Static game icon */}
             <div className="relative w-24 h-24 flex items-center justify-center text-primary-dark">
@@ -34,12 +34,12 @@ export default function GamesPage() {
         </p>
 
         {/* Feature Preview */}
-        <div className="bg-gradient-to-br from-primary/10 to-primary-light/10 rounded-3xl p-8 mb-8 border border-primary/20">
+        <div className="bg-linear-to-br from-primary/10 to-primary-light/10 rounded-3xl p-8 mb-8 border border-primary/20">
           <h3 className="text-lg font-bold text-primary-dark mb-6">What's Coming?</h3>
           
           <ul className="space-y-4 text-left">
             <li className="flex gap-4 items-start">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
+              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
                 <Check className="w-4 h-4" />
               </span>
               <div>
@@ -49,7 +49,7 @@ export default function GamesPage() {
             </li>
 
             <li className="flex gap-4 items-start">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
+              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
                 <Check className="w-4 h-4" />
               </span>
               <div>
@@ -59,7 +59,7 @@ export default function GamesPage() {
             </li>
 
             <li className="flex gap-4 items-start">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
+              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
                 <Check className="w-4 h-4" />
               </span>
               <div>
@@ -69,7 +69,7 @@ export default function GamesPage() {
             </li>
 
             <li className="flex gap-4 items-start">
-              <span className="flex-shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
+              <span className="shrink-0 w-8 h-8 rounded-full bg-primary text-gray-900 font-bold flex items-center justify-center">
                 <Check className="w-4 h-4" />
               </span>
               <div>
@@ -100,7 +100,7 @@ export default function GamesPage() {
         {/* Back to Menu Button */}
         <button
           onClick={() => navigate('/menu')}
-          className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group"
+          className="w-full bg-linear-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group"
         >
           <span>Browse Menu Instead</span>
           <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />

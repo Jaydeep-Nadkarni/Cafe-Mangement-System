@@ -104,10 +104,10 @@ export default function PaymentSuccessPage() {
           <div className="inline-flex items-center justify-center mb-6">
             <div className="relative w-24 h-24">
               {/* Outer ring */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-r from-primary to-primary-light opacity-20 animate-pulse" />
+              <div className="absolute inset-0 rounded-full bg-linear-to-r from-primary to-primary-light opacity-20 animate-pulse" />
               
               {/* Inner circle */}
-              <div className="absolute inset-0 rounded-full bg-gradient-to-br from-primary/20 to-primary-light/20 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full bg-linear-to-br from-primary/20 to-primary-light/20 flex items-center justify-center">
                 <Check className="w-12 h-12 text-primary-dark animate-bounce" />
               </div>
             </div>
@@ -227,7 +227,7 @@ export default function PaymentSuccessPage() {
         {/* Order More Button */}
         <button
           onClick={handleBackToHome}
-          className="w-full bg-gradient-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group animate-fade-in-up"
+          className="w-full bg-linear-to-r from-primary to-primary-light hover:from-primary-dark hover:to-primary text-gray-900 font-bold py-4 px-6 rounded-2xl transition-all duration-300 shadow-yellow hover:shadow-lg active:scale-95 flex items-center justify-center gap-2 group animate-fade-in-up"
         >
           <span>Order More</span>
           <Home className="w-5 h-5 group-hover:-rotate-45 transition-transform duration-300" />

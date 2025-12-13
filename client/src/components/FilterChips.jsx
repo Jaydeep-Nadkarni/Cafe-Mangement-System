@@ -18,7 +18,7 @@ export default function FilterChips({ activeFilter, onFilterChange }) {
           <button
             key={filter.id}
             onClick={() => onFilterChange(filter.id)}
-            className={`flex-shrink-0 px-4 py-2.5 rounded-full font-medium text-sm whitespace-nowrap transition-all duration-300 relative group flex items-center gap-2 ${
+            className={`shrink-0 px-4 py-2.5 rounded-full font-medium text-sm whitespace-nowrap transition-all duration-300 relative group flex items-center gap-2 ${
               isActive
                 ? 'bg-primary text-gray-900 shadow-md'
                 : 'bg-white text-gray-600 border border-gray-200 hover:border-primary hover:text-gray-900'

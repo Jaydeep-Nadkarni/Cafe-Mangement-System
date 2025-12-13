@@ -2,32 +2,42 @@ import { createContext, useContext, useState } from 'react';
 
 const CartContext = createContext();
 
+// Helper to create unique cart key for items with/without sizes
+const getCartKey = (itemId, size = null) => size ? `${itemId}-${size}` : `${itemId}`;
+
 export function CartProvider({ children }) {
   const [cart, setCart] = useState({});
 
-  const addItem = (item) => {
+  const addItem = (item, size = null) => {
+    const key = getCartKey(item.id, size);
     setCart(prev => ({
       ...prev,
-      [item.id]: (prev[item.id] || 0) + 1
+      [key]: {
+        quantity: (prev[key]?.quantity || 0) + 1,
+        item,
+        size
+      }
     }));
   };
 
-  const removeItem = (itemId) => {
+  const removeItem = (itemId, size = null) => {
+    const key = getCartKey(itemId, size);
     setCart(prev => {
       const newCart = { ...prev };
-      if (newCart[itemId] > 1) {
-        newCart[itemId] -= 1;
+      if (newCart[key]?.quantity > 1) {
+        newCart[key] = { ...newCart[key], quantity: newCart[key].quantity - 1 };
       } else {
-        delete newCart[itemId];
+        delete newCart[key];
       }
       return newCart;
     });
   };
 
-  const deleteItem = (itemId) => {
+  const deleteItem = (itemId, size = null) => {
+    const key = getCartKey(itemId, size);
     setCart(prev => {
       const newCart = { ...prev };
-      delete newCart[itemId];
+      delete newCart[key];
       return newCart;
     });
   };
@@ -36,12 +46,51 @@ export function CartProvider({ children }) {
     setCart({});
   };
 
-  const getQuantity = (itemId) => cart[itemId] || 0;
+  const getQuantity = (itemId, size = null) => {
+    const key = getCartKey(itemId, size);
+    return cart[key]?.quantity || 0;
+  };
 
-  const getTotalItems = () => Object.values(cart).reduce((sum, qty) => sum + qty, 0);
+  // Get total quantity for an item across all sizes
+  const getTotalQuantityForItem = (itemId) => {
+    return Object.entries(cart)
+      .filter(([key]) => key.startsWith(`${itemId}-`) || key === `${itemId}`)
+      .reduce((sum, [, data]) => sum + data.quantity, 0);
+  };
+
+  const getTotalItems = () => Object.values(cart).reduce((sum, data) => sum + data.quantity, 0);
+
+  // Get price for item considering size
+  const getItemPrice = (item, size = null) => {
+    if (size && item.sizes) {
+      const sizeData = item.sizes.find(s => s.name === size);
+      return sizeData ? sizeData.price : item.price;
+    }
+    return item.price;
+  };
+
+  // Get cart items as array for display
+  const getCartItems = () => {
+    return Object.entries(cart).map(([key, data]) => ({
+      key,
+      ...data,
+      price: getItemPrice(data.item, data.size)
+    }));
+  };
 
   return (
-    <CartContext.Provider value={{ cart, addItem, removeItem, deleteItem, clearCart, getQuantity, getTotalItems }}>
+    <CartContext.Provider value={{ 
+      cart, 
+      addItem, 
+      removeItem, 
+      deleteItem, 
+      clearCart, 
+      getQuantity, 
+      getTotalQuantityForItem,
+      getTotalItems,
+      getItemPrice,
+      getCartItems
+    }}>
       {children}
     </CartContext.Provider>
   );

@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import MobileNumberModal from '../components/MobileNumberModal';
 import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote } from 'lucide-react';
-import { MENU_ITEMS } from '../data/menuItems';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
-  const { cart, clearCart } = useCart();
+  const { cart, clearCart, getCartItems, getItemPrice } = useCart();
   const [showMobileModal, setShowMobileModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponInput, setCouponInput] = useState('');
 
+  // Get cart items as array
+  const cartItems = getCartItems();
+
   // Redirect if no items in cart
-  if (Object.keys(cart).length === 0) {
+  if (cartItems.length === 0) {
     return (
       <div className="px-4 py-12 text-center animate-fade-in-up">
         <div className="flex justify-center mb-4">
@@ -35,9 +37,8 @@ export default function OrderSummaryPage() {
   }
 
   // Calculate pricing
-  const subtotal = Object.entries(cart).reduce((sum, [itemId, qty]) => {
-    const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
-    return sum + (item ? item.price * qty : 0);
+  const subtotal = cartItems.reduce((sum, cartItem) => {
+    return sum + (cartItem.price * cartItem.quantity);
   }, 0);
 
   const taxRate = 0.05; // 5% GST
@@ -104,21 +105,27 @@ export default function OrderSummaryPage() {
       <div className="bg-white rounded-3xl shadow-card p-6 md:p-8 mb-6 animate-fade-in-up border border-gray-100">
         <h2 className="text-lg font-bold text-gray-900 mb-6 font-display">Your Items</h2>
         <div className="space-y-6">
-          {Object.entries(cart).map(([itemId, quantity]) => {
-            const item = MENU_ITEMS.find(i => i.id === parseInt(itemId));
-            if (!item) return null;
-            const itemTotal = item.price * quantity;
+          {cartItems.map((cartItem) => {
+            const { item, quantity, size, price, key } = cartItem;
+            const itemTotal = price * quantity;
             
             return (
-              <div key={itemId} className="flex items-start justify-between group">
+              <div key={key} className="flex items-start justify-between group">
                 <div className="flex gap-4">
-                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
+                  <div className="w-16 h-16 rounded-xl overflow-hidden bg-gray-100 shrink-0">
                     <img src={item.image} alt={item.name} className="w-full h-full object-cover" />
                   </div>
                   <div>
-                    <h3 className="font-bold text-gray-900 font-display">{item.name}</h3>
+                    <h3 className="font-bold text-gray-900 font-display">
+                      {item.name}
+                      {size && (
+                        <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full font-medium">
+                          {item.sizes?.find(s => s.name === size)?.label || size}
+                        </span>
+                      )}
+                    </h3>
                     <p className="text-sm text-gray-500 font-mono mt-1">
-                      {quantity} x ₹{item.price}
+                      {quantity} x ₹{price}
                     </p>
                   </div>
                 </div>
@@ -195,7 +202,7 @@ export default function OrderSummaryPage() {
       </div>
 
       {/* Gamification Tip */}
-      <div className="bg-gradient-to-r from-primary/10 to-primary-light/10 border border-primary/20 rounded-2xl p-4 mb-8 flex items-start gap-3 animate-fade-in-up delay-100">
+      <div className="bg-linear-to-r from-primary/10 to-primary-light/10 border border-primary/20 rounded-2xl p-4 mb-8 flex items-start gap-3 animate-fade-in-up delay-100">
         <div className="bg-white p-2 rounded-full shadow-sm">
           <Lightbulb className="w-5 h-5 text-primary" />
         </div>
