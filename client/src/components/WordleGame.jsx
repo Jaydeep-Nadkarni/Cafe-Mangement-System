@@ -260,7 +260,7 @@ function WordleGame({ onClose }) {
 
   if (gameState === 'won' || gameState === 'lost') {
     return (
-      <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-50 via-white to-gray-50 animate-fade-in">
+      <div className="fixed inset-0 z-50 bg-linear-to-br from-gray-50 via-white to-gray-50 animate-fade-in">
         <div className="h-full overflow-y-auto">
           <div className="min-h-full flex flex-col items-center justify-center p-4 py-8 md:p-8">
             <div className="w-full max-w-md relative">
@@ -276,8 +276,8 @@ function WordleGame({ onClose }) {
                   <div className={`
                     w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-lg
                     ${gameState === 'won' 
-                      ? 'bg-gradient-to-br from-green-400 to-emerald-500 text-white' 
-                      : 'bg-gradient-to-br from-gray-400 to-gray-500 text-white'}
+                      ? 'bg-linear-to-br from-green-400 to-emerald-500 text-white' 
+                      : 'bg-linear-to-br from-gray-400 to-gray-500 text-white'}
                   `}>
                     {gameState === 'won' 
                       ? <Trophy className="w-12 h-12" /> 
@@ -296,7 +296,7 @@ function WordleGame({ onClose }) {
                 </p>
                 
                 {gameState === 'won' && (
-                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-green-100">
+                  <div className="bg-linear-to-br from-green-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-green-100">
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">Reward Code</span>
                       <span className="text-xs text-green-600 font-bold bg-white px-3 py-1 rounded-full shadow-sm">10% OFF</span>
@@ -306,7 +306,7 @@ function WordleGame({ onClose }) {
                       <button 
                         onClick={copyToClipboard}
                         className={`
-                          flex-shrink-0 p-2.5 rounded-lg transition-all active:scale-95
+                          shrink-0 p-2.5 rounded-lg transition-all active:scale-95
                           ${copied 
                             ? 'bg-green-500 text-white' 
                             : 'bg-gray-900 text-white hover:bg-gray-800'}
@@ -333,7 +333,7 @@ function WordleGame({ onClose }) {
                   className={`
                     w-full py-3.5 rounded-xl font-bold transition-all duration-300 active:scale-[0.98] text-base
                     ${gameState === 'won'
-                      ? 'bg-gradient-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/30'
+                      ? 'bg-linear-to-r from-green-500 to-emerald-500 hover:from-green-600 hover:to-emerald-600 text-white shadow-lg shadow-green-500/30'
                       : 'bg-gray-900 hover:bg-gray-800 text-white shadow-lg shadow-gray-900/20'}
                   `}
                 >
@@ -355,7 +355,7 @@ function WordleGame({ onClose }) {
 
   return (
     <div className="wordle-game fixed inset-0 z-50 bg-white flex flex-col" onClick={handleGameBoardClick}>
-      <header className="h-[50px] border-b border-[#d3d6da] flex items-center justify-between px-4 shrink-0">
+      <header className="h-12.5 border-b border-[#d3d6da] flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2">
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded transition-colors">
             <X className="w-5 h-5 text-gray-600" />
@@ -382,7 +382,7 @@ function WordleGame({ onClose }) {
           const filtered = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
           setCurrentGuess(filtered);
         }}
-        className="fixed -top-[100px] opacity-0 pointer-events-none"
+        className="fixed -top-25 opacity-0 pointer-events-none"
         autoComplete="off"
         autoCorrect="off"
         autoCapitalize="characters"
@@ -391,15 +391,15 @@ function WordleGame({ onClose }) {
         readOnly
       />
 
-      <div className="flex-1 flex flex-col justify-between max-w-[500px] w-full mx-auto">
+      <div className="flex-1 flex flex-col justify-between max-w-125 w-full mx-auto">
         {message && (
-          <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-20 bg-gray-900 text-white px-4 py-3 rounded text-sm font-bold animate-fade-in">
+          <div className="absolute top-15 left-1/2 -translate-x-1/2 z-20 bg-gray-900 text-white px-4 py-3 rounded text-sm font-bold animate-fade-in">
             {message}
           </div>
         )}
 
         <div className="flex-1 flex items-center justify-center p-2.5">
-          <div className="grid grid-rows-6 gap-[5px] w-full max-w-[350px] aspect-[5/6]">
+          <div className="grid grid-rows-6 gap-1.25 w-full max-w-87.5 aspect-5/6">
             {[...Array(6)].map((_, rowIndex) => {
               const isCurrentRow = rowIndex === guesses.length;
               const guess = guesses[rowIndex];
@@ -408,7 +408,7 @@ function WordleGame({ onClose }) {
               return (
                 <div 
                   key={rowIndex} 
-                  className={`grid grid-cols-5 gap-[5px] ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
+                  className={`grid grid-cols-5 gap-1.25 ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
                 >
                   {[...Array(5)].map((_, colIndex) => {
                     const letter = guess 
@@ -456,12 +456,12 @@ function WordleGame({ onClose }) {
         </div>
 
         {/* Cafe-Style Keyboard */}
-        <div className="w-full px-2 pb-5 pt-3 shrink-0 bg-gradient-to-b from-amber-50/30 to-amber-50/60" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
-          <div className="max-w-[500px] mx-auto">
+        <div className="w-full px-2 pb-5 pt-3 shrink-0 bg-linear-to-b from-amber-50/30 to-amber-50/60" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+          <div className="max-w-125 mx-auto">
             {keyboardRows.map((row, rowIndex) => (
               <div 
                 key={rowIndex} 
-                className="flex justify-center gap-[6px] mb-[6px]"
+                className="flex justify-center gap-1.5 mb-1.5"
                 style={{ 
                   paddingLeft: rowIndex === 1 ? '24px' : 0, 
                   paddingRight: rowIndex === 1 ? '24px' : 0 
