@@ -101,4 +101,31 @@
   .animate-bounce-short {
     animation: bounce 0.5s;
   }
+
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
+    20%, 40%, 60%, 80% { transform: translateX(4px); }
+  }
+
+  .animate-shake {
+    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+  }
+
+  /* 3D Transform Utilities */
+  .perspective-1000 {
+    perspective: 1000px;
+  }
+  
+  .transform-style-3d {
+    transform-style: preserve-3d;
+  }
+  
+  .rotate-x-0 {
+    transform: rotateX(0deg);
+  }
+  
+  .rotate-x-180 {
+    transform: rotateX(180deg);
+  }
 }
