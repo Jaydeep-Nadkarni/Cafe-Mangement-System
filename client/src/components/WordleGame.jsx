@@ -262,6 +262,22 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
+  // Get keyboard letter status (best result from all guesses)
+  const getKeyStatus = (letter) => {
+    let bestStatus = 'unused';
+    for (const guess of guesses) {
+      const colors = getRowColors(guess);
+      for (let i = 0; i < 5; i++) {
+        if (guess[i] === letter) {
+          if (colors[i] === 'correct') return 'correct';
+          if (colors[i] === 'present' && bestStatus !== 'correct') bestStatus = 'present';
+          if (colors[i] === 'absent' && bestStatus === 'unused') bestStatus = 'absent';
+        }
+      }
+    }
+    return bestStatus;
+  };
+
   const copyToClipboard = () => {
     navigator.clipboard.writeText(couponCode);
     setCopied(true);
@@ -368,124 +384,114 @@ export default function WordleGame({ onClose }) {
     );
   }
 
-  // Game board view
+  // NYT Wordle Keyboard Rows
+  const keyboardRows = [
+    ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
+    ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
+    ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK']
+  ];
+
+  // Game board view - NYT Wordle Style
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 backdrop-blur-md p-2 md:p-4 animate-fade-in" onClick={handleGameBoardClick}>
-      <div className="bg-white/95 backdrop-blur-xl w-full max-w-md rounded-2xl md:rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[95vh] md:max-h-[90vh] relative border border-white/20">
-        
-        {/* Header */}
-        <div className="p-3 md:p-5 border-b border-gray-100 flex items-center justify-between bg-white/50 shrink-0">
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="bg-primary/10 p-2 rounded-lg shrink-0">
-              <Trophy className="w-4 md:w-5 h-4 md:h-5 text-primary-dark" />
-            </div>
-            <h2 className="text-lg md:text-xl font-bold font-display text-gray-900 truncate">Cafe Wordle</h2>
-          </div>
-          <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <button 
-              onClick={() => setSoundEnabled(!soundEnabled)}
-              className="p-2 hover:bg-gray-100 rounded-full transition-colors text-gray-500"
-              title={soundEnabled ? "Mute Sounds" : "Enable Sounds"}
-            >
-              {soundEnabled ? <Volume2 className="w-4 md:w-5 h-4 md:h-5" /> : <VolumeX className="w-4 md:w-5 h-4 md:h-5" />}
-            </button>
-            <button onClick={onClose} className="p-2 hover:bg-red-50 hover:text-red-500 rounded-full transition-colors">
-              <X className="w-4 md:w-5 h-4 md:h-5 text-gray-500" />
-            </button>
-          </div>
+    <div className="wordle-game fixed inset-0 z-50 bg-white flex flex-col" onClick={handleGameBoardClick}>
+      {/* Header - NYT Style */}
+      <header className="h-[50px] border-b border-[#d3d6da] flex items-center justify-between px-4 shrink-0">
+        <div className="flex items-center gap-2">
+          <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded transition-colors">
+            <X className="w-5 h-5 text-gray-600" />
+          </button>
         </div>
+        <h1 className="text-[22px] font-bold tracking-wide text-gray-900 uppercase" style={{ fontFamily: "'Helvetica Neue', Arial, sans-serif" }}>
+          Wordle
+        </h1>
+        <div className="flex items-center gap-1">
+          <button 
+            onClick={() => setSoundEnabled(!soundEnabled)}
+            className="p-1.5 hover:bg-gray-100 rounded transition-colors"
+            title={soundEnabled ? "Mute" : "Unmute"}
+          >
+            {soundEnabled ? <Volume2 className="w-5 h-5 text-gray-600" /> : <VolumeX className="w-5 h-5 text-gray-600" />}
+          </button>
+        </div>
+      </header>
 
-        {/* Hidden Input for Mobile Keyboard - Disabled to use custom keyboard only */}
-        <textarea
-          ref={inputRef}
-          value={currentGuess}
-          onChange={(e) => {
-            // Filter to only A-Z and limit to 5 characters
-            const filtered = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
-            setCurrentGuess(filtered);
-          }}
-          className="fixed inset-0 opacity-0 pointer-events-none"
-          autoComplete="off"
-          autoCorrect="off"
-          autoCapitalize="characters"
-          spellCheck="false"
-          inputMode="none"
-          readOnly
-          onFocus={focusInput}
-          autoFocus
-        />
+      {/* Hidden Input */}
+      <textarea
+        ref={inputRef}
+        value={currentGuess}
+        onChange={(e) => {
+          const filtered = e.target.value.toUpperCase().replace(/[^A-Z]/g, '').slice(0, 5);
+          setCurrentGuess(filtered);
+        }}
+        className="fixed -top-[100px] opacity-0 pointer-events-none"
+        autoComplete="off"
+        autoCorrect="off"
+        autoCapitalize="characters"
+        spellCheck="false"
+        inputMode="none"
+        readOnly
+      />
 
-        {/* Game Board */}
-        <div 
-          className="flex-1 overflow-y-auto p-3 md:p-6 pb-80 md:pb-6 flex flex-col items-center justify-center bg-gradient-to-b from-gray-50 to-white cursor-text"
-          onClick={focusInput}
-        >
-          {message && (
-            <div className="absolute top-16 md:top-24 z-20 bg-gray-900/90 text-white px-4 md:px-6 py-2 md:py-3 rounded-lg md:rounded-xl text-xs md:text-sm font-bold animate-fade-in-up shadow-xl backdrop-blur-sm border border-white/10">
-              {message}
-            </div>
-          )}
+      {/* Main Game Area */}
+      <div className="flex-1 flex flex-col justify-between max-w-[500px] w-full mx-auto">
+        {/* Toast Message */}
+        {message && (
+          <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-20 bg-gray-900 text-white px-4 py-3 rounded text-sm font-bold animate-fade-in">
+            {message}
+          </div>
+        )}
 
-          <div className="grid grid-rows-6 gap-2 md:gap-3 mb-4 md:mb-8">
+        {/* Game Board Container */}
+        <div className="flex-1 flex items-center justify-center p-2.5">
+          <div className="grid grid-rows-6 gap-[5px] w-full max-w-[350px] aspect-[5/6]">
             {[...Array(6)].map((_, rowIndex) => {
               const isCurrentRow = rowIndex === guesses.length;
               const guess = guesses[rowIndex];
               const rowColors = guess ? getRowColors(guess) : null;
+              const isRevealing = guess && rowIndex === guesses.length - 1;
               
               return (
                 <div 
                   key={rowIndex} 
-                  className={`grid grid-cols-5 gap-3 ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
+                  className={`grid grid-cols-5 gap-[5px] ${isCurrentRow && shakeRow ? 'animate-shake' : ''}`}
                 >
                   {[...Array(5)].map((_, colIndex) => {
                     const letter = guess 
                       ? guess[colIndex] 
                       : (isCurrentRow ? currentGuess[colIndex] : '');
                     
-                    let bgColor = 'bg-white';
-                    let borderColor = 'border-gray-200';
-                    let textColor = 'text-gray-900';
-                    let animation = '';
-                    let shadow = 'shadow-sm';
+                    const isTyping = isCurrentRow && !guess && letter;
+                    const status = rowColors ? rowColors[colIndex] : null;
 
-                    if (guess) {
-                      const status = rowColors[colIndex];
-                      animation = 'animate-flip';
-                      
-                      if (status === 'correct') {
-                        bgColor = 'bg-gradient-to-br from-green-500 to-green-600';
-                        borderColor = 'border-green-600';
-                        textColor = 'text-white';
-                        shadow = 'shadow-green-200';
-                      } else if (status === 'present') {
-                        bgColor = 'bg-gradient-to-br from-yellow-400 to-yellow-500';
-                        borderColor = 'border-yellow-500';
-                        textColor = 'text-white';
-                        shadow = 'shadow-yellow-200';
-                      } else {
-                        bgColor = 'bg-gradient-to-br from-gray-400 to-gray-500';
-                        borderColor = 'border-gray-500';
-                        textColor = 'text-white';
-                        shadow = 'shadow-gray-200';
-                      }
-                    } else if (letter) {
-                      borderColor = 'border-gray-400';
-                      textColor = 'text-gray-900';
-                      animation = 'animate-pop';
-                      shadow = 'shadow-md';
+                    // NYT Color classes
+                    let tileClass = 'bg-white border-2 border-[#d3d6da]'; // Empty
+                    if (letter && !guess) {
+                      tileClass = 'bg-white border-2 border-[#878a8c]'; // Filled but not submitted
                     }
+                    if (status === 'correct') tileClass = 'bg-[#6aaa64] border-2 border-[#6aaa64] text-white';
+                    if (status === 'present') tileClass = 'bg-[#c9b458] border-2 border-[#c9b458] text-white';
+                    if (status === 'absent') tileClass = 'bg-[#787c7e] border-2 border-[#787c7e] text-white';
 
                     return (
                       <div
                         key={colIndex}
                         className={`
-                          w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 border-2 rounded-lg md:rounded-xl flex items-center justify-center text-xl sm:text-2xl font-bold uppercase transition-all duration-200
-                          ${bgColor} ${borderColor} ${textColor} ${animation} ${shadow}
-                          ${letter && !guess ? 'scale-95' : 'scale-100'}
+                          aspect-square flex items-center justify-center text-[2rem] font-bold uppercase
+                          ${tileClass}
+                          ${isTyping ? 'animate-pop' : ''}
+                          ${guess ? 'animate-flip-tile' : ''}
                         `}
-                        style={{ animationDelay: guess ? `${colIndex * 100}ms` : '0ms' }}
+                        style={{ 
+                          fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                          animationDelay: guess ? `${colIndex * 300}ms` : '0ms',
+                          borderRadius: '2px'
+                        }}
+                        data-status={status}
+                        data-letter={letter}
                       >
-                        {letter}
+                        <span className="tile-letter" style={{ animationDelay: guess ? `${colIndex * 300}ms` : '0ms' }}>
+                          {letter}
+                        </span>
                       </div>
                     );
                   })}
@@ -493,181 +499,147 @@ export default function WordleGame({ onClose }) {
               );
             })}
           </div>
+        </div>
 
-          {/* Advanced Mobile Keyboard */}
-          {gameState === 'playing' && (
-            <div className="w-full md:hidden fixed bottom-0 left-0 right-0 bg-gray-100 pb-safe pt-3 px-1 z-50 border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)]">
-              <div className="max-w-md mx-auto flex flex-col gap-2 pb-4">
-                {/* Row 1 */}
-                <div className="flex gap-1 justify-center">
-                  {['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'].map((letter) => {
-                    let style = 'bg-white text-gray-900 border-b-4 border-gray-300 active:border-b-0 active:translate-y-1';
-                    
-                    let status = 'unused';
-                    for (const guess of guesses) {
-                      for (let i = 0; i < 5; i++) {
-                        if (guess[i] === letter) {
-                          if (solution[i] === letter) status = 'correct';
-                          else if (solution.includes(letter) && status !== 'correct') status = 'present';
-                          else if (status === 'unused') status = 'absent';
-                        }
-                      }
-                    }
-                    
-                    if (status === 'correct') style = 'bg-green-500 text-white border-b-4 border-green-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'present') style = 'bg-yellow-500 text-white border-b-4 border-yellow-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'absent') style = 'bg-gray-400 text-white border-b-4 border-gray-500 active:border-b-0 active:translate-y-1';
-
-                    return (
-                      <button
-                        key={letter}
-                        onClick={() => currentGuess.length < 5 && setCurrentGuess(prev => prev + letter)}
-                        className={`flex-1 h-14 rounded-lg font-bold text-xl transition-all shadow-sm ${style}`}
-                      >
-                        {letter}
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {/* Row 2 */}
-                <div className="flex gap-1 justify-center px-4">
-                  {['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'].map((letter) => {
-                    let style = 'bg-white text-gray-900 border-b-4 border-gray-300 active:border-b-0 active:translate-y-1';
-                    
-                    let status = 'unused';
-                    for (const guess of guesses) {
-                      for (let i = 0; i < 5; i++) {
-                        if (guess[i] === letter) {
-                          if (solution[i] === letter) status = 'correct';
-                          else if (solution.includes(letter) && status !== 'correct') status = 'present';
-                          else if (status === 'unused') status = 'absent';
-                        }
-                      }
-                    }
-                    
-                    if (status === 'correct') style = 'bg-green-500 text-white border-b-4 border-green-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'present') style = 'bg-yellow-500 text-white border-b-4 border-yellow-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'absent') style = 'bg-gray-400 text-white border-b-4 border-gray-500 active:border-b-0 active:translate-y-1';
-
-                    return (
-                      <button
-                        key={letter}
-                        onClick={() => currentGuess.length < 5 && setCurrentGuess(prev => prev + letter)}
-                        className={`flex-1 h-14 rounded-lg font-bold text-xl transition-all shadow-sm ${style}`}
-                      >
-                        {letter}
-                      </button>
-                    );
-                  })}
-                </div>
-                
-                {/* Row 3 */}
-                <div className="flex gap-1 justify-center">
-                  <button
-                    onClick={submitGuess}
-                    disabled={currentGuess.length !== 5}
-                    className="flex-[1.5] h-14 bg-gray-200 text-gray-900 border-b-4 border-gray-300 active:border-b-0 active:translate-y-1 rounded-lg font-bold text-sm flex items-center justify-center shadow-sm disabled:opacity-50"
-                  >
-                    ENTER
-                  </button>
-                  
-                  {['Z', 'X', 'C', 'V', 'B', 'N', 'M'].map((letter) => {
-                    let style = 'bg-white text-gray-900 border-b-4 border-gray-300 active:border-b-0 active:translate-y-1';
-                    
-                    let status = 'unused';
-                    for (const guess of guesses) {
-                      for (let i = 0; i < 5; i++) {
-                        if (guess[i] === letter) {
-                          if (solution[i] === letter) status = 'correct';
-                          else if (solution.includes(letter) && status !== 'correct') status = 'present';
-                          else if (status === 'unused') status = 'absent';
-                        }
-                      }
-                    }
-                    
-                    if (status === 'correct') style = 'bg-green-500 text-white border-b-4 border-green-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'present') style = 'bg-yellow-500 text-white border-b-4 border-yellow-700 active:border-b-0 active:translate-y-1';
-                    else if (status === 'absent') style = 'bg-gray-400 text-white border-b-4 border-gray-500 active:border-b-0 active:translate-y-1';
-
-                    return (
-                      <button
-                        key={letter}
-                        onClick={() => currentGuess.length < 5 && setCurrentGuess(prev => prev + letter)}
-                        className={`flex-1 h-14 rounded-lg font-bold text-xl transition-all shadow-sm ${style}`}
-                      >
-                        {letter}
-                      </button>
-                    );
-                  })}
-                  
-                  <button
-                    onClick={() => setCurrentGuess(prev => prev.slice(0, -1))}
-                    className="flex-[1.5] h-14 bg-gray-200 text-gray-900 border-b-4 border-gray-300 active:border-b-0 active:translate-y-1 rounded-lg font-bold text-xl flex items-center justify-center shadow-sm"
-                  >
-                    <span className="sr-only">Backspace</span>
-                    ⌫
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Instruction for Desktop */}
-          {gameState === 'playing' && (
-            <button 
-              onClick={focusInput}
-              className="hidden md:flex items-center gap-2 text-gray-500 text-xs md:text-sm font-medium bg-gray-100 hover:bg-gray-200 px-4 md:px-5 py-2.5 rounded-full transition-colors active:scale-95 mt-4"
+        {/* NYT-Style Keyboard */}
+        <div className="w-full px-2 pb-4 pt-2 shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
+          {keyboardRows.map((row, rowIndex) => (
+            <div 
+              key={rowIndex} 
+              className="flex justify-center gap-[6px] mb-2"
+              style={{ marginLeft: rowIndex === 1 ? '5%' : 0, marginRight: rowIndex === 1 ? '5%' : 0 }}
             >
-              <span className="relative flex h-2 w-2">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-              </span>
-              <span>Use your keyboard to type</span>
-            </button>
-          )}
+              {row.map((key) => {
+                const isSpecial = key === 'ENTER' || key === 'BACK';
+                const status = isSpecial ? 'unused' : getKeyStatus(key);
+                
+                // NYT Key colors
+                let keyBg = '#d3d6da'; // Default gray
+                let keyText = '#000';
+                
+                if (status === 'correct') {
+                  keyBg = '#6aaa64';
+                  keyText = '#fff';
+                } else if (status === 'present') {
+                  keyBg = '#c9b458';
+                  keyText = '#fff';
+                } else if (status === 'absent') {
+                  keyBg = '#787c7e';
+                  keyText = '#fff';
+                }
+
+                const handleClick = () => {
+                  if (key === 'ENTER') {
+                    submitGuess();
+                  } else if (key === 'BACK') {
+                    setCurrentGuess(prev => prev.slice(0, -1));
+                    playSound('tap');
+                  } else if (currentGuess.length < 5) {
+                    setCurrentGuess(prev => prev + key);
+                    playSound('tap');
+                  }
+                };
+
+                return (
+                  <button
+                    key={key}
+                    onClick={handleClick}
+                    className="flex items-center justify-center font-bold uppercase transition-colors active:opacity-80"
+                    style={{
+                      backgroundColor: keyBg,
+                      color: keyText,
+                      borderRadius: '4px',
+                      height: '58px',
+                      minWidth: isSpecial ? '65px' : '43px',
+                      flex: isSpecial ? '1.5' : '1',
+                      maxWidth: isSpecial ? '80px' : '50px',
+                      fontSize: isSpecial ? '12px' : '14px',
+                      fontFamily: "'Helvetica Neue', Arial, sans-serif",
+                      fontWeight: 'bold',
+                      userSelect: 'none',
+                      WebkitTapHighlightColor: 'transparent',
+                      touchAction: 'manipulation'
+                    }}
+                  >
+                    {key === 'BACK' ? (
+                      <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor">
+                        <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7.07L2.4 12l4.66-7H22v14zm-11.59-2L14 13.41 17.59 17 19 15.59 15.41 12 19 8.41 17.59 7 14 10.59 10.41 7 9 8.41 12.59 12 9 15.59z"></path>
+                      </svg>
+                    ) : key}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
         </div>
       </div>
 
       <style>{`
-        @keyframes shake {
-          0%, 100% { transform: translateX(0); }
-          10%, 30%, 50%, 70%, 90% { transform: translateX(-2px); }
-          20%, 40%, 60%, 80% { transform: translateX(2px); }
-        }
-        .animate-shake {
-          animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
-        }
+        /* NYT Wordle Animations */
+        
+        /* Pop animation - when typing a letter */
         @keyframes pop {
-          0% { transform: scale(0.8); opacity: 0; }
-          40% { transform: scale(1.05); opacity: 1; }
-          100% { transform: scale(1); opacity: 1; }
+          0% { transform: scale(1); }
+          50% { transform: scale(1.1); }
+          100% { transform: scale(1); }
         }
         .animate-pop {
-          animation: pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+          animation: pop 100ms ease-in-out;
         }
-        @keyframes flip {
+        
+        /* Shake animation - invalid word */
+        @keyframes shake {
+          0%, 100% { transform: translateX(0); }
+          10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+          20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        .animate-shake {
+          animation: shake 600ms ease-in-out;
+        }
+        
+        /* Flip animation - revealing tiles */
+        @keyframes flip-in {
           0% { transform: rotateX(0deg); }
-          45% { transform: rotateX(90deg); }
+          50% { transform: rotateX(-90deg); }
           100% { transform: rotateX(0deg); }
         }
-        .animate-flip {
-          animation: flip 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-          transform-style: preserve-3d;
+        .animate-flip-tile {
+          animation: flip-in 500ms ease-in-out both;
         }
+        
+        /* Fade in for toast messages */
         @keyframes fadeIn {
-          from { opacity: 0; }
-          to { opacity: 1; }
+          from { opacity: 0; transform: translate(-50%, -10px); }
+          to { opacity: 1; transform: translate(-50%, 0); }
         }
         .animate-fade-in {
-          animation: fadeIn 0.3s ease-out forwards;
+          animation: fadeIn 200ms ease-out forwards;
         }
-        @keyframes fadeInUp {
-          from { opacity: 0; transform: translateY(10px); }
-          to { opacity: 1; transform: translateY(0); }
+        
+        /* Bounce animation for winning */
+        @keyframes bounce {
+          0%, 20% { transform: translateY(0); }
+          40% { transform: translateY(-30px); }
+          50% { transform: translateY(5px); }
+          60% { transform: translateY(-15px); }
+          80% { transform: translateY(2px); }
+          100% { transform: translateY(0); }
         }
-        .animate-fade-in-up {
-          animation: fadeInUp 0.4s ease-out forwards;
+        .animate-bounce-win {
+          animation: bounce 1000ms ease-in-out;
+        }
+        
+        /* Prevent text selection on keyboard */
+        .wordle-game button {
+          -webkit-user-select: none;
+          user-select: none;
+        }
+        
+        /* Safe area for notch devices */
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+          .wordle-game {
+            padding-bottom: env(safe-area-inset-bottom);
+          }
         }
       `}</style>
     </div>
