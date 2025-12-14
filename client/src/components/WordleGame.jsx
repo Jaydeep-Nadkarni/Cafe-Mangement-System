@@ -11,11 +11,11 @@ const WORDS = [
   'AROMA', 'TASTE', 'DRINK', 'ORDER', 'TABLE'
 ];
 
-export default function WordleGame({ onClose }) {
+function WordleGame({ onClose }) {
   const [solution, setSolution] = useState('');
   const [guesses, setGuesses] = useState([]);
   const [currentGuess, setCurrentGuess] = useState('');
-  const [gameState, setGameState] = useState('loading'); // loading, playing, won, lost
+  const [gameState, setGameState] = useState('loading');
   const [shakeRow, setShakeRow] = useState(false);
   const [message, setMessage] = useState('');
   const [soundEnabled, setSoundEnabled] = useState(true);
@@ -23,18 +23,16 @@ export default function WordleGame({ onClose }) {
   const [copied, setCopied] = useState(false);
   const inputRef = useRef(null);
 
-  // Initialize Game
   useEffect(() => {
     const initializeGame = () => {
       const today = new Date().toISOString().split('T')[0];
-      let sessionId = localStorage.getItem('cafe_session_id');
+      let sessionId = sessionStorage.getItem('cafe_session_id');
       
       if (!sessionId) {
         sessionId = Math.random().toString(36).substring(2) + Date.now().toString(36);
-        localStorage.setItem('cafe_session_id', sessionId);
+        sessionStorage.setItem('cafe_session_id', sessionId);
       }
 
-      // Deterministic word selection
       let hash = 0;
       const str = today + sessionId;
       for (let i = 0; i < str.length; i++) {
@@ -43,8 +41,7 @@ export default function WordleGame({ onClose }) {
       }
       const dailyWord = WORDS[Math.abs(hash) % WORDS.length];
 
-      // Check saved state
-      const savedState = JSON.parse(localStorage.getItem('cafe_wordle_state'));
+      const savedState = JSON.parse(sessionStorage.getItem('cafe_wordle_state') || 'null');
       
       if (savedState && savedState.date === today) {
         setSolution(savedState.solution);
@@ -52,7 +49,6 @@ export default function WordleGame({ onClose }) {
         setGameState(savedState.gameState);
         if (savedState.couponCode) setCouponCode(savedState.couponCode);
       } else {
-        // New Game
         setSolution(dailyWord);
         setGuesses([]);
         setGameState('playing');
@@ -63,12 +59,11 @@ export default function WordleGame({ onClose }) {
     initializeGame();
   }, []);
 
-  // Save State
   useEffect(() => {
     if (gameState === 'loading') return;
     
     const today = new Date().toISOString().split('T')[0];
-    localStorage.setItem('cafe_wordle_state', JSON.stringify({
+    sessionStorage.setItem('cafe_wordle_state', JSON.stringify({
       date: today,
       guesses,
       gameState,
@@ -77,7 +72,6 @@ export default function WordleGame({ onClose }) {
     }));
   }, [guesses, gameState, solution, couponCode]);
 
-  // Sound System (Web Audio API)
   const playSound = (type) => {
     if (!soundEnabled) return;
     try {
@@ -108,10 +102,10 @@ export default function WordleGame({ onClose }) {
         createOsc(150, 'sawtooth', 0.2, 0, 0.1);
         createOsc(100, 'sawtooth', 0.2, 0.1, 0.1);
       } else if (type === 'win') {
-        createOsc(523.25, 'sine', 0.2, 0); // C5
-        createOsc(659.25, 'sine', 0.2, 0.1); // E5
-        createOsc(783.99, 'sine', 0.4, 0.2); // G5
-        createOsc(1046.50, 'sine', 0.8, 0.3); // C6
+        createOsc(523.25, 'sine', 0.2, 0);
+        createOsc(659.25, 'sine', 0.2, 0.1);
+        createOsc(783.99, 'sine', 0.4, 0.2);
+        createOsc(1046.50, 'sine', 0.8, 0.3);
       } else if (type === 'lose') {
         createOsc(300, 'triangle', 0.3, 0);
         createOsc(200, 'triangle', 0.3, 0.2);
@@ -122,14 +116,12 @@ export default function WordleGame({ onClose }) {
     }
   };
 
-  // Global keyboard handler - works for both physical and virtual keyboards
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (gameState !== 'playing') return;
 
       const key = e.key.toUpperCase();
 
-      // Handle letter input (A-Z)
       if (/^[A-Z]$/.test(key)) {
         e.preventDefault();
         if (currentGuess.length < 5) {
@@ -139,7 +131,6 @@ export default function WordleGame({ onClose }) {
         return;
       }
 
-      // Handle backspace
       if (e.key === 'Backspace') {
         e.preventDefault();
         if (currentGuess.length > 0) {
@@ -149,7 +140,6 @@ export default function WordleGame({ onClose }) {
         return;
       }
 
-      // Handle enter/submit
       if (e.key === 'Enter') {
         e.preventDefault();
         submitGuess();
@@ -157,22 +147,18 @@ export default function WordleGame({ onClose }) {
       }
     };
 
-    // Attach to window for global keyboard capture
     window.addEventListener('keydown', handleKeyDown, true);
     return () => window.removeEventListener('keydown', handleKeyDown, true);
   }, [gameState, currentGuess, solution, guesses]);
 
-  // Focus input on mount for mobile keyboard
   useEffect(() => {
     if (gameState === 'playing' && inputRef.current) {
       inputRef.current.focus();
     } else if ((gameState === 'won' || gameState === 'lost') && inputRef.current) {
-      // Blur and hide keyboard when game ends
       inputRef.current.blur();
     }
   }, [gameState]);
 
-  // Tap anywhere on game to focus input (mobile UX improvement)
   const focusInput = () => {
     if (inputRef.current && gameState === 'playing') {
       inputRef.current.focus();
@@ -183,17 +169,6 @@ export default function WordleGame({ onClose }) {
     focusInput();
   };
 
-  const handleKeyPress = (letter) => {
-    if (currentGuess.length < 5 && gameState === 'playing') {
-      setCurrentGuess(prev => prev + letter);
-      playSound('tap');
-    }
-  };
-
-  const handleDelete = () => {
-    setCurrentGuess(prev => prev.slice(0, -1));
-  };
-
   const showMessage = (msg) => {
     setMessage(msg);
     setTimeout(() => setMessage(''), 2000);
@@ -201,7 +176,7 @@ export default function WordleGame({ onClose }) {
 
   const generateCoupon = () => {
     const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = 'WT'; // Wordle Token
+    let code = 'WT';
     const array = new Uint32Array(8);
     crypto.getRandomValues(array);
     for (let i = 0; i < 8; i++) {
@@ -243,7 +218,6 @@ export default function WordleGame({ onClose }) {
 
     solutionChars.forEach(c => solutionCounts[c] = (solutionCounts[c] || 0) + 1);
 
-    // Green pass
     guessChars.forEach((c, i) => {
       if (c === solutionChars[i]) {
         status[i] = 'correct';
@@ -251,7 +225,6 @@ export default function WordleGame({ onClose }) {
       }
     });
 
-    // Yellow pass
     guessChars.forEach((c, i) => {
       if (status[i] !== 'correct' && solutionCounts[c] > 0) {
         status[i] = 'present';
@@ -262,7 +235,6 @@ export default function WordleGame({ onClose }) {
     return status;
   };
 
-  // Get keyboard letter status (best result from all guesses)
   const getKeyStatus = (letter) => {
     let bestStatus = 'unused';
     for (const guess of guesses) {
@@ -286,14 +258,12 @@ export default function WordleGame({ onClose }) {
 
   if (gameState === 'loading') return null;
 
-  // Show results page instead of game board when won/lost
   if (gameState === 'won' || gameState === 'lost') {
     return (
       <div className="fixed inset-0 z-50 bg-gradient-to-br from-gray-50 via-white to-gray-50 animate-fade-in">
         <div className="h-full overflow-y-auto">
           <div className="min-h-full flex flex-col items-center justify-center p-4 py-8 md:p-8">
             <div className="w-full max-w-md relative">
-              {/* Close button - positioned absolutely */}
               <button
                 onClick={onClose}
                 className="absolute -top-4 right-0 p-2 hover:bg-white/80 rounded-full transition-all z-10 bg-white shadow-sm"
@@ -301,9 +271,7 @@ export default function WordleGame({ onClose }) {
                 <X className="w-5 h-5 text-gray-500" />
               </button>
 
-              {/* Results Card */}
               <div className="bg-white rounded-3xl p-6 md:p-8 shadow-2xl border border-gray-100">
-                {/* Icon */}
                 <div className="mb-6">
                   <div className={`
                     w-24 h-24 mx-auto rounded-3xl flex items-center justify-center shadow-lg
@@ -317,19 +285,16 @@ export default function WordleGame({ onClose }) {
                   </div>
                 </div>
                 
-                {/* Title */}
                 <h3 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 font-display text-center">
                   {gameState === 'won' ? 'Brilliant!' : 'Nice Try!'}
                 </h3>
                 
-                {/* Subtitle */}
                 <p className="text-gray-500 text-base mb-8 text-center">
                   {gameState === 'won' 
                     ? 'You cracked today\'s word' 
                     : <span>The word was <span className="font-bold text-gray-700">{solution}</span></span>}
                 </p>
                 
-                {/* Coupon Card */}
                 {gameState === 'won' && (
                   <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-2xl p-5 mb-6 border border-green-100">
                     <div className="flex items-center justify-between mb-4">
@@ -355,7 +320,6 @@ export default function WordleGame({ onClose }) {
                   </div>
                 )}
 
-                {/* Lost state message */}
                 {gameState === 'lost' && (
                   <div className="bg-gray-50 rounded-2xl p-5 mb-6 border border-gray-100">
                     <p className="text-sm text-gray-600 text-center leading-relaxed">
@@ -364,7 +328,6 @@ export default function WordleGame({ onClose }) {
                   </div>
                 )}
 
-                {/* Close Button */}
                 <button 
                   onClick={onClose}
                   className={`
@@ -384,17 +347,14 @@ export default function WordleGame({ onClose }) {
     );
   }
 
-  // NYT Wordle Keyboard Rows
   const keyboardRows = [
     ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
     ['A', 'S', 'D', 'F', 'G', 'H', 'J', 'K', 'L'],
     ['ENTER', 'Z', 'X', 'C', 'V', 'B', 'N', 'M', 'BACK']
   ];
 
-  // Game board view - NYT Wordle Style
   return (
     <div className="wordle-game fixed inset-0 z-50 bg-white flex flex-col" onClick={handleGameBoardClick}>
-      {/* Header - NYT Style */}
       <header className="h-[50px] border-b border-[#d3d6da] flex items-center justify-between px-4 shrink-0">
         <div className="flex items-center gap-2">
           <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded transition-colors">
@@ -415,7 +375,6 @@ export default function WordleGame({ onClose }) {
         </div>
       </header>
 
-      {/* Hidden Input */}
       <textarea
         ref={inputRef}
         value={currentGuess}
@@ -432,23 +391,19 @@ export default function WordleGame({ onClose }) {
         readOnly
       />
 
-      {/* Main Game Area */}
       <div className="flex-1 flex flex-col justify-between max-w-[500px] w-full mx-auto">
-        {/* Toast Message */}
         {message && (
           <div className="absolute top-[60px] left-1/2 -translate-x-1/2 z-20 bg-gray-900 text-white px-4 py-3 rounded text-sm font-bold animate-fade-in">
             {message}
           </div>
         )}
 
-        {/* Game Board Container */}
         <div className="flex-1 flex items-center justify-center p-2.5">
           <div className="grid grid-rows-6 gap-[5px] w-full max-w-[350px] aspect-[5/6]">
             {[...Array(6)].map((_, rowIndex) => {
               const isCurrentRow = rowIndex === guesses.length;
               const guess = guesses[rowIndex];
               const rowColors = guess ? getRowColors(guess) : null;
-              const isRevealing = guess && rowIndex === guesses.length - 1;
               
               return (
                 <div 
@@ -463,10 +418,9 @@ export default function WordleGame({ onClose }) {
                     const isTyping = isCurrentRow && !guess && letter;
                     const status = rowColors ? rowColors[colIndex] : null;
 
-                    // NYT Color classes
-                    let tileClass = 'bg-white border-2 border-[#d3d6da]'; // Empty
+                    let tileClass = 'bg-white border-2 border-[#d3d6da]';
                     if (letter && !guess) {
-                      tileClass = 'bg-white border-2 border-[#878a8c]'; // Filled but not submitted
+                      tileClass = 'bg-white border-2 border-[#878a8c]';
                     }
                     if (status === 'correct') tileClass = 'bg-[#6aaa64] border-2 border-[#6aaa64] text-white';
                     if (status === 'present') tileClass = 'bg-[#c9b458] border-2 border-[#c9b458] text-white';
@@ -501,83 +455,82 @@ export default function WordleGame({ onClose }) {
           </div>
         </div>
 
-        {/* NYT-Style Keyboard */}
-        <div className="w-full px-2 pb-4 pt-2 shrink-0" style={{ paddingBottom: 'max(16px, env(safe-area-inset-bottom))' }}>
-          {keyboardRows.map((row, rowIndex) => (
-            <div 
-              key={rowIndex} 
-              className="flex justify-center gap-[6px] mb-2"
-              style={{ marginLeft: rowIndex === 1 ? '5%' : 0, marginRight: rowIndex === 1 ? '5%' : 0 }}
-            >
-              {row.map((key) => {
-                const isSpecial = key === 'ENTER' || key === 'BACK';
-                const status = isSpecial ? 'unused' : getKeyStatus(key);
-                
-                // NYT Key colors
-                let keyBg = '#d3d6da'; // Default gray
-                let keyText = '#000';
-                
-                if (status === 'correct') {
-                  keyBg = '#6aaa64';
-                  keyText = '#fff';
-                } else if (status === 'present') {
-                  keyBg = '#c9b458';
-                  keyText = '#fff';
-                } else if (status === 'absent') {
-                  keyBg = '#787c7e';
-                  keyText = '#fff';
-                }
-
-                const handleClick = () => {
-                  if (key === 'ENTER') {
-                    submitGuess();
-                  } else if (key === 'BACK') {
-                    setCurrentGuess(prev => prev.slice(0, -1));
-                    playSound('tap');
-                  } else if (currentGuess.length < 5) {
-                    setCurrentGuess(prev => prev + key);
-                    playSound('tap');
+        {/* Cafe-Style Keyboard */}
+        <div className="w-full px-2 pb-5 pt-3 shrink-0 bg-gradient-to-b from-amber-50/30 to-amber-50/60" style={{ paddingBottom: 'max(20px, env(safe-area-inset-bottom))' }}>
+          <div className="max-w-[500px] mx-auto">
+            {keyboardRows.map((row, rowIndex) => (
+              <div 
+                key={rowIndex} 
+                className="flex justify-center gap-[6px] mb-[6px]"
+                style={{ 
+                  paddingLeft: rowIndex === 1 ? '24px' : 0, 
+                  paddingRight: rowIndex === 1 ? '24px' : 0 
+                }}
+              >
+                {row.map((key) => {
+                  const isSpecial = key === 'ENTER' || key === 'BACK';
+                  const status = isSpecial ? 'unused' : getKeyStatus(key);
+                  
+                  let keyClass = 'bg-gradient-to-b from-stone-100 to-stone-200 text-stone-800 shadow-sm border border-stone-300/50 hover:from-stone-200 hover:to-stone-300';
+                  
+                  if (status === 'correct') {
+                    keyClass = 'bg-gradient-to-b from-amber-700 to-amber-800 text-amber-50 shadow-md border border-amber-900/30 hover:from-amber-600 hover:to-amber-700';
+                  } else if (status === 'present') {
+                    keyClass = 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-md border border-amber-700/30 hover:from-amber-400 hover:to-amber-500';
+                  } else if (status === 'absent') {
+                    keyClass = 'bg-gradient-to-b from-stone-400 to-stone-500 text-stone-100 shadow-sm border border-stone-600/30';
                   }
-                };
 
-                return (
-                  <button
-                    key={key}
-                    onClick={handleClick}
-                    className="flex items-center justify-center font-bold uppercase transition-colors active:opacity-80"
-                    style={{
-                      backgroundColor: keyBg,
-                      color: keyText,
-                      borderRadius: '4px',
-                      height: '58px',
-                      minWidth: isSpecial ? '65px' : '43px',
-                      flex: isSpecial ? '1.5' : '1',
-                      maxWidth: isSpecial ? '80px' : '50px',
-                      fontSize: isSpecial ? '12px' : '14px',
-                      fontFamily: "'Helvetica Neue', Arial, sans-serif",
-                      fontWeight: 'bold',
-                      userSelect: 'none',
-                      WebkitTapHighlightColor: 'transparent',
-                      touchAction: 'manipulation'
-                    }}
-                  >
-                    {key === 'BACK' ? (
-                      <svg xmlns="http://www.w3.org/2000/svg" height="24" viewBox="0 0 24 24" width="24" fill="currentColor">
-                        <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7.07L2.4 12l4.66-7H22v14zm-11.59-2L14 13.41 17.59 17 19 15.59 15.41 12 19 8.41 17.59 7 14 10.59 10.41 7 9 8.41 12.59 12 9 15.59z"></path>
-                      </svg>
-                    ) : key}
-                  </button>
-                );
-              })}
-            </div>
-          ))}
+                  const handleClick = () => {
+                    if (key === 'ENTER') {
+                      submitGuess();
+                    } else if (key === 'BACK') {
+                      setCurrentGuess(prev => prev.slice(0, -1));
+                      playSound('tap');
+                    } else if (currentGuess.length < 5) {
+                      setCurrentGuess(prev => prev + key);
+                      playSound('tap');
+                    }
+                  };
+
+                  return (
+                    <button
+                      key={key}
+                      onClick={handleClick}
+                      className={`
+                        flex items-center justify-center font-bold uppercase 
+                        transition-all duration-200 active:scale-95 active:shadow-none
+                        ${keyClass}
+                      `}
+                      style={{
+                        borderRadius: '6px',
+                        height: '42px',
+                        flex: isSpecial ? '1.5' : '1',
+                        minWidth: isSpecial ? '60px' : '0',
+                        fontSize: isSpecial ? '10px' : '13px',
+                        fontFamily: "'Inter', 'SF Pro Display', -apple-system, sans-serif",
+                        fontWeight: '700',
+                        letterSpacing: isSpecial ? '0.5px' : '0.3px',
+                        userSelect: 'none',
+                        WebkitTapHighlightColor: 'transparent',
+                        touchAction: 'manipulation'
+                      }}
+                    >
+                      {key === 'BACK' ? (
+                        <svg xmlns="http://www.w3.org/2000/svg" height="20" viewBox="0 0 24 24" width="20" fill="currentColor">
+                          <path d="M22 3H7c-.69 0-1.23.35-1.59.88L0 12l5.41 8.11c.36.53.9.89 1.59.89h15c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 16H7.07L2.4 12l4.66-7H22v14zm-11.59-2L14 13.41 17.59 17 19 15.59 15.41 12 19 8.41 17.59 7 14 10.59 10.41 7 9 8.41 12.59 12 9 15.59z"></path>
+                        </svg>
+                      ) : key}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
       <style>{`
-        /* NYT Wordle Animations */
-        
-        /* Pop animation - when typing a letter */
         @keyframes pop {
           0% { transform: scale(1); }
           50% { transform: scale(1.1); }
@@ -587,7 +540,6 @@ export default function WordleGame({ onClose }) {
           animation: pop 100ms ease-in-out;
         }
         
-        /* Shake animation - invalid word */
         @keyframes shake {
           0%, 100% { transform: translateX(0); }
           10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
@@ -597,7 +549,6 @@ export default function WordleGame({ onClose }) {
           animation: shake 600ms ease-in-out;
         }
         
-        /* Flip animation - revealing tiles */
         @keyframes flip-in {
           0% { transform: rotateX(0deg); }
           50% { transform: rotateX(-90deg); }
@@ -607,7 +558,6 @@ export default function WordleGame({ onClose }) {
           animation: flip-in 500ms ease-in-out both;
         }
         
-        /* Fade in for toast messages */
         @keyframes fadeIn {
           from { opacity: 0; transform: translate(-50%, -10px); }
           to { opacity: 1; transform: translate(-50%, 0); }
@@ -616,32 +566,38 @@ export default function WordleGame({ onClose }) {
           animation: fadeIn 200ms ease-out forwards;
         }
         
-        /* Bounce animation for winning */
-        @keyframes bounce {
-          0%, 20% { transform: translateY(0); }
-          40% { transform: translateY(-30px); }
-          50% { transform: translateY(5px); }
-          60% { transform: translateY(-15px); }
-          80% { transform: translateY(2px); }
-          100% { transform: translateY(0); }
-        }
-        .animate-bounce-win {
-          animation: bounce 1000ms ease-in-out;
-        }
-        
-        /* Prevent text selection on keyboard */
         .wordle-game button {
           -webkit-user-select: none;
           user-select: none;
         }
         
-        /* Safe area for notch devices */
         @supports (padding-bottom: env(safe-area-inset-bottom)) {
           .wordle-game {
             padding-bottom: env(safe-area-inset-bottom);
           }
         }
       `}</style>
+    </div>
+  );
+}
+
+export default function App() {
+  const [showGame, setShowGame] = useState(true);
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
+      {showGame ? (
+        <WordleGame onClose={() => setShowGame(false)} />
+      ) : (
+        <div className="text-center">
+          <button 
+            onClick={() => setShowGame(true)}
+            className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
+          >
+            ☕ Play Cafe Wordle
+          </button>
+        </div>
+      )}
     </div>
   );
 }
