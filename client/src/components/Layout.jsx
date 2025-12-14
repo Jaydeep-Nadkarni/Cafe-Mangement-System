@@ -7,7 +7,8 @@ import BottomNav from './BottomNav';
 
 export default function Layout({ children }) {
   const location = useLocation();
-  const { isWordleOpen } = useContext(GameContext);
+  const gameContext = useContext(GameContext);
+  const isWordleOpen = gameContext?.isWordleOpen || false;
   
   // Hide nav on payment success or during Wordle gameplay
   const hideNav = ['/payment-success'].includes(location.pathname) || isWordleOpen;

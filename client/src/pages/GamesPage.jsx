@@ -18,6 +18,7 @@ export default function GamesPage() {
   };
 
   const handleWordleClose = () => {
+    console.log('Closing Wordle game');
     setIsWordleOpen(false);
     setGlobalIsWordleOpen(false);
   };
