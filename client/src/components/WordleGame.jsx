@@ -581,23 +581,4 @@ function WordleGame({ onClose }) {
   );
 }
 
-export default function App() {
-  const [showGame, setShowGame] = useState(true);
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-amber-50 to-orange-50 flex items-center justify-center p-4">
-      {showGame ? (
-        <WordleGame onClose={() => setShowGame(false)} />
-      ) : (
-        <div className="text-center">
-          <button 
-            onClick={() => setShowGame(true)}
-            className="bg-gradient-to-r from-amber-600 to-orange-600 text-white px-8 py-4 rounded-2xl font-bold text-lg shadow-xl hover:shadow-2xl transition-all duration-300 hover:scale-105"
-          >
-            ☕ Play Cafe Wordle
-          </button>
-        </div>
-      )}
-    </div>
-  );
-}
+export default WordleGame; 

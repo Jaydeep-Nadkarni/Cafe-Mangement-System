@@ -1,8 +1,7 @@
-import { useState, useEffect, useRef, useContext } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Coffee, Search, X } from 'lucide-react';
 import { MENU_ITEMS } from '../data/menuItems';
-import { GameContext } from '../context/GameContext';
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -12,12 +11,6 @@ export default function Header() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchRef = useRef(null);
-  const { isWordleOpen } = useContext(GameContext);
-
-  // Hide header when Wordle is open
-  if (isWordleOpen) {
-    return null;
-  }
 
   // Close suggestions when clicking outside
   useEffect(() => {
