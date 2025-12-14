@@ -418,13 +418,13 @@ function WordleGame({ onClose }) {
                     const isTyping = isCurrentRow && !guess && letter;
                     const status = rowColors ? rowColors[colIndex] : null;
 
-                    let tileClass = 'bg-white border-2 border-[#d3d6da]';
+                    let tileClass = 'bg-white border-2 border-[#e5e7eb]';
                     if (letter && !guess) {
-                      tileClass = 'bg-white border-2 border-[#878a8c]';
+                      tileClass = 'bg-white border-2 border-[#9ca3af]';
                     }
-                    if (status === 'correct') tileClass = 'bg-[#6aaa64] border-2 border-[#6aaa64] text-white';
-                    if (status === 'present') tileClass = 'bg-[#c9b458] border-2 border-[#c9b458] text-white';
-                    if (status === 'absent') tileClass = 'bg-[#787c7e] border-2 border-[#787c7e] text-white';
+                    if (status === 'correct') tileClass = 'bg-[#22c55e] border-2 border-[#16a34a] text-white';
+                    if (status === 'present') tileClass = 'bg-[#fb923c] border-2 border-[#f97316] text-white';
+                    if (status === 'absent') tileClass = 'bg-[#6b7280] border-2 border-[#4b5563] text-white';
 
                     return (
                       <div
@@ -471,14 +471,14 @@ function WordleGame({ onClose }) {
                   const isSpecial = key === 'ENTER' || key === 'BACK';
                   const status = isSpecial ? 'unused' : getKeyStatus(key);
                   
-                  let keyClass = 'bg-gradient-to-b from-stone-100 to-stone-200 text-stone-800 shadow-sm border border-stone-300/50 hover:from-stone-200 hover:to-stone-300';
+                  let keyClass = 'bg-gradient-to-b from-gray-200 to-gray-300 text-gray-800 shadow-sm border border-gray-400/50 hover:from-gray-300 hover:to-gray-400';
                   
                   if (status === 'correct') {
-                    keyClass = 'bg-gradient-to-b from-amber-700 to-amber-800 text-amber-50 shadow-md border border-amber-900/30 hover:from-amber-600 hover:to-amber-700';
+                    keyClass = 'bg-gradient-to-b from-green-500 to-green-600 text-white shadow-md border border-green-700/30 hover:from-green-400 hover:to-green-500';
                   } else if (status === 'present') {
-                    keyClass = 'bg-gradient-to-b from-amber-500 to-amber-600 text-white shadow-md border border-amber-700/30 hover:from-amber-400 hover:to-amber-500';
+                    keyClass = 'bg-gradient-to-b from-orange-400 to-orange-500 text-white shadow-md border border-orange-600/30 hover:from-orange-300 hover:to-orange-400';
                   } else if (status === 'absent') {
-                    keyClass = 'bg-gradient-to-b from-stone-400 to-stone-500 text-stone-100 shadow-sm border border-stone-600/30';
+                    keyClass = 'bg-gradient-to-b from-gray-500 to-gray-600 text-gray-100 shadow-sm border border-gray-700/30';
                   }
 
                   const handleClick = () => {
