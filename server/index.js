@@ -598,6 +598,7 @@ app.listen(PORT, () => {
 ║  Server running on: http://localhost:${PORT}     ║
 ║  Environment: ${process.env.NODE_ENV || 'development'}                     ║
 ║  CORS enabled for: ${process.env.CLIENT_URL || 'http://localhost:3000'} ║
+║  MongoDB: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/cafe_management'} ║
 ╚════════════════════════════════════════════╝
   `);
 });
