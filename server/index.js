@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const PDFDocument = require('pdfkit');
@@ -12,8 +14,21 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const branchRoutes = require('./routes/branchRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const { initRealtime } = require('./services/realtimeService');
 
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  }
+});
+
+// Initialize Real-time Service
+initRealtime(io);
+
 const PORT = process.env.PORT || 5000;
 
 // ==================== DATABASE CONNECTION ====================
@@ -600,7 +615,7 @@ app.use((err, req, res, next) => {
 
 // ==================== SERVER START ====================
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════╗
 ║   Cafe Management System - API Server     ║
@@ -609,6 +624,7 @@ app.listen(PORT, () => {
 ║  Environment: ${process.env.NODE_ENV || 'development'}                     ║
 ║  CORS enabled for: ${process.env.CLIENT_URL || 'http://localhost:3000'} ║
 ║  MongoDB: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/cafe_management'} ║
+║  Socket.io: Enabled                        ║
 ╚════════════════════════════════════════════╝
   `);
 });
