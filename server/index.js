@@ -8,6 +8,7 @@ require('dotenv').config();
 
 const { connectDB } = require('./config/database');
 const models = require('./models');
+const authRoutes = require('./routes/authRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -23,6 +24,9 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// ==================== ROUTES ====================
+app.use('/api/auth', authRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [
