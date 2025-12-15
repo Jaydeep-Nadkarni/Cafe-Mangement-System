@@ -96,12 +96,13 @@ export default function OrderSummaryPage() {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
-      // Prepare order items
+      // Prepare order items with both local ID and item name
       const orderItems = cartItems.map(cartItem => ({
-        menuItem: cartItem.item.id, // Use item id
+        menuItem: cartItem.item.id, // Keep local ID for reference
+        name: cartItem.item.name,   // Send name for database lookup
         quantity: cartItem.quantity,
         price: cartItem.price,
-        notes: ''
+        specialInstructions: ''
       }));
 
       // Create order using PUBLIC endpoint (no authentication required)
