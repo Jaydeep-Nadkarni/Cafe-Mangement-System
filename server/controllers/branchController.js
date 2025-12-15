@@ -152,10 +152,53 @@ const getBranchDetails = async (req, res) => {
   }
 };
 
+// @desc    Create a new table for the branch
+// @route   POST /api/branch/tables
+// @access  Manager
+const createTable = async (req, res) => {
+  try {
+    const { tableNumber, capacity, location } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    // Validate inputs
+    if (!tableNumber || !capacity) {
+      return res.status(400).json({ message: 'Table number and capacity are required' });
+    }
+
+    // Check if table already exists
+    const existing = await Table.findOne({
+      branch: branch._id,
+      tableNumber: parseInt(tableNumber)
+    });
+
+    if (existing) {
+      return res.status(400).json({ message: 'Table with this number already exists' });
+    }
+
+    // Create new table
+    const table = new Table({
+      tableNumber: parseInt(tableNumber),
+      branch: branch._id,
+      capacity: parseInt(capacity),
+      location: location || 'indoor',
+      status: 'available',
+      isActive: true
+    });
+
+    const savedTable = await table.save();
+    console.log('Table created:', savedTable._id, 'Number:', tableNumber);
+
+    res.status(201).json(savedTable);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
   updateItemAvailability,
   mergeTables,
-  getBranchDetails
+  getBranchDetails,
+  createTable
 };

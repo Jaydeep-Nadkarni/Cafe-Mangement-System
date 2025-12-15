@@ -149,6 +149,8 @@ const createQROrder = async (req, res) => {
       tax: tax,
       total: total,
       status: 'pending',
+      paymentStatus: 'unpaid',
+      paymentMethod: null, // Will be set when payment is made
       customerCount: customerCount || 1,
       customerName: customerName || null,
       customerPhone: customerPhone || null

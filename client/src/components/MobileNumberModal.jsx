@@ -31,6 +31,10 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
+      console.log('OrderData received:', orderData);
+      console.log('BranchCode:', orderData?.branchCode);
+      console.log('TableNumber:', orderData?.tableNumber);
+      
       // Prepare order items with item name for database lookup
       const orderItems = (orderData?.items || []).map(cartItem => ({
         menuItem: cartItem.item?.id,
@@ -49,10 +53,12 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         customerPhone: customerPhone
       };
 
-      console.log('Order payload:', JSON.stringify(orderPayload, null, 2));
-      console.log('Branch Code:', orderData?.branchCode, 'Type:', typeof orderData?.branchCode);
-      console.log('Table Number:', orderData?.tableNumber, 'Type:', typeof orderData?.tableNumber);
-      console.log('Items count:', orderItems.length);
+      console.log('Saving order to database:', orderPayload);
+
+      // Validate payload
+      if (!orderPayload.branchCode || !orderPayload.tableNumber || orderPayload.items.length === 0) {
+        throw new Error(`Invalid order payload: branchCode=${orderPayload.branchCode}, tableNumber=${orderPayload.tableNumber}, items=${orderPayload.items.length}`);
+      }
 
       const response = await axios.post(
         `${API_URL}/api/public/orders`,
@@ -63,8 +69,10 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
       return response.data;
     } catch (error) {
       console.error('Error saving order:', error);
-      console.error('Error response:', error.response);
-      console.error('Error message:', error.message);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      }
       throw error;
     }
   };
@@ -92,13 +100,6 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
     const currentCart = { ...cart };
     const phoneNumber = mobileNumber.replace(/\D/g, '');
     const totalAmount = orderData?.totalAmount || 0;
-
-    // Validate required fields for order
-    if (!orderData?.branchCode || !orderData?.tableNumber) {
-      setError('Session expired. Please scan QR code again.');
-      setIsSubmitting(false);
-      return;
-    }
 
     // Save order to database FIRST
     let savedOrder;

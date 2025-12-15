@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { getTableSession } from '../utils/sessionStorage';
 import MobileNumberModal from '../components/MobileNumberModal';
-import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote } from 'lucide-react';
+import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 
 export default function OrderSummaryPage() {
@@ -15,13 +15,19 @@ export default function OrderSummaryPage() {
   const [couponInput, setCouponInput] = useState('');
   const [branchCode, setBranchCode] = useState('');
   const [tableNumber, setTableNumber] = useState('');
+  const [session, setSession] = useState(null);
 
   // Retrieve branch code and table number from persistent session
   useEffect(() => {
-    const session = getTableSession();
-    if (session) {
-      setBranchCode(session.branchCode);
-      setTableNumber(session.tableNumber);
+    const retrievedSession = getTableSession();
+    console.log('Session retrieved:', retrievedSession);
+    if (retrievedSession) {
+      setSession(retrievedSession);
+      setBranchCode(retrievedSession.branchCode);
+      setTableNumber(retrievedSession.tableNumber);
+      console.log('Set branchCode:', retrievedSession.branchCode, 'tableNumber:', retrievedSession.tableNumber);
+    } else {
+      console.warn('No session found - user may not have scanned QR code');
     }
   }, []);
 
@@ -44,6 +50,27 @@ export default function OrderSummaryPage() {
           className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-xl transition-all duration-300 shadow-lg"
         >
           Browse Menu
+        </button>
+      </div>
+    );
+  }
+
+  // Show warning if no session (user didn't scan QR)
+  if (!session) {
+    return (
+      <div className="px-4 py-12 text-center animate-fade-in-up">
+        <div className="flex justify-center mb-4">
+          <div className="bg-red-100 p-6 rounded-full">
+            <AlertCircle className="w-12 h-12 text-red-600" />
+          </div>
+        </div>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2 font-display">No Table Session Found</h2>
+        <p className="text-gray-500 mb-8 font-body">Please scan the QR code at your table to proceed</p>
+        <button
+          onClick={() => navigate('/menu')}
+          className="bg-gray-900 hover:bg-gray-800 text-white font-bold px-8 py-3 rounded-xl transition-all duration-300 shadow-lg"
+        >
+          Go Back to Menu
         </button>
       </div>
     );
@@ -252,8 +279,8 @@ export default function OrderSummaryPage() {
           orderData={{
             totalAmount: total,
             orderId: `ORD_${Date.now()}`,
-            branchCode: branchCode,
-            tableNumber: tableNumber,
+            branchCode: session?.branchCode || branchCode,
+            tableNumber: session?.tableNumber || tableNumber,
             items: cartItems
           }}
           paymentMethod={paymentMethod}

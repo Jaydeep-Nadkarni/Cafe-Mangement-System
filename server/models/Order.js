@@ -87,7 +87,7 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'upi', 'wallet'],
+      enum: [null, 'cash', 'card', 'upi', 'wallet'],
       default: null
     },
     customerName: {
@@ -116,21 +116,38 @@ const orderSchema = new mongoose.Schema(
 
 // Pre-save middleware to generate orderNumber and calculate totals
 orderSchema.pre('save', async function(next) {
-  // Generate orderNumber if not provided
-  if (!this.orderNumber) {
-    const branch = await mongoose.model('Branch').findById(this.branch);
-    const branchCode = branch?.branchCode || 'GEN';
-    const timestamp = Date.now().toString().slice(-6);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    this.orderNumber = `${branchCode}-${timestamp}-${random}`;
-  }
+  try {
+    // Generate orderNumber if not provided
+    if (!this.orderNumber) {
+      let branchCode = 'ORD';
+      try {
+        const branch = await mongoose.model('Branch').findById(this.branch);
+        if (branch) {
+          branchCode = branch.branchCode;
+        }
+      } catch (err) {
+        console.error('Could not fetch branch for orderNumber:', err.message);
+        // Continue with default branchCode
+      }
+      
+      const timestamp = Date.now().toString().slice(-6);
+      const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+      this.orderNumber = `${branchCode}-${timestamp}-${random}`;
+      console.log('Generated orderNumber:', this.orderNumber);
+    }
 
-  // Calculate totals
-  if (this.items && this.items.length > 0) {
-    this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-    this.total = this.subtotal + this.tax - this.discount;
+    // Calculate totals
+    if (this.items && this.items.length > 0) {
+      this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      this.tax = this.tax || 0;
+      this.discount = this.discount || 0;
+      this.total = this.subtotal + this.tax - this.discount;
+    }
+    next();
+  } catch (error) {
+    console.error('Pre-save hook error:', error);
+    next(error);
   }
-  next();
 });
 
 // Index for frequently queried fields
