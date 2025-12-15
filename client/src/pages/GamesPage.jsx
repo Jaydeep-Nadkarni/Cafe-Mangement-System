@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
 import { GameContext } from '../context/GameContext';
 import WordleGame from '../components/WordleGame';
-import SearchGame from '../components/SearchGame';
 import HowToPlayModal from '../components/HowToPlayModal';
 
 export default function GamesPage() {
