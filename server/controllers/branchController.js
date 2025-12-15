@@ -124,9 +124,22 @@ const mergeTables = async (req, res) => {
   }
 };
 
+// @desc    Get current branch details
+// @route   GET /api/branch/details
+// @access  Manager
+const getBranchDetails = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    res.json(branch);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
   updateItemAvailability,
-  mergeTables
+  mergeTables,
+  getBranchDetails
 };
