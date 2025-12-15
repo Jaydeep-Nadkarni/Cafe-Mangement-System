@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
 import { GameContext } from '../context/GameContext';
 import WordleGame from '../components/WordleGame';
-import SearchGame from '../components/SearchGame';
 import HowToPlayModal from '../components/HowToPlayModal';
 
 export default function GamesPage() {
@@ -11,15 +10,11 @@ export default function GamesPage() {
   const { setIsWordleOpen: setGlobalIsWordleOpen } = useContext(GameContext);
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
-  const [isSearchGameOpen, setIsSearchGameOpen] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   const handlePlayClick = (gameId) => {
     if (gameId === 'wordle') {
       setIsWordleOpen(true);
-      setGlobalIsWordleOpen(true);
-    } else if (gameId === 'search') {
-      setIsSearchGameOpen(true);
       setGlobalIsWordleOpen(true);
     }
   };
@@ -30,14 +25,9 @@ export default function GamesPage() {
     setGlobalIsWordleOpen(false);
   };
 
-  const handleSearchGameClose = () => {
-    setIsSearchGameOpen(false);
-    setGlobalIsWordleOpen(false);
-  };
-
   useEffect(() => {
     // Prevent body scroll when game is open
-    if (isWordleOpen || isSearchGameOpen) {
+    if (isWordleOpen) {
       document.body.style.overflow = 'hidden';
     } else {
       document.body.style.overflow = 'auto';
@@ -45,7 +35,7 @@ export default function GamesPage() {
     return () => {
       document.body.style.overflow = 'auto';
     };
-  }, [isWordleOpen, isSearchGameOpen]);
+  }, [isWordleOpen]);
 
   const games = [
     {
@@ -56,15 +46,6 @@ export default function GamesPage() {
       reward: 'Win 10% Off Coupon',
       tag: 'Daily Challenge',
       color: 'bg-green-100 text-green-800'
-    },
-    {
-      id: 'search',
-      name: 'Cafe Feud',
-      description: 'Guess the top search completions for cafe-related questions.',
-      image: 'https://images.unsplash.com/photo-1485827404703-89b55fcc595e?w=800&h=600&fit=crop',
-      reward: 'Earn Loyalty Points',
-      tag: 'New Game',
-      color: 'bg-blue-100 text-blue-800'
     }
   ];
 
@@ -192,7 +173,6 @@ export default function GamesPage() {
       </div>
 
       {isWordleOpen && <WordleGame onClose={handleWordleClose} />}
-      {isSearchGameOpen && <SearchGame onClose={handleSearchGameClose} />}
       <HowToPlayModal isOpen={showHowToPlay} onClose={() => setShowHowToPlay(false)} />
     </div>
   );

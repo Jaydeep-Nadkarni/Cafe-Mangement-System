@@ -1,4 +1,6 @@
 const express = require('express');
+const http = require('http');
+const { Server } = require('socket.io');
 const cors = require('cors');
 const bodyParser = require('body-parser');
 const PDFDocument = require('pdfkit');
@@ -6,8 +8,34 @@ const axios = require('axios');
 const FormData = require('form-data');
 require('dotenv').config();
 
+const { connectDB } = require('./config/database');
+const models = require('./models');
+const authRoutes = require('./routes/authRoutes');
+const adminRoutes = require('./routes/adminRoutes');
+const branchRoutes = require('./routes/branchRoutes');
+const orderRoutes = require('./routes/orderRoutes');
+const couponRoutes = require('./routes/couponRoutes');
+const gameRoutes = require('./routes/gameRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const { initRealtime } = require('./services/realtimeService');
+
 const app = express();
+const server = http.createServer(app);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    credentials: true
+  }
+});
+
+// Initialize Real-time Service
+initRealtime(io);
+
 const PORT = process.env.PORT || 5000;
+
+// ==================== DATABASE CONNECTION ====================
+connectDB();
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
@@ -17,6 +45,15 @@ app.use(cors({
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// ==================== ROUTES ====================
+app.use('/api/auth', authRoutes);
+app.use('/api/admin', adminRoutes);
+app.use('/api/branch', branchRoutes);
+app.use('/api/orders', orderRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/games', gameRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [
@@ -584,7 +621,7 @@ app.use((err, req, res, next) => {
 
 // ==================== SERVER START ====================
 
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`
 ╔════════════════════════════════════════════╗
 ║   Cafe Management System - API Server     ║
@@ -592,6 +629,8 @@ app.listen(PORT, () => {
 ║  Server running on: http://localhost:${PORT}     ║
 ║  Environment: ${process.env.NODE_ENV || 'development'}                     ║
 ║  CORS enabled for: ${process.env.CLIENT_URL || 'http://localhost:3000'} ║
+║  MongoDB: ${process.env.MONGODB_URI || 'mongodb://localhost:27017/cafe_management'} ║
+║  Socket.io: Enabled                        ║
 ╚════════════════════════════════════════════╝
   `);
 });
