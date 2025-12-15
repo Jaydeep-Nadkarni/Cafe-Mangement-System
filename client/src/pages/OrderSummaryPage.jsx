@@ -92,63 +92,8 @@ export default function OrderSummaryPage() {
     setAppliedCoupon(null);
   };
 
-  const saveOrderToDatabase = async (orderId, paymentMethodType, customerPhone = null) => {
-    try {
-      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
-      // Prepare order items with both local ID and item name
-      const orderItems = cartItems.map(cartItem => ({
-        menuItem: cartItem.item.id, // Keep local ID for reference
-        name: cartItem.item.name,   // Send name for database lookup
-        quantity: cartItem.quantity,
-        price: cartItem.price,
-        specialInstructions: ''
-      }));
-
-      // Create order using PUBLIC endpoint (no authentication required)
-      const orderPayload = {
-        branchCode: branchCode,
-        tableNumber: parseInt(tableNumber),
-        items: orderItems,
-        customerCount: 1
-      };
-
-      const response = await axios.post(
-        `${API_URL}/api/public/orders`,
-        orderPayload
-      );
-
-      console.log('Order saved successfully:', response.data);
-      return response.data._id;
-    } catch (error) {
-      console.error('Error saving order:', error.response?.data || error.message);
-      return null;
-    }
-  };
-
   const handlePaymentSelect = (method) => {
-    if (method === 'cash') {
-      const currentCart = { ...cart };
-      const orderId = `ORD_${Date.now()}`;
-      
-      // Save order to database before clearing cart
-      saveOrderToDatabase(orderId, 'cash');
-      
-      clearCart();
-      navigate('/payment-success', {
-        state: {
-          paymentData: {
-            orderId: orderId,
-            method: 'cash',
-            amount: total,
-            timestamp: new Date().toISOString()
-          },
-          orderItems: currentCart
-        },
-      });
-      return;
-    }
-
+    // Always show modal to collect customer details before proceeding
     setPaymentMethod(method);
     setShowMobileModal(true);
   };
@@ -307,6 +252,9 @@ export default function OrderSummaryPage() {
           orderData={{
             totalAmount: total,
             orderId: `ORD_${Date.now()}`,
+            branchCode: branchCode,
+            tableNumber: tableNumber,
+            items: cartItems
           }}
           paymentMethod={paymentMethod}
         />
