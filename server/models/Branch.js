@@ -8,6 +8,13 @@ const branchSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, 'Branch name must be at least 3 characters']
     },
+    branchCode: {
+      type: String,
+      required: [true, 'Branch code is required'],
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
     address: {
       street: String,
       city: String,
