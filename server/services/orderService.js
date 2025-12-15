@@ -1,5 +1,5 @@
 const MenuItem = require('../models/MenuItem');
-const Coupon = require('../models/Coupon');
+const couponService = require('./couponService');
 
 /**
  * Calculate order totals including tax and discounts
@@ -40,31 +40,15 @@ const calculateOrderTotals = async (items, couponCode = null) => {
   let couponId = null;
 
   if (couponCode) {
-    const coupon = await Coupon.findOne({ 
-      code: couponCode, 
-      isActive: true,
-      validFrom: { $lte: new Date() },
-      validUntil: { $gte: new Date() }
-    });
-
-    if (coupon) {
-      // Check minimum order amount
-      if (subtotal >= coupon.minOrderAmount) {
-        // Check usage limit
-        if (coupon.usageLimit && coupon.usageCount >= coupon.usageLimit) {
-          throw new Error('Coupon usage limit reached');
-        }
-
-        if (coupon.discountType === 'percentage') {
-          discount = (subtotal * coupon.discountValue) / 100;
-          if (coupon.maxDiscountAmount) {
-            discount = Math.min(discount, coupon.maxDiscountAmount);
-          }
-        } else {
-          discount = coupon.discountValue;
-        }
-        couponId = coupon._id;
-      }
+    const validation = await couponService.validateCoupon(couponCode, subtotal);
+    
+    if (validation.isValid) {
+      discount = couponService.calculateDiscount(validation.coupon, subtotal);
+      couponId = validation.coupon._id;
+    } else {
+      // If coupon is invalid, we can either throw an error or just ignore it.
+      // Throwing an error is better for feedback.
+      throw new Error(validation.error);
     }
   }
 
@@ -76,7 +60,8 @@ const calculateOrderTotals = async (items, couponCode = null) => {
     tax,
     discount,
     total,
-    couponId
+    couponId,
+    couponCode: couponId ? couponCode : null
   };
 };
 

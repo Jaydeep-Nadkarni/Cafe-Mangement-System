@@ -14,6 +14,8 @@ const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
 const branchRoutes = require('./routes/branchRoutes');
 const orderRoutes = require('./routes/orderRoutes');
+const couponRoutes = require('./routes/couponRoutes');
+const gameRoutes = require('./routes/gameRoutes');
 const { initRealtime } = require('./services/realtimeService');
 
 const app = express();
@@ -48,6 +50,8 @@ app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/branch', branchRoutes);
 app.use('/api/orders', orderRoutes);
+app.use('/api/coupons', couponRoutes);
+app.use('/api/games', gameRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [
