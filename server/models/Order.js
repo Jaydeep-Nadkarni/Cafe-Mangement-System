@@ -4,8 +4,8 @@ const orderSchema = new mongoose.Schema(
   {
     orderNumber: {
       type: String,
-      required: [true, 'Order number is required'],
-      unique: true
+      unique: true,
+      sparse: true
     },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
@@ -134,6 +134,11 @@ orderSchema.pre('save', async function(next) {
       const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
       this.orderNumber = `${branchCode}-${timestamp}-${random}`;
       console.log('Generated orderNumber:', this.orderNumber);
+    }
+
+    // Validate orderNumber was generated
+    if (!this.orderNumber) {
+      throw new Error('Order number generation failed');
     }
 
     // Calculate totals
