@@ -10,6 +10,8 @@ const { connectDB } = require('./config/database');
 const models = require('./models');
 const authRoutes = require('./routes/authRoutes');
 const adminRoutes = require('./routes/adminRoutes');
+const branchRoutes = require('./routes/branchRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -29,6 +31,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 // ==================== ROUTES ====================
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/branch', branchRoutes);
+app.use('/api/orders', orderRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [
