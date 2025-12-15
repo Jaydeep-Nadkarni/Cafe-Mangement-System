@@ -25,7 +25,7 @@ const getAnalytics = async (req, res) => {
 // @access  Admin/SuperAdmin
 const createBranch = async (req, res) => {
   try {
-    const { name, branchCode, email, password, address, phone, operatingHours } = req.body;
+    const { name, branchCode, email, password, address, mobileNumber, operatingHours } = req.body;
 
     // 1. Check if branch exists
     const branchExists = await Branch.findOne({ $or: [{ name }, { branchCode }] });
@@ -55,7 +55,7 @@ const createBranch = async (req, res) => {
       name,
       branchCode,
       address,
-      phone: phone || '000-000-0000', // Default if not provided
+      mobileNumber: mobileNumber || null,
       email,
       manager: manager._id,
       operatingHours

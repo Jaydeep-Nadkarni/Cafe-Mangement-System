@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Lock, Store, AlertCircle } from 'lucide-react';
 
 export default function BranchLogin() {
-  const [username, setUsername] = useState('');
+  const [branchCode, setBranchCode] = useState('');
   const [password, setPassword] = useState('');
   const { login, error } = useAuth();
   const navigate = useNavigate();
@@ -13,7 +13,7 @@ export default function BranchLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const result = await login({ username, password }, 'branch');
+    const result = await login({ branchCode, password }, 'branch');
     if (result.success) {
       navigate('/branch/dashboard');
     }
@@ -45,9 +45,9 @@ export default function BranchLogin() {
                 type="text"
                 required
                 className="appearance-none rounded-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
-                placeholder="Branch Username"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Branch Code (e.g. NYC01)"
+                value={branchCode}
+                onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
               />
             </div>
             <div className="relative">

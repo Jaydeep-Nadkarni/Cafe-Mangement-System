@@ -30,6 +30,7 @@ export default function AdminDashboard() {
     name: '',
     branchCode: '',
     email: '',
+    mobileNumber: '',
     password: ''
   });
 
@@ -45,10 +46,10 @@ export default function AdminDashboard() {
       const analyticsRes = await axios.get(`${API_URL}/api/admin/analytics`);
       const global = analyticsRes.data.global;
       setStats({
-        totalBranches: global.totalBranches,
-        activeBranches: global.activeBranches,
-        todayOrders: global.todayOrders,
-        todayRevenue: global.todayRevenue
+        totalBranches: global.branches?.total || 0,
+        activeBranches: global.branches?.active || 0,
+        todayOrders: global.orders?.total || 0,
+        todayRevenue: global.revenue?.today || 0
       });
 
       // Fetch Branches
@@ -69,7 +70,7 @@ export default function AdminDashboard() {
       await axios.post(`${API_URL}/api/admin/branches`, formData);
       
       // Reset and refresh
-      setFormData({ name: '', branchCode: '', email: '', password: '' });
+      setFormData({ name: '', branchCode: '', email: '', mobileNumber: '', password: '' });
       setShowCreateForm(false);
       fetchData();
     } catch (error) {
@@ -184,6 +185,13 @@ export default function AdminDashboard() {
                   className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   value={formData.email}
                   onChange={e => setFormData({...formData, email: e.target.value})}
+                />
+                <input
+                  type="tel"
+                  placeholder="Mobile Number (e.g. +1234567890)"
+                  className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  value={formData.mobileNumber}
+                  onChange={e => setFormData({...formData, mobileNumber: e.target.value})}
                 />
                 <input
                   type="password"
