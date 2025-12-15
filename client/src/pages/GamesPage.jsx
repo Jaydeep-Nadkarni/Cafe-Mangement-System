@@ -10,15 +10,11 @@ export default function GamesPage() {
   const { setIsWordleOpen: setGlobalIsWordleOpen } = useContext(GameContext);
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
-  const [isSearchGameOpen, setIsSearchGameOpen] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
 
   const handlePlayClick = (gameId) => {
     if (gameId === 'wordle') {
       setIsWordleOpen(true);
-      setGlobalIsWordleOpen(true);
-    } else if (gameId === 'search') {
-      setIsSearchGameOpen(true);
       setGlobalIsWordleOpen(true);
     }
   };
@@ -26,11 +22,6 @@ export default function GamesPage() {
   const handleWordleClose = () => {
     console.log('Closing Wordle game');
     setIsWordleOpen(false);
-    setGlobalIsWordleOpen(false);
-  };
-
-  const handleSearchGameClose = () => {
-    setIsSearchGameOpen(false);
     setGlobalIsWordleOpen(false);
   };
 
