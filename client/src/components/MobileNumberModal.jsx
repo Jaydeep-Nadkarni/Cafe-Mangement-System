@@ -49,7 +49,10 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         customerPhone: customerPhone
       };
 
-      console.log('Saving order to database:', orderPayload);
+      console.log('Order payload:', JSON.stringify(orderPayload, null, 2));
+      console.log('Branch Code:', orderData?.branchCode, 'Type:', typeof orderData?.branchCode);
+      console.log('Table Number:', orderData?.tableNumber, 'Type:', typeof orderData?.tableNumber);
+      console.log('Items count:', orderItems.length);
 
       const response = await axios.post(
         `${API_URL}/api/public/orders`,
@@ -59,7 +62,9 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
       console.log('Order saved successfully:', response.data);
       return response.data;
     } catch (error) {
-      console.error('Error saving order:', error.response?.data || error.message);
+      console.error('Error saving order:', error);
+      console.error('Error response:', error.response);
+      console.error('Error message:', error.message);
       throw error;
     }
   };
@@ -87,6 +92,13 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
     const currentCart = { ...cart };
     const phoneNumber = mobileNumber.replace(/\D/g, '');
     const totalAmount = orderData?.totalAmount || 0;
+
+    // Validate required fields for order
+    if (!orderData?.branchCode || !orderData?.tableNumber) {
+      setError('Session expired. Please scan QR code again.');
+      setIsSubmitting(false);
+      return;
+    }
 
     // Save order to database FIRST
     let savedOrder;
