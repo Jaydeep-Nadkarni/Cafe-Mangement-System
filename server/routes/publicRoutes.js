@@ -60,6 +60,8 @@ const createQROrder = async (req, res) => {
   try {
     const { branchCode, tableNumber, items, customerCount } = req.body;
 
+    console.log('📝 Creating QR Order:', { branchCode, tableNumber, itemCount: items?.length });
+
     // Validate inputs
     if (!branchCode || !tableNumber || !items || !Array.isArray(items)) {
       return res.status(400).json({ message: 'Missing required fields: branchCode, tableNumber, items' });
@@ -68,8 +70,10 @@ const createQROrder = async (req, res) => {
     // Get branch
     const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
     if (!branch) {
+      console.error('❌ Branch not found:', branchCode);
       return res.status(404).json({ message: 'Branch not found' });
     }
+    console.log('✅ Branch found:', branch._id);
 
     // Get table
     const table = await Table.findOne({
@@ -78,10 +82,13 @@ const createQROrder = async (req, res) => {
     });
 
     if (!table) {
+      console.error('❌ Table not found:', tableNumber, 'in branch', branch._id);
       return res.status(404).json({ message: 'Table not found' });
     }
+    console.log('✅ Table found:', table._id);
 
     if (table.currentOrder) {
+      console.error('❌ Table already has an active order:', table.currentOrder);
       return res.status(400).json({ message: 'Table is already occupied. Please contact staff.' });
     }
 
@@ -100,16 +107,17 @@ const createQROrder = async (req, res) => {
         // Search by name
         menuItem = await MenuItem.findOne({ name: item.name });
       } else {
-        // Try to find by local ID in a special way
-        // For now, just reject this
+        console.error('❌ Invalid menu item:', item);
         return res.status(400).json({ message: `Invalid menu item: missing name or valid ObjectId` });
       }
 
       if (!menuItem) {
+        console.error('❌ Menu item not found:', item.name || item.menuItem);
         return res.status(404).json({ message: `Menu item not found: ${item.name || item.menuItem}` });
       }
 
       if (!menuItem.isAvailable) {
+        console.error('❌ Menu item unavailable:', menuItem.name);
         return res.status(400).json({ message: `Menu item is not available: ${menuItem.name}` });
       }
 
@@ -123,6 +131,8 @@ const createQROrder = async (req, res) => {
         specialInstructions: item.specialInstructions || '',
         status: 'pending'
       });
+      
+      console.log(`  ✅ Added item: ${item.quantity}x ${menuItem.name} (₹${menuItem.price})`);
     }
 
     // Calculate tax
@@ -143,15 +153,32 @@ const createQROrder = async (req, res) => {
     });
 
     const savedOrder = await order.save();
+    console.log('✅ Order created:', savedOrder._id, 'OrderNumber:', savedOrder.orderNumber);
 
     // Update table status
     table.currentOrder = savedOrder._id;
     table.status = 'occupied';
     await table.save();
+    console.log('✅ Table updated to occupied');
 
-    res.status(201).json(savedOrder);
+    // Populate order details before returning
+    const populatedOrder = await Order.findById(savedOrder._id)
+      .populate('branch')
+      .populate('table')
+      .populate('items.menuItem');
+
+    // Emit real-time event to branch manager
+    const branchRoom = `branch_${branch._id}`;
+    req.io.to(branchRoom).emit('new_order', {
+      orderId: populatedOrder._id,
+      data: populatedOrder,
+      timestamp: new Date()
+    });
+    console.log(`📡 Emitted new_order event to room: ${branchRoom}`);
+
+    res.status(201).json(populatedOrder);
   } catch (error) {
-    console.error('Error creating QR order:', error);
+    console.error('❌ Error creating QR order:', error.message);
     res.status(500).json({ message: error.message });
   }
 };
