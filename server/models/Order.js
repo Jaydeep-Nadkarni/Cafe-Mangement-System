@@ -114,8 +114,18 @@ const orderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Pre-save middleware to calculate totals
-orderSchema.pre('save', function(next) {
+// Pre-save middleware to generate orderNumber and calculate totals
+orderSchema.pre('save', async function(next) {
+  // Generate orderNumber if not provided
+  if (!this.orderNumber) {
+    const branch = await mongoose.model('Branch').findById(this.branch);
+    const branchCode = branch?.branchCode || 'GEN';
+    const timestamp = Date.now().toString().slice(-6);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    this.orderNumber = `${branchCode}-${timestamp}-${random}`;
+  }
+
+  // Calculate totals
   if (this.items && this.items.length > 0) {
     this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     this.total = this.subtotal + this.tax - this.discount;

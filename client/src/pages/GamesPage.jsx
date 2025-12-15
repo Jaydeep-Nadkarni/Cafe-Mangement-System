@@ -1,7 +1,8 @@
 import { useState, useContext, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Gamepad2, Users, Play, Trophy, Lock } from 'lucide-react';
+import { Gamepad2, Users, Play, Trophy, Lock, Clock } from 'lucide-react';
 import { GameContext } from '../context/GameContext';
+import { getTableSession, getSessionDisplayString } from '../utils/sessionStorage';
 import WordleGame from '../components/WordleGame';
 import HowToPlayModal from '../components/HowToPlayModal';
 
@@ -11,6 +12,13 @@ export default function GamesPage() {
   const [activeTab, setActiveTab] = useState('single');
   const [isWordleOpen, setIsWordleOpen] = useState(false);
   const [showHowToPlay, setShowHowToPlay] = useState(false);
+  const [currentSession, setCurrentSession] = useState(null);
+
+  // Load session on mount
+  useEffect(() => {
+    const session = getTableSession();
+    setCurrentSession(session);
+  }, []);
 
   const handlePlayClick = (gameId) => {
     if (gameId === 'wordle') {
@@ -51,6 +59,21 @@ export default function GamesPage() {
 
   return (
     <div className="px-4 md:px-6 py-8 max-w-4xl mx-auto min-h-[80vh]">
+      {/* Session Banner */}
+      {currentSession && (
+        <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in-up">
+          <Clock className="h-5 w-5 text-blue-600 flex-shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-900">
+              🎯 {getSessionDisplayString()}
+            </p>
+            <p className="text-xs text-blue-700 mt-1">
+              Your order will be placed at this table.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Header */}
       <div className="text-center mb-8 animate-fade-in-up">
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-2 font-display">

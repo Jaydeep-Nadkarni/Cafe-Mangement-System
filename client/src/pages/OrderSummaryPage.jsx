@@ -1,8 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { getTableSession } from '../utils/sessionStorage';
 import MobileNumberModal from '../components/MobileNumberModal';
 import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote } from 'lucide-react';
+import axios from 'axios';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
@@ -11,6 +13,17 @@ export default function OrderSummaryPage() {
   const [paymentMethod, setPaymentMethod] = useState(null);
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [couponInput, setCouponInput] = useState('');
+  const [branchCode, setBranchCode] = useState('');
+  const [tableNumber, setTableNumber] = useState('');
+
+  // Retrieve branch code and table number from persistent session
+  useEffect(() => {
+    const session = getTableSession();
+    if (session) {
+      setBranchCode(session.branchCode);
+      setTableNumber(session.tableNumber);
+    }
+  }, []);
 
   // Get cart items as array
   const cartItems = getCartItems();
@@ -79,10 +92,46 @@ export default function OrderSummaryPage() {
     setAppliedCoupon(null);
   };
 
+  const saveOrderToDatabase = async (orderId, paymentMethodType, customerPhone = null) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      // Prepare order items
+      const orderItems = cartItems.map(cartItem => ({
+        menuItem: cartItem.item.id, // Use item id
+        quantity: cartItem.quantity,
+        price: cartItem.price,
+        notes: ''
+      }));
+
+      // Create order using PUBLIC endpoint (no authentication required)
+      const orderPayload = {
+        branchCode: branchCode,
+        tableNumber: parseInt(tableNumber),
+        items: orderItems,
+        customerCount: 1
+      };
+
+      const response = await axios.post(
+        `${API_URL}/api/public/orders`,
+        orderPayload
+      );
+
+      console.log('Order saved successfully:', response.data);
+      return response.data._id;
+    } catch (error) {
+      console.error('Error saving order:', error.response?.data || error.message);
+      return null;
+    }
+  };
+
   const handlePaymentSelect = (method) => {
     if (method === 'cash') {
       const currentCart = { ...cart };
       const orderId = `ORD_${Date.now()}`;
+      
+      // Save order to database before clearing cart
+      saveOrderToDatabase(orderId, 'cash');
       
       clearCart();
       navigate('/payment-success', {

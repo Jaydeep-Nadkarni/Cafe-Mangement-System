@@ -12,13 +12,29 @@ const getManagerBranch = async (userId) => {
   return branch;
 };
 
-// @desc    Get tables for the branch
-// @route   GET /api/branch/tables
-// @access  Manager
+// @desc    Get tables for the branch (with optional filters)
+// @route   GET /api/branch/tables?tableNumber=7&branch=BRANCHID
+// @access  Manager or Public (for QR code scanning)
 const getTables = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
-    const tables = await Table.find({ branch: branch._id })
+    const { tableNumber, branch } = req.query;
+    
+    let query = {};
+    
+    // If branch is provided in query, use it; otherwise use manager's branch
+    if (branch) {
+      query.branch = branch;
+    } else {
+      const managerBranch = await getManagerBranch(req.user._id);
+      query.branch = managerBranch._id;
+    }
+    
+    // If table number is provided, filter by it
+    if (tableNumber) {
+      query.tableNumber = parseInt(tableNumber);
+    }
+    
+    const tables = await Table.find(query)
       .populate({
         path: 'currentOrder',
         select: 'orderNumber status total items',

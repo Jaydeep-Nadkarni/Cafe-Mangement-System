@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
+import QRCodeGenerator from '../components/QRCodeGenerator';
 import { 
   LogOut, 
   Store, 
@@ -9,7 +10,8 @@ import {
   Plus, 
   MoreVertical,
   CheckCircle,
-  XCircle
+  XCircle,
+  QrCode
 } from 'lucide-react';
 import axios from 'axios';
 
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [activeTab, setActiveTab] = useState('branches'); // branches or qrcode
   
   // Form State
   const [formData, setFormData] = useState({
@@ -147,34 +150,63 @@ export default function AdminDashboard() {
 
         {/* Branch Management Section */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-          <div className="p-6 border-b border-gray-100 flex justify-between items-center">
-            <h2 className="text-lg font-semibold text-gray-900">Branch Management</h2>
-            <button 
-              onClick={() => setShowCreateForm(!showCreateForm)}
-              className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+          {/* Tabs */}
+          <div className="border-b border-gray-100 flex">
+            <button
+              onClick={() => setActiveTab('branches')}
+              className={`flex-1 py-4 px-6 font-medium text-sm text-center border-b-2 transition-colors ${
+                activeTab === 'branches'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
             >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Branch
+              <Store className="h-4 w-4 inline mr-2" />
+              Branches
+            </button>
+            <button
+              onClick={() => setActiveTab('qrcode')}
+              className={`flex-1 py-4 px-6 font-medium text-sm text-center border-b-2 transition-colors ${
+                activeTab === 'qrcode'
+                  ? 'border-indigo-500 text-indigo-600'
+                  : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              <QrCode className="h-4 w-4 inline mr-2" />
+              QR Codes
             </button>
           </div>
 
-          {/* Create Form */}
-          {showCreateForm && (
-            <div className="p-6 bg-gray-50 border-b border-gray-100">
-              <form onSubmit={handleCreateBranch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <input
-                  type="text"
-                  placeholder="Branch Name"
-                  required
-                  className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
-                  value={formData.name}
-                  onChange={e => setFormData({...formData, name: e.target.value})}
-                />
-                <input
-                  type="text"
-                  placeholder="Branch Code (e.g. NYC01)"
-                  required
-                  className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+          {/* Branches Tab */}
+          {activeTab === 'branches' && (
+            <>
+              <div className="p-6 border-b border-gray-100 flex justify-between items-center">
+                <h2 className="text-lg font-semibold text-gray-900">Manage Branches</h2>
+                <button 
+                  onClick={() => setShowCreateForm(!showCreateForm)}
+                  className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Branch
+                </button>
+              </div>
+
+              {/* Create Form */}
+              {showCreateForm && (
+                <div className="p-6 bg-gray-50 border-b border-gray-100">
+                  <form onSubmit={handleCreateBranch} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                    <input
+                      type="text"
+                      placeholder="Branch Name"
+                      required
+                      className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                      value={formData.name}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
+                    />
+                    <input
+                      type="text"
+                      placeholder="Branch Code (e.g. NYC01)"
+                      required
+                      className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   value={formData.branchCode}
                   onChange={e => setFormData({...formData, branchCode: e.target.value})}
                 />
@@ -276,6 +308,23 @@ export default function AdminDashboard() {
               </tbody>
             </table>
           </div>
+            </>
+          )}
+
+          {/* QR Code Tab */}
+          {activeTab === 'qrcode' && branches.length > 0 && (
+            <div className="p-6">
+              <QRCodeGenerator branches={branches} />
+            </div>
+          )}
+
+          {/* No Branches Message for QR Code Tab */}
+          {activeTab === 'qrcode' && branches.length === 0 && (
+            <div className="p-12 text-center">
+              <QrCode className="h-12 w-12 text-gray-300 mx-auto mb-4" />
+              <p className="text-gray-500">Create a branch first to generate QR codes.</p>
+            </div>
+          )}
         </div>
       </main>
     </div>
