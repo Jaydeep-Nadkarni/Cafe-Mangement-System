@@ -11,7 +11,7 @@ const sendWhatsappBill = async (phoneNumber, pdfBuffer, filename = 'bill.pdf') =
   try {
     // Check if WhatsApp API is configured
     const apiUrl = process.env.WHATSAPP_API_URL;
-    const apiKey = process.env.WHATSAPP_API_KEY;
+    const apiKey = process.env.WHATSAPP_ACCESS_TOKEN || process.env.WHATSAPP_API_KEY;
 
     if (!apiUrl || !apiKey) {
       console.warn('WhatsApp API not configured. Skipping message send.');

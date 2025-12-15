@@ -196,10 +196,42 @@ const checkoutOrder = async (req, res) => {
   }
 };
 
+// @desc    Send bill via WhatsApp
+// @route   POST /api/orders/:id/send-whatsapp-bill
+// @access  Manager
+const sendWhatsappBill = async (req, res) => {
+  try {
+    const { phoneNumber } = req.body;
+    const order = await Order.findById(req.params.id)
+      .populate('items.menuItem')
+      .populate('table');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Generate PDF
+    const pdfBuffer = await billService.generateThermalBill(order);
+
+    // Send via WhatsApp
+    const result = await whatsappService.sendWhatsappBill(phoneNumber, pdfBuffer, `Bill-${order._id}.pdf`);
+
+    if (result.success) {
+      res.json({ message: 'Bill sent successfully' });
+    } else {
+      res.status(500).json({ message: 'Failed to send bill', error: result.error });
+    }
+  } catch (error) {
+    console.error('Send Bill Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrder,
   addItemsToOrder,
   applyCoupon,
-  checkoutOrder
+  checkoutOrder,
+  sendWhatsappBill
 };

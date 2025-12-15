@@ -6,7 +6,8 @@ const {
   getOrder,
   addItemsToOrder,
   applyCoupon,
-  checkoutOrder
+  checkoutOrder,
+  sendWhatsappBill
 } = require('../controllers/orderController');
 
 // All routes are protected and require branch manager role
@@ -18,5 +19,6 @@ router.get('/:id', getOrder);
 router.put('/:id/items', addItemsToOrder);
 router.put('/:id/coupon', applyCoupon);
 router.post('/:id/checkout', checkoutOrder);
+router.post('/:id/send-whatsapp-bill', sendWhatsappBill);
 
 module.exports = router;

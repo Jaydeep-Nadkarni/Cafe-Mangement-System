@@ -16,6 +16,7 @@ const branchRoutes = require('./routes/branchRoutes');
 const orderRoutes = require('./routes/orderRoutes');
 const couponRoutes = require('./routes/couponRoutes');
 const gameRoutes = require('./routes/gameRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
 const { initRealtime } = require('./services/realtimeService');
 
 const app = express();
@@ -52,6 +53,7 @@ app.use('/api/branch', branchRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/games', gameRoutes);
+app.use('/api/payment', paymentRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [
