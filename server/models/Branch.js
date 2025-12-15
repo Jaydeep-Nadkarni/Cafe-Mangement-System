@@ -8,6 +8,13 @@ const branchSchema = new mongoose.Schema(
       trim: true,
       minlength: [3, 'Branch name must be at least 3 characters']
     },
+    branchCode: {
+      type: String,
+      required: [true, 'Branch code is required'],
+      unique: true,
+      uppercase: true,
+      trim: true
+    },
     address: {
       street: String,
       city: String,
@@ -17,8 +24,13 @@ const branchSchema = new mongoose.Schema(
     },
     phone: {
       type: String,
-      required: [true, 'Phone number is required'],
-      match: [/^\+?1?\d{9,15}$/, 'Please provide a valid phone number']
+      match: [/^\+?1?\d{9,15}$/, 'Please provide a valid phone number'],
+      sparse: true
+    },
+    mobileNumber: {
+      type: String,
+      match: [/^\+?1?\d{9,15}$/, 'Please provide a valid mobile number'],
+      sparse: true
     },
     email: {
       type: String,

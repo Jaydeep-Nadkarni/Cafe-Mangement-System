@@ -1,9 +1,46 @@
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { GameProvider } from './context/GameContext';
+import { useAuth } from './context/AuthContext';
 import { Layout, PageTransition } from './components';
-import { MenuPage, OrderSummaryPage, PaymentSuccessPage, GamesPage, AIChatPage } from './pages';
+import { 
+  MenuPage, 
+  OrderSummaryPage, 
+  PaymentSuccessPage, 
+  GamesPage, 
+  AIChatPage,
+  AdminLogin,
+  BranchLogin,
+  AdminDashboard,
+  BranchDashboard
+} from './pages';
 import SplashScreen from './components/SplashScreen';
+
+// Protected Route Component
+const ProtectedRoute = ({ children, role }) => {
+  const { user, loading } = useAuth();
+  
+  if (loading) return <div>Loading...</div>;
+  
+  if (!user) {
+    return <Navigate to={role === 'admin' ? '/admin' : '/branch'} replace />;
+  }
+  
+  if (role === 'admin' && !['admin', 'super_admin'].includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+  
+  if (role === 'branch' && !['manager', 'admin', 'super_admin'].includes(user.role)) {
+    return <Navigate to="/" replace />;
+  }
+  
+  return children;
+};
+
+// Wrapper for Customer Routes to include Layout
+const CustomerRoute = ({ children }) => {
+  return <Layout>{children}</Layout>;
+};
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -33,17 +70,34 @@ export default function App() {
           v7_relativeSplatPath: true,
         }}
       >
-        <Layout>
-          <Routes>
-            <Route path="/menu" element={<PageTransition><MenuPage /></PageTransition>} />
-            <Route path="/games" element={<PageTransition><GamesPage /></PageTransition>} />
-            <Route path="/ai" element={<PageTransition><AIChatPage /></PageTransition>} />
-            <Route path="/order-summary" element={<PageTransition><OrderSummaryPage /></PageTransition>} />
-            <Route path="/payment-success" element={<PageTransition><PaymentSuccessPage /></PageTransition>} />
-            <Route path="/" element={<Navigate to="/menu" replace />} />
-            <Route path="*" element={<Navigate to="/menu" replace />} />
-          </Routes>
-        </Layout>
+        <Routes>
+          {/* Customer Routes */}
+          <Route path="/menu" element={<CustomerRoute><PageTransition><MenuPage /></PageTransition></CustomerRoute>} />
+          <Route path="/games" element={<CustomerRoute><PageTransition><GamesPage /></PageTransition></CustomerRoute>} />
+          <Route path="/ai" element={<CustomerRoute><PageTransition><AIChatPage /></PageTransition></CustomerRoute>} />
+          <Route path="/order-summary" element={<CustomerRoute><PageTransition><OrderSummaryPage /></PageTransition></CustomerRoute>} />
+          <Route path="/payment-success" element={<CustomerRoute><PageTransition><PaymentSuccessPage /></PageTransition></CustomerRoute>} />
+          
+          {/* Auth Routes */}
+          <Route path="/admin" element={<AdminLogin />} />
+          <Route path="/branch" element={<BranchLogin />} />
+          
+          {/* Protected Dashboard Routes */}
+          <Route path="/admin/dashboard" element={
+            <ProtectedRoute role="admin">
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
+          <Route path="/branch/dashboard" element={
+            <ProtectedRoute role="branch">
+              <BranchDashboard />
+            </ProtectedRoute>
+          } />
+
+          {/* Default Redirect */}
+          <Route path="/" element={<Navigate to="/menu" replace />} />
+          <Route path="*" element={<Navigate to="/menu" replace />} />
+        </Routes>
       </Router>
     </GameProvider>
   )

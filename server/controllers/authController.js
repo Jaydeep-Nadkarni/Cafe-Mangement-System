@@ -1,4 +1,5 @@
 const Admin = require('../models/Admin');
+const Branch = require('../models/Branch');
 const { generateToken } = require('../utils/jwt');
 
 // Helper function for authentication
@@ -49,11 +50,55 @@ const loginAdmin = async (req, res) => {
   await authenticateUser(req, res, ['super_admin', 'admin']);
 };
 
-// @desc    Login for Branch Portal
+// @desc    Login for Branch Portal using Branch Code
 // @route   POST /api/auth/branch/login
 // @access  Public
 const loginBranch = async (req, res) => {
-  await authenticateUser(req, res, ['super_admin', 'admin', 'manager']);
+  const { branchCode, password } = req.body;
+
+  try {
+    // Find branch by code
+    const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() })
+      .populate('manager');
+
+    if (!branch) {
+      return res.status(401).json({ message: 'Invalid branch code or password' });
+    }
+
+    // Get the manager user
+    const user = await Admin.findById(branch.manager._id).select('+password');
+
+    if (user && (await user.matchPassword(password))) {
+      // Check if account is active
+      if (!user.isActive) {
+        return res.status(401).json({ message: 'Account is deactivated' });
+      }
+
+      // Check if manager role
+      if (!['manager', 'admin', 'super_admin'].includes(user.role)) {
+        return res.status(403).json({ message: 'Access denied. User is not a branch manager' });
+      }
+
+      // Update last login
+      user.lastLogin = Date.now();
+      await user.save({ validateBeforeSave: false });
+
+      res.json({
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role,
+        branchId: branch._id,
+        branchName: branch.name,
+        token: generateToken(user._id, user.role),
+      });
+    } else {
+      res.status(401).json({ message: 'Invalid branch code or password' });
+    }
+  } catch (error) {
+    console.error('Branch Login Error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
 };
 
 // @desc    Register a new user (for initial setup or admin use)

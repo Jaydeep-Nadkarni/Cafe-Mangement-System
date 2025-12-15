@@ -1,4 +1,5 @@
 const Branch = require('../models/Branch');
+const Admin = require('../models/Admin');
 const analyticsService = require('../services/analyticsService');
 
 // @desc    Get global analytics
@@ -24,19 +25,39 @@ const getAnalytics = async (req, res) => {
 // @access  Admin/SuperAdmin
 const createBranch = async (req, res) => {
   try {
-    const { name, address, phone, email, manager, operatingHours } = req.body;
+    const { name, branchCode, email, password, address, mobileNumber, operatingHours } = req.body;
 
-    const branchExists = await Branch.findOne({ name });
+    // 1. Check if branch exists
+    const branchExists = await Branch.findOne({ $or: [{ name }, { branchCode }] });
     if (branchExists) {
-      return res.status(400).json({ message: 'Branch already exists' });
+      return res.status(400).json({ message: 'Branch with this name or code already exists' });
     }
 
+    // 2. Check if user exists or create new manager
+    let manager = await Admin.findOne({ email });
+    if (manager) {
+      // If user exists, ensure they are a manager
+      if (manager.role !== 'manager') {
+        return res.status(400).json({ message: 'User exists but is not a manager' });
+      }
+    } else {
+      // Create new manager
+      manager = await Admin.create({
+        username: `Manager-${branchCode}`,
+        email,
+        password,
+        role: 'manager'
+      });
+    }
+
+    // 3. Create Branch
     const branch = await Branch.create({
       name,
+      branchCode,
       address,
-      phone,
+      mobileNumber: mobileNumber || null,
       email,
-      manager,
+      manager: manager._id,
       operatingHours
     });
 
