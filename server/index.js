@@ -6,8 +6,14 @@ const axios = require('axios');
 const FormData = require('form-data');
 require('dotenv').config();
 
+const { connectDB } = require('./config/database');
+const models = require('./models');
+
 const app = express();
 const PORT = process.env.PORT || 5000;
+
+// ==================== DATABASE CONNECTION ====================
+connectDB();
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
