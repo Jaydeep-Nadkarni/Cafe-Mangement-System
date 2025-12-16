@@ -5,13 +5,18 @@ import AIOptionsModal from './AIOptionsModal';
 import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function MenuCard({ item }) {
+  // Guard against undefined item or missing required properties
+  if (!item || !item.name) {
+    return null;
+  }
+
   const { addItem, removeItem, getQuantity, getItemPrice, getTotalQuantityForItem } = useCart();
-  const [selectedSize, setSelectedSize] = useState(item.sizes ? item.sizes[0].name : null);
+  const [selectedSize, setSelectedSize] = useState(item.sizes && item.sizes.length > 0 ? item.sizes[0].name : null);
   const [showAIModal, setShowAIModal] = useState(false);
   
   // Get quantity for current selection (with size if applicable)
-  const quantity = getQuantity(item.id, selectedSize);
-  const totalQuantity = item.sizes ? getTotalQuantityForItem(item.id) : quantity;
+  const quantity = getQuantity(item._id || item.id, selectedSize);
+  const totalQuantity = item.sizes ? getTotalQuantityForItem(item._id || item.id) : quantity;
   
   // Get current price based on size
   const currentPrice = getItemPrice(item, selectedSize);
@@ -21,7 +26,7 @@ export default function MenuCard({ item }) {
   };
 
   const handleRemove = () => {
-    removeItem(item.id, selectedSize);
+    removeItem(item._id || item.id, selectedSize);
   };
 
   return (

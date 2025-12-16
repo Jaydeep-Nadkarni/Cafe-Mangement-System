@@ -47,6 +47,7 @@ const seedMenuItems = async () => {
     if (existingItems === 0) {
       console.log('Seeding menu items to database...');
       const MENU_ITEMS_TO_SEED = [
+        // Coffee
         {
           name: 'Espresso',
           description: 'Strong and bold single shot of espresso.',
@@ -85,7 +86,8 @@ const seedMenuItems = async () => {
           image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=800&h=600&fit=crop',
           isAvailable: true,
           isVegetarian: true,
-          costPrice: 30
+          costPrice: 30,
+          tag: 'Popular'
         },
         {
           name: 'Latte',
@@ -106,6 +108,132 @@ const seedMenuItems = async () => {
           isAvailable: true,
           isVegetarian: true,
           costPrice: 35
+        },
+        {
+          name: 'Caramel Macchiato',
+          description: 'Espresso with vanilla, steamed milk, and caramel drizzle.',
+          price: 150,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1485808191679-5f86510681a2?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 40,
+          tag: 'Best Seller'
+        },
+        // Beverages
+        {
+          name: 'Iced Tea',
+          description: 'Refreshing cold brewed tea with lemon.',
+          price: 80,
+          category: 'beverages',
+          image: 'https://images.unsplash.com/photo-1556679343-c7306c1976bc?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 15
+        },
+        {
+          name: 'Fresh Lime Soda',
+          description: 'Zesty lime juice with soda water.',
+          price: 70,
+          category: 'beverages',
+          image: 'https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 12
+        },
+        {
+          name: 'Mango Smoothie',
+          description: 'Creamy mango blended with yogurt and honey.',
+          price: 120,
+          category: 'beverages',
+          image: 'https://images.unsplash.com/photo-1546173159-315724a31696?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 35
+        },
+        // Desserts
+        {
+          name: 'Chocolate Brownie',
+          description: 'Rich, fudgy brownie with walnuts.',
+          price: 90,
+          category: 'dessert',
+          image: 'https://images.unsplash.com/photo-1564355808539-22fda35bed7e?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 25
+        },
+        {
+          name: 'Cheesecake',
+          description: 'Creamy New York style cheesecake.',
+          price: 150,
+          category: 'dessert',
+          image: 'https://images.unsplash.com/photo-1567327613485-fbc7bf196198?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 45,
+          tag: 'Popular'
+        },
+        {
+          name: 'Tiramisu',
+          description: 'Classic Italian coffee-flavored dessert.',
+          price: 180,
+          category: 'dessert',
+          image: 'https://images.unsplash.com/photo-1571877227200-a0d98ea607e9?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 55
+        },
+        // Fast Food
+        {
+          name: 'Classic Burger',
+          description: 'Juicy beef patty with fresh vegetables and special sauce.',
+          price: 180,
+          category: 'fast-food',
+          image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: false,
+          costPrice: 60,
+          tag: 'Best Seller'
+        },
+        {
+          name: 'Veggie Burger',
+          description: 'Plant-based patty with fresh veggies.',
+          price: 160,
+          category: 'fast-food',
+          image: 'https://images.unsplash.com/photo-1520072959219-c595dc870360?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 50
+        },
+        {
+          name: 'French Fries',
+          description: 'Crispy golden fries with seasoning.',
+          price: 80,
+          category: 'fast-food',
+          image: 'https://images.unsplash.com/photo-1576107232684-1279f390859f?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 20
+        },
+        {
+          name: 'Chicken Sandwich',
+          description: 'Grilled chicken with lettuce, tomato and mayo.',
+          price: 150,
+          category: 'fast-food',
+          image: 'https://images.unsplash.com/photo-1553909489-cd47e0907980?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: false,
+          costPrice: 45
+        },
+        {
+          name: 'Margherita Pizza',
+          description: 'Classic pizza with tomato sauce, mozzarella and basil.',
+          price: 250,
+          category: 'fast-food',
+          image: 'https://images.unsplash.com/photo-1574071318508-1cdbab80d002?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 80
         }
       ];
       

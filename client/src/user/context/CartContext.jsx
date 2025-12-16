@@ -18,7 +18,9 @@ export function CartProvider({ children }) {
   };
 
   const addItem = (item, size = null) => {
-    const key = getCartKey(item.id, size);
+    if (!item) return;
+    const itemId = item._id || item.id;
+    const key = getCartKey(itemId, size);
     setCart(prev => ({
       ...prev,
       [key]: {
@@ -71,8 +73,9 @@ export function CartProvider({ children }) {
 
   // Get price for item considering size
   const getItemPrice = (item, size = null) => {
-    if (size && item.sizes) {
-      const sizeData = item.sizes.find(s => s.name === size);
+    if (!item || !item.price) return 0;
+    if (size && item.sizes && Array.isArray(item.sizes)) {
+      const sizeData = item.sizes.find(s => s && s.name === size);
       return sizeData ? sizeData.price : item.price;
     }
     return item.price;

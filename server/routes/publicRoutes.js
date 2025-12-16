@@ -329,9 +329,61 @@ const confirmPayment = async (req, res) => {
   }
 };
 
+// @desc    Get public menu items (for customer-facing menu)
+// @route   GET /api/public/menu
+// @access  Public
+const getPublicMenu = async (req, res) => {
+  try {
+    const { branchCode } = req.query;
+    
+    // Get menu items - filter by availability
+    let query = { isAvailable: true };
+    
+    // If branchCode is provided, filter by that branch OR items with no branch assigned (global items)
+    if (branchCode) {
+      const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
+      if (branch) {
+        query.$or = [
+          { branch: branch._id },
+          { branch: null },
+          { branch: { $exists: false } }
+        ];
+      } else {
+        // If branch not found, still show global items
+        query.$or = [
+          { branch: null },
+          { branch: { $exists: false } }
+        ];
+      }
+    }
+
+    const menuItems = await MenuItem.find(query).sort({ category: 1, name: 1 });
+    
+    // Transform to match frontend expected format
+    const transformedItems = menuItems.map(item => ({
+      id: item._id,
+      _id: item._id,
+      name: item.name,
+      description: item.description || '',
+      price: item.price,
+      category: item.category,
+      image: item.image || `https://images.unsplash.com/photo-1495474472287-4d71bcdd2085?w=800&h=600&fit=crop`,
+      tag: item.tag || null,
+      sizes: item.sizes || null,
+      isAvailable: item.isAvailable
+    }));
+
+    res.json(transformedItems);
+  } catch (error) {
+    console.error('Error fetching public menu:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Routes
 router.get('/branch/:code', getBranchByCode);
 router.get('/table/:branchCode/:tableNumber', getTableByNumberAndBranch);
+router.get('/menu', getPublicMenu);
 router.post('/orders', createQROrder);
 router.post('/orders/:orderId/confirm-payment', confirmPayment);
 

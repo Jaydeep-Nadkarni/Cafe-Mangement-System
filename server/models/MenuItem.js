@@ -15,7 +15,8 @@ const menuItemSchema = new mongoose.Schema(
     category: {
       type: String,
       required: [true, 'Category is required'],
-      enum: ['coffee', 'tea', 'pastry', 'sandwich', 'dessert', 'beverage', 'snack', 'special'],
+      trim: true,
+      lowercase: true,
       index: true
     },
     price: {
@@ -73,6 +74,18 @@ const menuItemSchema = new mongoose.Schema(
     popularity: {
       type: Number,
       default: 0
+    },
+    tag: {
+      type: String,
+      default: null
+    },
+    sizes: {
+      type: [{
+        name: String,
+        label: String,
+        price: Number
+      }],
+      default: null
     }
   },
   { timestamps: true }

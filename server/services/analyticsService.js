@@ -270,8 +270,41 @@ const getBranchStats = async (branchId, startDate, endDate) => {
     ])
   ]);
 
+  // Calculate growth compared to previous period
+  const periodLength = end - start;
+  const prevStart = new Date(start.getTime() - periodLength);
+  const prevEnd = new Date(start.getTime() - 1);
+
+  const prevMatchStage = {
+    branch: branchId,
+    status: { $in: ['completed', 'paid'] },
+    createdAt: { $gte: prevStart, $lte: prevEnd }
+  };
+
+  const [prevSummary] = await Order.aggregate([
+    { $match: prevMatchStage },
+    { $group: {
+        _id: null,
+        totalRevenue: { $sum: '$total' },
+        totalOrders: { $sum: 1 }
+    }}
+  ]);
+
+  const prev = prevSummary || { totalRevenue: 0, totalOrders: 0 };
+  const curr = summary[0] || { totalRevenue: 0, totalOrders: 0 };
+
+  const growth = {
+    revenue: prev.totalRevenue > 0 
+      ? ((curr.totalRevenue - prev.totalRevenue) / prev.totalRevenue) * 100 
+      : curr.totalRevenue > 0 ? 100 : 0,
+    orders: prev.totalOrders > 0 
+      ? ((curr.totalOrders - prev.totalOrders) / prev.totalOrders) * 100 
+      : curr.totalOrders > 0 ? 100 : 0
+  };
+
   return {
     summary: summary[0] || { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0, totalItemsSold: 0 },
+    growth,
     revenueTrend,
     categorySales,
     topItems,
