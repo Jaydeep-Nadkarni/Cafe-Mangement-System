@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { getTableSession } from '../utils/sessionStorage';
 import MobileNumberModal from '../components/MobileNumberModal';
+import SkeletonList from '../../components/skeletons/SkeletonList';
 import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote, AlertCircle } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../utils/formatCurrency';
@@ -18,6 +19,13 @@ export default function OrderSummaryPage() {
   const [tableNumber, setTableNumber] = useState('');
   const [session, setSession] = useState(null);
   const [chefNotes, setChefNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Simulate loading check
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Retrieve branch code and table number from persistent session
   useEffect(() => {
@@ -35,6 +43,19 @@ export default function OrderSummaryPage() {
 
   // Get cart items as array
   const cartItems = getCartItems();
+
+  if (loading) {
+    return (
+      <div className="px-4 py-6 max-w-3xl mx-auto">
+        <div className="h-8 w-48 bg-gray-200 rounded mb-6 animate-pulse" />
+        <SkeletonList count={3} />
+        <div className="mt-8 space-y-4">
+          <div className="h-12 bg-gray-200 rounded animate-pulse" />
+          <div className="h-12 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   // Redirect if no items in cart
   if (cartItems.length === 0) {

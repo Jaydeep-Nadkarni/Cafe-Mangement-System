@@ -148,7 +148,7 @@ orderSchema.pre('save', async function(next) {
     // Calculate totals
     if (this.items && this.items.length > 0) {
       this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      this.tax = this.tax || 0;
+      this.tax = this.subtotal * 0.10; // 10% tax
       this.discount = this.discount || 0;
       this.total = this.subtotal + this.tax - this.discount;
     }

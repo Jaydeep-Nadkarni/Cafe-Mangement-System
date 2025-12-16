@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../user/context/AuthContext';
 import QRCodeGenerator from '../../user/components/QRCodeGenerator';
 import Sidebar from '../components/admin/Sidebar';
+import SkeletonDashboard from '../../components/skeletons/SkeletonDashboard';
 import { 
   LogOut, 
   Store, 
@@ -96,9 +97,15 @@ export default function AdminDashboard() {
     }
   };
 
-  if (loading) return <div className="p-8 text-center">Loading Dashboard...</div>;
-
   const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="bg-gray-50 p-6 rounded-lg">
+          <SkeletonDashboard />
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'branches':
         return (

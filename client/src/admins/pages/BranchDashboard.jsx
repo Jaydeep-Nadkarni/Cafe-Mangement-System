@@ -13,6 +13,7 @@ import Reports from '../components/branch/Reports';
 import Settings from '../components/branch/Settings';
 import Alerts from '../components/branch/Alerts';
 import Memos from '../components/branch/Memos';
+import SkeletonDashboard from '../../components/skeletons/SkeletonDashboard';
 
 export default function BranchDashboard() {
   const { user, logout } = useAuth();
@@ -76,13 +77,14 @@ export default function BranchDashboard() {
     }
   });
 
-  if (loading) return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-    </div>
-  );
-
   const renderContent = () => {
+    if (loading) {
+      return (
+        <div className="bg-gray-50 p-6 rounded-lg">
+          <SkeletonDashboard />
+        </div>
+      );
+    }
     switch (activeTab) {
       case 'orders':
         return <Orders tables={tables} menu={menu} onRefresh={fetchData} />;
