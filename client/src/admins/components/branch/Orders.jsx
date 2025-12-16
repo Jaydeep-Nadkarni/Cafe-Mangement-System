@@ -5,6 +5,7 @@ import {
   ArrowRightLeft, AlertCircle, Search, X
 } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 export default function Orders({ tables, menu = [], onRefresh }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -31,13 +32,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     ),
     [menu, itemSearch]
   );
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR'
-    }).format(amount);
-  };
 
   // Actions
   const handleAddItem = async (menuItem) => {

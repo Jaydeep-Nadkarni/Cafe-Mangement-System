@@ -1,6 +1,7 @@
 import { useCart } from '../context/CartContext';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShoppingBag } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function BottomOrderBar({ isVisible = true }) {
   const navigate = useNavigate();
@@ -32,7 +33,7 @@ export default function BottomOrderBar({ isVisible = true }) {
             </div>
             <div className="flex flex-col items-start">
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wider">Total</span>
-              <span className="text-xl font-bold font-mono">₹{totalPrice.toFixed(0)}</span>
+              <span className="text-xl font-bold font-mono">{formatCurrency(totalPrice)}</span>
             </div>
           </div>
 

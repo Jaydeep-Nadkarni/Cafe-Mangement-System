@@ -8,6 +8,7 @@ import {
   ArrowUpRight, ArrowDownRight, Filter
 } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 export default function Reports() {
   const [loading, setLoading] = useState(true);
@@ -50,14 +51,6 @@ export default function Reports() {
     } finally {
       setLoading(false);
     }
-  };
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-IN', {
-      style: 'currency',
-      currency: 'INR',
-      maximumFractionDigits: 0
-    }).format(value);
   };
 
   const exportData = () => {

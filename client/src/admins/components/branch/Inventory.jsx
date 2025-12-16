@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Utensils, Search, Plus, Edit2, Trash2, X, Image as ImageIcon, Check } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 export default function Inventory({ menu, setMenu }) {
   const [showModal, setShowModal] = useState(false);
@@ -156,7 +157,7 @@ export default function Inventory({ menu, setMenu }) {
                 </div>
               </div>
               <div className="col-span-2 text-center font-mono text-sm text-gray-600">
-                ₹{item.price.toFixed(2)}
+                {formatCurrency(item.price)}
               </div>
               <div className="col-span-2 text-center">
                 <span className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded-full capitalize">

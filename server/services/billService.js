@@ -2,6 +2,13 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
+const formatCurrency = (val) => {
+  return new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR'
+  }).format(val);
+};
+
 /**
  * Generate a thermal bill PDF
  * @param {Object} order - Order object with items, totals, etc.
@@ -50,7 +57,7 @@ const generateThermalBill = (order) => {
       order.items.forEach(item => {
         const itemName = item.menuItem.name || 'Unknown Item';
         const qty = item.quantity;
-        const price = (item.price * qty).toFixed(2);
+        const price = formatCurrency(item.price * qty);
         
         doc.text(`${itemName} x ${qty}`, { continued: true });
         doc.text(price, { align: 'right' });
@@ -61,18 +68,18 @@ const generateThermalBill = (order) => {
       // --- Totals ---
       doc.font('Helvetica-Bold');
       doc.text(`Subtotal:`, { continued: true });
-      doc.text(order.subtotal.toFixed(2), { align: 'right' });
+      doc.text(formatCurrency(order.subtotal), { align: 'right' });
 
       if (order.discount > 0) {
         doc.text(`Discount:`, { continued: true });
-        doc.text(`-${order.discount.toFixed(2)}`, { align: 'right' });
+        doc.text(`-${formatCurrency(order.discount)}`, { align: 'right' });
       }
 
       doc.text(`Tax:`, { continued: true });
-      doc.text(order.tax.toFixed(2), { align: 'right' });
+      doc.text(formatCurrency(order.tax), { align: 'right' });
 
       doc.fontSize(10).text(`TOTAL:`, { continued: true });
-      doc.text(order.total.toFixed(2), { align: 'right' });
+      doc.text(formatCurrency(order.total), { align: 'right' });
 
       doc.moveDown();
       doc.fontSize(8).font('Helvetica').text('Thank you for visiting!', { align: 'center' });

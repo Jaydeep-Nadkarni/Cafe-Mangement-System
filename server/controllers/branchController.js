@@ -8,9 +8,14 @@ const { getBranchStats } = require('../services/analyticsService');
 
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+  
   const branch = await Branch.findOne({ manager: userId });
   if (!branch) {
-    throw new Error('No branch assigned to this manager');
+    console.error(`No branch found for manager ID: ${userId}`);
+    throw new Error(`No branch assigned to this manager. User ID: ${userId}`);
   }
   return branch;
 };
@@ -148,9 +153,23 @@ const mergeTables = async (req, res) => {
 // @access  Manager
 const getBranchDetails = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    
+    const branch = await Branch.findOne({ manager: req.user._id });
+    
+    if (!branch) {
+      console.warn(`Manager ${req.user._id} has no branch assigned`);
+      return res.status(404).json({ 
+        message: 'No branch assigned to this manager',
+        managerId: req.user._id 
+      });
+    }
+    
     res.json(branch);
   } catch (error) {
+    console.error('Error in getBranchDetails:', error);
     res.status(500).json({ message: error.message });
   }
 };

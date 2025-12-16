@@ -19,6 +19,7 @@ const getGlobalStats = async () => {
     monthRevenue,
     totalOrders,
     activeBranches,
+    totalBranches,
     topSellingItems
   ] = await Promise.all([
     // Total Revenue (All time)
@@ -54,6 +55,9 @@ const getGlobalStats = async () => {
 
     // Active Branches Count
     Branch.countDocuments({ isActive: true }),
+
+    // Total Branches Count
+    Branch.countDocuments({}),
 
     // Top 5 Selling Items
     Order.aggregate([
@@ -98,7 +102,8 @@ const getGlobalStats = async () => {
       total: totalOrders
     },
     branches: {
-      active: activeBranches
+      active: activeBranches,
+      total: totalBranches
     },
     topItems: topSellingItems
   };

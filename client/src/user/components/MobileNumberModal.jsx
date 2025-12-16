@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
 import { Check, AlertCircle, Loader2, Lock, ArrowRight } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData, paymentMethod }) {
   const navigate = useNavigate();
@@ -107,7 +108,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
     try {
       savedOrder = await saveOrderToDatabase(customerName, phoneNumber);
     } catch (error) {
-      setError('Failed to create order. Please try again.');
+      setError('Failed to process order. Please try again.');
       setIsSubmitting(false);
       return;
     }
@@ -124,7 +125,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             method: 'cash',
             amount: totalAmount,
             customerName: customerName,
-            customerPhone: phoneNumber
+            customerPhone: phoneNumber,
+            isAddedToExisting: savedOrder?.isExistingOrder || false
           },
           orderItems: currentCart,
           savedOrderId: savedOrder?._id
@@ -285,7 +287,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 </>
               ) : (
                 <>
-                  <span>{paymentMethod === 'cash' ? 'Confirm Order' : `Pay ₹${orderData?.totalAmount?.toFixed(2)}`}</span>
+                  <span>{paymentMethod === 'cash' ? 'Confirm Order' : `Pay ${formatCurrency(orderData?.totalAmount)}`}</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </>
               )}

@@ -45,7 +45,17 @@ export default function BranchDashboard() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching branch data:', error);
+      console.error('Error fetching branch data:', error.response?.data || error.message);
+      
+      if (error.response?.status === 404) {
+        alert('No branch assigned to your account. Please contact the administrator.');
+      } else if (error.response?.status === 401) {
+        alert('Your session has expired. Please log in again.');
+        logout();
+      } else {
+        alert('Failed to load branch data. Please try again.');
+      }
+      
       setLoading(false);
     }
   };

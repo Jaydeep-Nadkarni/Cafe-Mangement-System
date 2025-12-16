@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 export default function Tables({ tables, onRefresh }) {
   const [showModal, setShowModal] = useState(false);
@@ -218,10 +219,6 @@ export default function Tables({ tables, onRefresh }) {
                   <span className="text-xs text-gray-500 font-bold uppercase block mb-1">Capacity</span>
                   <span className="font-medium">{selectedTable.capacity} Seats</span>
                 </div>
-                <div className="bg-gray-50 p-3 rounded-xl">
-                  <span className="text-xs text-gray-500 font-bold uppercase block mb-1">Occupancy</span>
-                  <span className="font-medium">{selectedTable.currentOccupancy || 0} Guests</span>
-                </div>
               </div>
 
               {/* Notes */}
@@ -250,14 +247,14 @@ export default function Tables({ tables, onRefresh }) {
                       {selectedTable.currentOrder.items?.map((item, idx) => (
                         <div key={idx} className="flex justify-between text-sm">
                           <span className="text-gray-600">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
-                          <span className="font-medium">${(item.price * item.quantity).toFixed(2)}</span>
+                          <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
                         </div>
                       ))}
                     </div>
                     <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                       <span className="font-bold text-gray-900">Total</span>
                       <span className="font-bold text-green-600 text-lg">
-                        ${selectedTable.currentOrder.total?.toFixed(2)}
+                        {formatCurrency(selectedTable.currentOrder.total)}
                       </span>
                     </div>
                   </div>

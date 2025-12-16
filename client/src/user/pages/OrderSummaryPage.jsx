@@ -5,6 +5,7 @@ import { getTableSession } from '../utils/sessionStorage';
 import MobileNumberModal from '../components/MobileNumberModal';
 import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
@@ -158,11 +159,11 @@ export default function OrderSummaryPage() {
                       )}
                     </h3>
                     <p className="text-sm text-gray-500 font-mono mt-1">
-                      {quantity} x ₹{price}
+                      {quantity} x {formatCurrency(price)}
                     </p>
                   </div>
                 </div>
-                <span className="font-bold text-gray-900 font-mono">₹{itemTotal}</span>
+                <span className="font-bold text-gray-900 font-mono">{formatCurrency(itemTotal)}</span>
               </div>
             );
           })}
@@ -231,21 +232,21 @@ export default function OrderSummaryPage() {
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-gray-600">
             <span>Subtotal</span>
-            <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+            <span className="font-mono">{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>Tax (5%)</span>
-            <span className="font-mono">₹{tax.toFixed(2)}</span>
+            <span className="font-mono">{formatCurrency(tax)}</span>
           </div>
           {appliedCoupon && (
             <div className="flex justify-between text-green-600 font-medium">
               <span>Discount</span>
-              <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+              <span className="font-mono">-{formatCurrency(discountAmount)}</span>
             </div>
           )}
           <div className="border-t border-dashed border-gray-200 my-3 pt-3 flex justify-between items-end">
             <span className="font-bold text-gray-900 text-lg font-display">Total</span>
-            <span className="font-bold text-gray-900 text-2xl font-mono">₹{total.toFixed(2)}</span>
+            <span className="font-bold text-gray-900 text-2xl font-mono">{formatCurrency(total)}</span>
           </div>
         </div>
       </div>
