@@ -75,7 +75,7 @@ export default function BranchDashboard() {
   const renderContent = () => {
     switch (activeTab) {
       case 'orders':
-        return <Orders tables={tables} onRefresh={fetchData} />;
+        return <Orders tables={tables} menu={menu} onRefresh={fetchData} />;
       case 'inventory':
         return <Inventory menu={menu} setMenu={setMenu} />;
       case 'tables':

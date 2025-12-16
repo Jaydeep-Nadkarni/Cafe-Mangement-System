@@ -34,7 +34,7 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout 
             <Store className="h-6 w-6 text-green-600" />
           </div>
           <div>
-            <h1 className="font-bold text-gray-900 truncate max-w-[140px]">{branchName || 'Branch'}</h1>
+            <h1 className="font-bold text-gray-900 truncate max-w-35">{branchName || 'Branch'}</h1>
             <p className="text-xs text-gray-500">Manager Dashboard</p>
           </div>
         </div>

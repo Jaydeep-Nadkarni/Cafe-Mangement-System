@@ -228,10 +228,154 @@ const sendWhatsappBill = async (req, res) => {
   }
 };
 
+// @desc    Remove item from order
+// @route   DELETE /api/orders/:id/items/:itemId
+// @access  Manager
+const removeItemFromOrder = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'merged') {
+      return res.status(400).json({ message: 'Cannot modify closed order' });
+    }
+
+    // Filter out the item
+    const initialLength = order.items.length;
+    order.items = order.items.filter(item => item._id.toString() !== itemId);
+
+    if (order.items.length === initialLength) {
+      return res.status(404).json({ message: 'Item not found in order' });
+    }
+
+    // Reconstruct items for calculation
+    const currentItems = order.items.map(item => ({
+      menuItemId: item.menuItem,
+      quantity: item.quantity,
+      notes: item.specialInstructions
+    }));
+
+    // Recalculate
+    const calculation = await orderService.calculateOrderTotals(currentItems, order.coupon);
+
+    order.items = calculation.items;
+    order.subtotal = calculation.subtotal;
+    order.tax = calculation.tax;
+    order.discount = calculation.discount;
+    order.total = calculation.total;
+    
+    await order.save();
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Cancel order
+// @route   POST /api/orders/:id/cancel
+// @access  Manager
+const cancelOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (order.status === 'completed') {
+      return res.status(400).json({ message: 'Cannot cancel completed order' });
+    }
+
+    order.status = 'cancelled';
+    await order.save();
+
+    // Free up table
+    const table = await Table.findById(order.table);
+    if (table) {
+      table.currentOrder = null;
+      table.status = 'available';
+      await table.save();
+    }
+
+    res.json({ message: 'Order cancelled successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Merge orders
+// @route   POST /api/orders/merge
+// @access  Manager
+const mergeOrders = async (req, res) => {
+  try {
+    const { sourceOrderId, targetOrderId } = req.body;
+
+    const sourceOrder = await Order.findById(sourceOrderId);
+    const targetOrder = await Order.findById(targetOrderId);
+
+    if (!sourceOrder || !targetOrder) {
+      return res.status(404).json({ message: 'One or both orders not found' });
+    }
+
+    if (sourceOrder.status !== 'active' && sourceOrder.status !== 'pending') {
+       return res.status(400).json({ message: 'Source order is not active' });
+    }
+    
+    // Combine items
+    const sourceItems = sourceOrder.items.map(item => ({
+      menuItemId: item.menuItem,
+      quantity: item.quantity,
+      notes: item.specialInstructions
+    }));
+    
+    const targetItems = targetOrder.items.map(item => ({
+      menuItemId: item.menuItem,
+      quantity: item.quantity,
+      notes: item.specialInstructions
+    }));
+
+    const allItems = [...targetItems, ...sourceItems];
+
+    // Recalculate target
+    const calculation = await orderService.calculateOrderTotals(allItems, targetOrder.coupon);
+
+    targetOrder.items = calculation.items;
+    targetOrder.subtotal = calculation.subtotal;
+    targetOrder.tax = calculation.tax;
+    targetOrder.discount = calculation.discount;
+    targetOrder.total = calculation.total;
+    
+    await targetOrder.save();
+
+    // Close source
+    sourceOrder.status = 'merged';
+    await sourceOrder.save();
+
+    // Free source table
+    const sourceTable = await Table.findById(sourceOrder.table);
+    if (sourceTable) {
+      sourceTable.currentOrder = null;
+      sourceTable.status = 'available';
+      await sourceTable.save();
+    }
+
+    res.json(targetOrder);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrder,
   addItemsToOrder,
+  removeItemFromOrder,
+  cancelOrder,
+  mergeOrders,
   applyCoupon,
   checkoutOrder,
   sendWhatsappBill
