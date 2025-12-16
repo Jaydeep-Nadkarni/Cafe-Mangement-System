@@ -102,6 +102,10 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    chefNotes: {
+      type: String,
+      default: ''
+    },
     completedAt: {
       type: Date,
       default: null

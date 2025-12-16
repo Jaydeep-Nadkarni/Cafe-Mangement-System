@@ -16,6 +16,7 @@ export default function OrderSummaryPage() {
   const [branchCode, setBranchCode] = useState('');
   const [tableNumber, setTableNumber] = useState('');
   const [session, setSession] = useState(null);
+  const [chefNotes, setChefNotes] = useState('');
 
   // Retrieve branch code and table number from persistent session
   useEffect(() => {
@@ -169,6 +170,22 @@ export default function OrderSummaryPage() {
         
         <div className="my-6 border-t border-gray-100" />
 
+        {/* Chef Notes Section */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="w-4 h-4 text-amber-500" />
+            <label className="text-sm font-bold text-gray-700">Note for Chef (Optional)</label>
+          </div>
+          <textarea
+            value={chefNotes}
+            onChange={(e) => setChefNotes(e.target.value)}
+            placeholder="E.g., Less spicy, no onions, extra cheese..."
+            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm resize-none h-24"
+          />
+        </div>
+
+        <div className="my-6 border-t border-gray-100" />
+
         {/* Coupon Section */}
         <div className="mb-6">
           {!appliedCoupon ? (
@@ -281,7 +298,8 @@ export default function OrderSummaryPage() {
             orderId: `ORD_${Date.now()}`,
             branchCode: session?.branchCode || branchCode,
             tableNumber: session?.tableNumber || tableNumber,
-            items: cartItems
+            items: cartItems,
+            chefNotes: chefNotes
           }}
           paymentMethod={paymentMethod}
         />

@@ -50,7 +50,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         items: orderItems,
         customerCount: 1,
         customerName: customerName,
-        customerPhone: customerPhone
+        customerPhone: customerPhone,
+        chefNotes: orderData?.chefNotes || ''
       };
 
       console.log('Saving order to database:', orderPayload);

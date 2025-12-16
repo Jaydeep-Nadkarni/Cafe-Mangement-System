@@ -11,7 +11,7 @@ const whatsappService = require('../services/whatsappService');
 // @access  Manager
 const createOrder = async (req, res) => {
   try {
-    const { tableId, items, customerCount } = req.body;
+    const { tableId, items, customerCount, chefNotes } = req.body;
     
     // Verify table belongs to manager's branch
     const table = await Table.findById(tableId).populate('branch');
@@ -38,7 +38,8 @@ const createOrder = async (req, res) => {
       tax: calculation.tax,
       total: calculation.total,
       status: 'active',
-      customerCount: customerCount || 1
+      customerCount: customerCount || 1,
+      chefNotes: chefNotes || ''
     });
 
     const savedOrder = await order.save();

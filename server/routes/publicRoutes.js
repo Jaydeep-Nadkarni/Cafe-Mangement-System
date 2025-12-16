@@ -58,7 +58,7 @@ const getTableByNumberAndBranch = async (req, res) => {
 // @access  Public
 const createQROrder = async (req, res) => {
   try {
-    const { branchCode, tableNumber, items, customerCount, customerName, customerPhone } = req.body;
+    const { branchCode, tableNumber, items, customerCount, customerName, customerPhone, chefNotes } = req.body;
 
     console.log('Creating QR Order:', { branchCode, tableNumber, itemCount: items?.length, customerName });
 
@@ -153,7 +153,8 @@ const createQROrder = async (req, res) => {
       paymentMethod: null, // Will be set when payment is made
       customerCount: customerCount || 1,
       customerName: customerName || null,
-      customerPhone: customerPhone || null
+      customerPhone: customerPhone || null,
+      chefNotes: chefNotes || ''
     });
 
     const savedOrder = await order.save();
