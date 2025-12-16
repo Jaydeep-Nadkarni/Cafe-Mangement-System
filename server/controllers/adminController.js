@@ -68,12 +68,20 @@ const createBranch = async (req, res) => {
   }
 };
 
-// @desc    Get all branches
-// @route   GET /api/admin/branches
+// @desc    Get all branches (with optional code filter)
+// @route   GET /api/admin/branches?code=BRANCHCODE
 // @access  Admin/SuperAdmin
 const getBranches = async (req, res) => {
   try {
-    const branches = await Branch.find({})
+    const { code } = req.query;
+    let query = {};
+    
+    // If branch code is provided, filter by it
+    if (code) {
+      query.branchCode = code.toUpperCase();
+    }
+    
+    const branches = await Branch.find(query)
       .populate('manager', 'username email')
       .sort({ createdAt: -1 });
     res.json(branches);

@@ -1,8 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
-import { GameProvider } from './context/GameContext';
-import { useAuth } from './context/AuthContext';
-import { Layout, PageTransition } from './components';
+import { GameProvider } from './user/context/GameContext';
+import { useAuth } from './user/context/AuthContext';
+import { Layout, PageTransition } from './user/components';
 import { 
   MenuPage, 
   OrderSummaryPage, 
@@ -13,8 +13,8 @@ import {
   BranchLogin,
   AdminDashboard,
   BranchDashboard
-} from './pages';
-import SplashScreen from './components/SplashScreen';
+} from './user/pages';
+import SplashScreen from './user/components/SplashScreen';
 
 // Protected Route Component
 const ProtectedRoute = ({ children, role }) => {

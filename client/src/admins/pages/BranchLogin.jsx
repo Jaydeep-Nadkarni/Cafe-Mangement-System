@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
-import { Lock, User, AlertCircle } from 'lucide-react';
+import { useAuth } from '../../user/context/AuthContext';
+import { Lock, Store, AlertCircle } from 'lucide-react';
 
-export default function AdminLogin() {
-  const [email, setEmail] = useState('');
+export default function BranchLogin() {
+  const [branchCode, setBranchCode] = useState('');
   const [password, setPassword] = useState('');
   const { login, error } = useAuth();
   const navigate = useNavigate();
@@ -13,9 +13,9 @@ export default function AdminLogin() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-    const result = await login({ email, password }, 'admin');
+    const result = await login({ branchCode, password }, 'branch');
     if (result.success) {
-      navigate('/admin/dashboard');
+      navigate('/branch/dashboard');
     }
     setIsLoading(false);
   };
@@ -24,8 +24,8 @@ export default function AdminLogin() {
     <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
       <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg">
         <div className="text-center">
-          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Admin Portal</h2>
-          <p className="mt-2 text-sm text-gray-600">Sign in to manage the system</p>
+          <h2 className="mt-6 text-3xl font-extrabold text-gray-900">Branch Manager</h2>
+          <p className="mt-2 text-sm text-gray-600">Sign in to your branch</p>
         </div>
         
         {error && (
@@ -39,15 +39,15 @@ export default function AdminLogin() {
           <div className="rounded-md shadow-sm -space-y-px">
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <User className="h-5 w-5 text-gray-400" />
+                <Store className="h-5 w-5 text-gray-400" />
               </div>
               <input
-                type="email"
+                type="text"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
-                placeholder="Admin Email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                className="appearance-none rounded-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
+                placeholder="Branch Code (e.g. NYC01)"
+                value={branchCode}
+                onChange={(e) => setBranchCode(e.target.value.toUpperCase())}
               />
             </div>
             <div className="relative">
@@ -57,7 +57,7 @@ export default function AdminLogin() {
               <input
                 type="password"
                 required
-                className="appearance-none rounded-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                className="appearance-none rounded-none relative block w-full px-3 py-2 pl-10 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-green-500 focus:border-green-500 focus:z-10 sm:text-sm"
                 placeholder="Password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -69,7 +69,7 @@ export default function AdminLogin() {
             <button
               type="submit"
               disabled={isLoading}
-              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50"
             >
               {isLoading ? 'Signing in...' : 'Sign in'}
             </button>

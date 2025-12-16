@@ -6,7 +6,8 @@ const {
   getMenu,
   updateItemAvailability,
   mergeTables,
-  getBranchDetails
+  getBranchDetails,
+  createTable
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -15,6 +16,7 @@ router.use(requireBranch);
 
 router.get('/details', getBranchDetails);
 router.get('/tables', getTables);
+router.post('/tables', createTable);
 router.get('/menu', getMenu);
 router.put('/menu/:id/availability', updateItemAvailability);
 router.post('/tables/merge', mergeTables);

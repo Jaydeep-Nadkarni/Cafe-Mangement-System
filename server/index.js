@@ -17,6 +17,7 @@ const orderRoutes = require('./routes/orderRoutes');
 const couponRoutes = require('./routes/couponRoutes');
 const gameRoutes = require('./routes/gameRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
+const publicRoutes = require('./routes/publicRoutes');
 const { initRealtime } = require('./services/realtimeService');
 
 const app = express();
@@ -37,6 +38,88 @@ const PORT = process.env.PORT || 5000;
 // ==================== DATABASE CONNECTION ====================
 connectDB();
 
+// Seed menu items to database if they don't exist
+const seedMenuItems = async () => {
+  try {
+    const MenuItem = require('./models/MenuItem');
+    const existingItems = await MenuItem.countDocuments();
+    
+    if (existingItems === 0) {
+      console.log('Seeding menu items to database...');
+      const MENU_ITEMS_TO_SEED = [
+        {
+          name: 'Espresso',
+          description: 'Strong and bold single shot of espresso.',
+          price: 80,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1514432324607-2e467f4af445?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 20
+        },
+        {
+          name: 'Double Espresso',
+          description: 'Two shots of premium espresso.',
+          price: 120,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1514432324607-2e467f4af445?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 35
+        },
+        {
+          name: 'Americano',
+          description: 'Espresso with hot water, smooth and balanced.',
+          price: 100,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1559056199-641a0ac8b3f4?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 25
+        },
+        {
+          name: 'Cappuccino',
+          description: 'Rich espresso with steamed milk and a deep layer of foam.',
+          price: 120,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1572442388796-11668a67e53d?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 30
+        },
+        {
+          name: 'Latte',
+          description: 'Smooth espresso with steamed milk and a light foam top.',
+          price: 130,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1541182286-21eaf810afe4?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 32
+        },
+        {
+          name: 'Mocha',
+          description: 'Espresso with steamed milk and rich chocolate.',
+          price: 140,
+          category: 'coffee',
+          image: 'https://images.unsplash.com/photo-1578985545062-69928b1d9587?w=800&h=600&fit=crop',
+          isAvailable: true,
+          isVegetarian: true,
+          costPrice: 35
+        }
+      ];
+      
+      await MenuItem.insertMany(MENU_ITEMS_TO_SEED);
+      console.log('Menu items seeded successfully!');
+    }
+  } catch (error) {
+    console.error('Error seeding menu items:', error.message);
+  }
+};
+
+// Run seeding after a short delay to ensure DB connection
+setTimeout(seedMenuItems, 1000);
+
 // ==================== MIDDLEWARE ====================
 app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3000',
@@ -46,6 +129,12 @@ app.use(cors({
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
+// Attach io to app for use in routes
+app.use((req, res, next) => {
+  req.io = io;
+  next();
+});
+
 // ==================== ROUTES ====================
 app.use('/api/auth', authRoutes);
 app.use('/api/admin', adminRoutes);
@@ -54,6 +143,7 @@ app.use('/api/orders', orderRoutes);
 app.use('/api/coupons', couponRoutes);
 app.use('/api/games', gameRoutes);
 app.use('/api/payment', paymentRoutes);
+app.use('/api/public', publicRoutes);
 
 // ==================== SAMPLE DATA ====================
 const MENU_ITEMS = [

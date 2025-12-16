@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useBranchSocket } from '../hooks/useBranchSocket';
+import { useAuth } from '../../user/context/AuthContext';
+import { useBranchSocket } from '../../user/hooks/useBranchSocket';
 import { 
   LogOut, 
   Store, 
@@ -26,6 +26,11 @@ export default function BranchDashboard() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('orders'); // orders, inventory, tables
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showCreateTableModal, setShowCreateTableModal] = useState(false);
+  const [newTableNumber, setNewTableNumber] = useState('');
+  const [newTableCapacity, setNewTableCapacity] = useState('');
+  const [newTableLocation, setNewTableLocation] = useState('indoor');
+  const [creatingTable, setCreatingTable] = useState(false);
 
   // Fetch Initial Data
   useEffect(() => {
@@ -89,6 +94,40 @@ export default function BranchDashboard() {
       ));
     } catch (error) {
       console.error('Error updating inventory:', error);
+    }
+  };
+
+  const handleCreateTable = async () => {
+    try {
+      if (!newTableNumber || !newTableCapacity) {
+        alert('Please fill in all fields');
+        return;
+      }
+
+      setCreatingTable(true);
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      const response = await axios.post(`${API_URL}/api/branch/tables`, {
+        tableNumber: parseInt(newTableNumber),
+        capacity: parseInt(newTableCapacity),
+        location: newTableLocation
+      });
+
+      console.log('Table created:', response.data);
+      
+      // Reset form and close modal
+      setNewTableNumber('');
+      setNewTableCapacity('');
+      setNewTableLocation('indoor');
+      setShowCreateTableModal(false);
+      
+      // Refresh tables list
+      fetchData();
+    } catch (error) {
+      console.error('Error creating table:', error);
+      alert('Failed to create table: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setCreatingTable(false);
     }
   };
 
@@ -246,7 +285,7 @@ export default function BranchDashboard() {
                   </div>
                   <button 
                     onClick={() => handleToggleAvailability(item._id, item.isAvailable)}
-                    className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
                       item.isAvailable ? 'bg-green-600' : 'bg-gray-200'
                     }`}
                   >
@@ -262,8 +301,18 @@ export default function BranchDashboard() {
 
         {/* TABLES TAB */}
         {activeTab === 'tables' && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            {tables.map(table => (
+          <div>
+            <div className="mb-6 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-gray-900">Manage Tables</h2>
+              <button
+                onClick={() => setShowCreateTableModal(true)}
+                className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2 rounded-lg transition-colors"
+              >
+                Add Table
+              </button>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {tables.map(table => (
               <div 
                 key={table._id} 
                 className={`p-6 rounded-xl border-2 text-center ${
@@ -280,9 +329,73 @@ export default function BranchDashboard() {
                 </span>
               </div>
             ))}
+            </div>
           </div>
         )}
       </main>
+
+      {/* Create Table Modal */}
+      {showCreateTableModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">Add New Table</h2>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Table Number</label>
+                <input
+                  type="number"
+                  value={newTableNumber}
+                  onChange={(e) => setNewTableNumber(e.target.value)}
+                  placeholder="e.g., 1, 2, 3..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Capacity</label>
+                <input
+                  type="number"
+                  value={newTableCapacity}
+                  onChange={(e) => setNewTableCapacity(e.target.value)}
+                  placeholder="e.g., 2, 4, 6..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Location</label>
+                <select
+                  value={newTableLocation}
+                  onChange={(e) => setNewTableLocation(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
+                  <option value="indoor">Indoor</option>
+                  <option value="outdoor">Outdoor</option>
+                  <option value="counter">Counter</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => setShowCreateTableModal(false)}
+                disabled={creatingTable}
+                className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 font-medium hover:bg-gray-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateTable}
+                disabled={creatingTable}
+                className="flex-1 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50"
+              >
+                {creatingTable ? 'Creating...' : 'Create Table'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Order Details Modal */}
       {selectedOrder && (

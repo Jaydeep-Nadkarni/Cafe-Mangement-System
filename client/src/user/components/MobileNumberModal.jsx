@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
 import { Check, AlertCircle, Loader2, Lock, ArrowRight } from 'lucide-react';
+import axios from 'axios';
 
 export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData, paymentMethod }) {
   const navigate = useNavigate();
@@ -23,6 +24,57 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
       return false;
     }
     return true;
+  };
+
+  // Save order to database
+  const saveOrderToDatabase = async (customerName, customerPhone) => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      console.log('OrderData received:', orderData);
+      console.log('BranchCode:', orderData?.branchCode);
+      console.log('TableNumber:', orderData?.tableNumber);
+      
+      // Prepare order items with item name for database lookup
+      const orderItems = (orderData?.items || []).map(cartItem => ({
+        menuItem: cartItem.item?.id,
+        name: cartItem.item?.name,
+        quantity: cartItem.quantity,
+        price: cartItem.price,
+        specialInstructions: ''
+      }));
+
+      const orderPayload = {
+        branchCode: orderData?.branchCode,
+        tableNumber: parseInt(orderData?.tableNumber),
+        items: orderItems,
+        customerCount: 1,
+        customerName: customerName,
+        customerPhone: customerPhone
+      };
+
+      console.log('Saving order to database:', orderPayload);
+
+      // Validate payload
+      if (!orderPayload.branchCode || !orderPayload.tableNumber || orderPayload.items.length === 0) {
+        throw new Error(`Invalid order payload: branchCode=${orderPayload.branchCode}, tableNumber=${orderPayload.tableNumber}, items=${orderPayload.items.length}`);
+      }
+
+      const response = await axios.post(
+        `${API_URL}/api/public/orders`,
+        orderPayload
+      );
+
+      console.log('Order saved successfully:', response.data);
+      return response.data;
+    } catch (error) {
+      console.error('Error saving order:', error);
+      if (error.response) {
+        console.error('Response status:', error.response.status);
+        console.error('Response data:', error.response.data);
+      }
+      throw error;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -47,29 +99,39 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
 
     const currentCart = { ...cart };
     const phoneNumber = mobileNumber.replace(/\D/g, '');
-    const orderId = `ORD_${Date.now()}`;
     const totalAmount = orderData?.totalAmount || 0;
 
+    // Save order to database FIRST
+    let savedOrder;
+    try {
+      savedOrder = await saveOrderToDatabase(customerName, phoneNumber);
+    } catch (error) {
+      setError('Failed to create order. Please try again.');
+      setIsSubmitting(false);
+      return;
+    }
+
+    const orderId = savedOrder?.orderNumber || `ORD_${Date.now()}`;
+
     if (paymentMethod === 'cash') {
-      setTimeout(() => {
-        clearCart();
-        navigate('/payment-success', {
-          state: {
-            paymentData: {
-              paymentId: 'CASH_' + Date.now(),
-              orderId: orderId,
-              method: 'cash',
-              amount: totalAmount,
-              customerName: customerName,
-              customerPhone: phoneNumber
-            },
-            orderItems: currentCart
+      clearCart();
+      navigate('/payment-success', {
+        state: {
+          paymentData: {
+            paymentId: 'CASH_' + Date.now(),
+            orderId: orderId,
+            method: 'cash',
+            amount: totalAmount,
+            customerName: customerName,
+            customerPhone: phoneNumber
           },
-        });
-        setMobileNumber('');
-        setCustomerName('');
-        onClose();
-      }, 1500);
+          orderItems: currentCart,
+          savedOrderId: savedOrder?._id
+        },
+      });
+      setMobileNumber('');
+      setCustomerName('');
+      onClose();
       return;
     }
 
@@ -89,10 +151,12 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             state: {
               paymentData: {
                 ...paymentResponse,
+                orderId: orderId,
                 customerName: customerName,
                 customerPhone: phoneNumber
               },
-              orderItems: currentCart
+              orderItems: currentCart,
+              savedOrderId: savedOrder?._id
             },
           });
           setMobileNumber('');
