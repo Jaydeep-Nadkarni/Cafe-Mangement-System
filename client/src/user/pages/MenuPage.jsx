@@ -5,7 +5,7 @@ import { saveTableSession, getTableSession, getSessionDisplayString } from '../u
 import FilterChips from '../components/FilterChips';
 import MenuCard from '../components/MenuCard';
 import SkeletonCard from '../../components/skeletons/SkeletonCard';
-import { MENU_ITEMS } from '../data/menuItems';
+import axios from 'axios';
 import { AlertCircle, Clock } from 'lucide-react';
 
 export default function MenuPage() {
@@ -18,12 +18,35 @@ export default function MenuPage() {
   const [activeFilter, setActiveFilter] = useState('all');
   const [currentSession, setCurrentSession] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [menuItems, setMenuItems] = useState([]);
+  const [error, setError] = useState(null);
 
-  // Simulate loading state on initial load only
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Fetch menu from database
   useEffect(() => {
-    const timer = setTimeout(() => setLoading(false), 800);
-    return () => clearTimeout(timer);
-  }, []);
+    const fetchMenu = async () => {
+      try {
+        setLoading(true);
+        const session = getTableSession();
+        const branch = branchCode || session?.branchCode || '';
+        
+        const response = await axios.get(`${API_URL}/api/public/menu`, {
+          params: branch ? { branchCode: branch } : {}
+        });
+        
+        setMenuItems(response.data);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching menu:', err);
+        setError('Failed to load menu. Please try again.');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchMenu();
+  }, [branchCode, API_URL]);
 
   // Handle URL params and session management
   useEffect(() => {
@@ -39,7 +62,7 @@ export default function MenuPage() {
   }, [branchCode, tableNumber]);
 
   const filteredItems = useMemo(() => {
-    let items = MENU_ITEMS;
+    let items = menuItems;
 
     // Apply category filter
     if (activeFilter !== 'all') {
@@ -57,7 +80,13 @@ export default function MenuPage() {
     }
 
     return items;
-  }, [searchQuery, activeFilter]);
+  }, [searchQuery, activeFilter, menuItems]);
+
+  // Extract unique categories from menu items
+  const categories = useMemo(() => {
+    const uniqueCategories = [...new Set(menuItems.map(item => item.category))];
+    return uniqueCategories.sort();
+  }, [menuItems]);
 
   return (
     <div className="px-4 md:px-6 py-6 pb-32">
@@ -80,7 +109,8 @@ export default function MenuPage() {
       <div className="mb-6 animate-fade-in-up">
         <FilterChips 
           activeFilter={activeFilter} 
-          onFilterChange={setActiveFilter} 
+          onFilterChange={setActiveFilter}
+          categories={categories}
         />
       </div>
 
@@ -91,10 +121,21 @@ export default function MenuPage() {
             <SkeletonCard key={i} />
           ))}
         </div>
+      ) : error ? (
+        <div className="text-center py-12">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500 text-lg">{error}</p>
+          <button 
+            onClick={() => window.location.reload()}
+            className="mt-4 px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800"
+          >
+            Try Again
+          </button>
+        </div>
       ) : filteredItems.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredItems.map(item => (
-            <MenuCard key={item.id} item={item} />
+            <MenuCard key={item.id || item._id} item={item} />
           ))}
         </div>
       ) : (

@@ -145,9 +145,16 @@ export default function Reports() {
             <div className="p-3 bg-green-50 rounded-xl">
               <DollarSign className="w-6 h-6 text-green-600" />
             </div>
-            <span className="flex items-center text-xs font-medium text-green-600 bg-green-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="w-3 h-3 mr-1" /> +12.5%
-            </span>
+            {data?.growth?.revenue !== undefined && (
+              <span className={`flex items-center text-xs font-medium px-2 py-1 rounded-full ${
+                data.growth.revenue >= 0 
+                  ? 'text-green-600 bg-green-50' 
+                  : 'text-red-600 bg-red-50'
+              }`}>
+                {data.growth.revenue >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                {data.growth.revenue >= 0 ? '+' : ''}{data.growth.revenue?.toFixed(1)}%
+              </span>
+            )}
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Total Revenue</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">{formatCurrency(data?.summary.totalRevenue || 0)}</p>
@@ -158,9 +165,16 @@ export default function Reports() {
             <div className="p-3 bg-blue-50 rounded-xl">
               <ShoppingBag className="w-6 h-6 text-blue-600" />
             </div>
-            <span className="flex items-center text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
-              <ArrowUpRight className="w-3 h-3 mr-1" /> +8.2%
-            </span>
+            {data?.growth?.orders !== undefined && (
+              <span className={`flex items-center text-xs font-medium px-2 py-1 rounded-full ${
+                data.growth.orders >= 0 
+                  ? 'text-blue-600 bg-blue-50' 
+                  : 'text-red-600 bg-red-50'
+              }`}>
+                {data.growth.orders >= 0 ? <ArrowUpRight className="w-3 h-3 mr-1" /> : <ArrowDownRight className="w-3 h-3 mr-1" />}
+                {data.growth.orders >= 0 ? '+' : ''}{data.growth.orders?.toFixed(1)}%
+              </span>
+            )}
           </div>
           <h3 className="text-gray-500 text-sm font-medium">Total Orders</h3>
           <p className="text-2xl font-bold text-gray-900 mt-1">{data?.summary.totalOrders || 0}</p>
