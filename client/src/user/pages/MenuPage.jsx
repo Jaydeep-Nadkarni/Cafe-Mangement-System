@@ -61,8 +61,22 @@ export default function MenuPage() {
     }
   }, [branchCode, tableNumber]);
 
+  // Filter out any undefined items
+  const validMenuItems = useMemo(() => {
+    return menuItems.filter(item => {
+      if (!item || !item.name || !item.category) {
+        return false;
+      }
+      // If sizes exist, ensure they're a non-empty array
+      if (item.sizes && !Array.isArray(item.sizes)) {
+        return false;
+      }
+      return true;
+    });
+  }, [menuItems]);
+
   const filteredItems = useMemo(() => {
-    let items = menuItems;
+    let items = validMenuItems;
 
     // Apply category filter
     if (activeFilter !== 'all') {
@@ -80,11 +94,12 @@ export default function MenuPage() {
     }
 
     return items;
-  }, [searchQuery, activeFilter, menuItems]);
+  }, [searchQuery, activeFilter, validMenuItems]);
 
   // Extract unique categories from menu items
   const categories = useMemo(() => {
-    const uniqueCategories = [...new Set(menuItems.map(item => item.category))];
+    const validItems = menuItems.filter(item => item && item.category);
+    const uniqueCategories = [...new Set(validItems.map(item => item.category))];
     return uniqueCategories.sort();
   }, [menuItems]);
 
