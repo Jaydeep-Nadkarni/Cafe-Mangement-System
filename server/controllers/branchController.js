@@ -2,12 +2,20 @@ const Branch = require('../models/Branch');
 const Table = require('../models/Table');
 const MenuItem = require('../models/MenuItem');
 const Order = require('../models/Order');
+const Alert = require('../models/Alert');
+const Memo = require('../models/Memo');
+const { getBranchStats } = require('../services/analyticsService');
 
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
+  if (!userId) {
+    throw new Error('User ID is required');
+  }
+  
   const branch = await Branch.findOne({ manager: userId });
   if (!branch) {
-    throw new Error('No branch assigned to this manager');
+    console.error(`No branch found for manager ID: ${userId}`);
+    throw new Error(`No branch assigned to this manager. User ID: ${userId}`);
   }
   return branch;
 };
@@ -145,9 +153,23 @@ const mergeTables = async (req, res) => {
 // @access  Manager
 const getBranchDetails = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
+    if (!req.user) {
+      return res.status(401).json({ message: 'User not authenticated' });
+    }
+    
+    const branch = await Branch.findOne({ manager: req.user._id });
+    
+    if (!branch) {
+      console.warn(`Manager ${req.user._id} has no branch assigned`);
+      return res.status(404).json({ 
+        message: 'No branch assigned to this manager',
+        managerId: req.user._id 
+      });
+    }
+    
     res.json(branch);
   } catch (error) {
+    console.error('Error in getBranchDetails:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -194,11 +216,328 @@ const createTable = async (req, res) => {
   }
 };
 
+// @desc    Update table details
+// @route   PUT /api/branch/tables/:id
+// @access  Manager
+const updateTable = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    const table = await Table.findOne({ _id: id, branch: branch._id });
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+
+    // Prevent changing table number to one that already exists
+    if (updates.tableNumber && updates.tableNumber !== table.tableNumber) {
+      const existing = await Table.findOne({
+        branch: branch._id,
+        tableNumber: parseInt(updates.tableNumber)
+      });
+      if (existing) {
+        return res.status(400).json({ message: 'Table number already exists' });
+      }
+    }
+
+    Object.keys(updates).forEach(key => {
+      table[key] = updates[key];
+    });
+
+    const updatedTable = await table.save();
+    res.json(updatedTable);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete table
+// @route   DELETE /api/branch/tables/:id
+// @access  Manager
+const deleteTable = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+
+    const table = await Table.findOne({ _id: id, branch: branch._id });
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+
+    if (table.currentOrder) {
+      return res.status(400).json({ message: 'Cannot delete table with active order' });
+    }
+
+    await Table.deleteOne({ _id: id });
+    res.json({ message: 'Table deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update table status
+// @route   PUT /api/branch/tables/:id/status
+// @access  Manager
+const updateTableStatus = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { status } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    const table = await Table.findOne({ _id: id, branch: branch._id });
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+
+    // If manually setting to available, ensure no active order
+    if (status === 'available' && table.currentOrder) {
+      // Optional: Could force close order here, but safer to require order closure first
+      // For now, we'll just clear the reference if the user forces it
+      table.currentOrder = null;
+    }
+
+    table.status = status;
+    await table.save();
+    res.json(table);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Add new menu item
+// @route   POST /api/branch/menu
+// @access  Manager
+const addMenuItem = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { 
+      name, description, price, category, 
+      isVegetarian, isVegan, isSpicy, image 
+    } = req.body;
+
+    const menuItem = new MenuItem({
+      name,
+      description,
+      price,
+      category,
+      image,
+      isVegetarian,
+      isVegan,
+      isSpicy,
+      branch: branch._id, // Associate with this branch
+      isAvailable: true
+    });
+
+    const savedItem = await menuItem.save();
+    res.status(201).json(savedItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update menu item
+// @route   PUT /api/branch/menu/:id
+// @access  Manager
+const updateMenuItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    const menuItem = await MenuItem.findOne({ _id: id, branch: branch._id });
+    if (!menuItem) {
+      return res.status(404).json({ message: 'Item not found or unauthorized' });
+    }
+
+    Object.keys(updates).forEach(key => {
+      menuItem[key] = updates[key];
+    });
+
+    const updatedItem = await menuItem.save();
+    res.json(updatedItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete menu item
+// @route   DELETE /api/branch/menu/:id
+// @access  Manager
+const deleteMenuItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+
+    const result = await MenuItem.deleteOne({ _id: id, branch: branch._id });
+    
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ message: 'Item not found or unauthorized' });
+    }
+
+    res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get branch analytics
+// @route   GET /api/branch/analytics
+// @access  Manager
+const getAnalytics = async (req, res) => {
+  try {
+    const { startDate, endDate } = req.query;
+    const branch = await getManagerBranch(req.user._id);
+    
+    // Default to last 30 days if not provided
+    const end = endDate ? new Date(endDate) : new Date();
+    const start = startDate ? new Date(startDate) : new Date(new Date().setDate(end.getDate() - 30));
+
+    const stats = await getBranchStats(branch._id, start, end);
+    res.json(stats);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// --- ALERTS & MEMOS ---
+
+// @desc    Get all alerts
+// @route   GET /api/branch/alerts
+// @access  Manager
+const getAlerts = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const alerts = await Alert.find({ branch: branch._id })
+      .sort({ createdAt: -1 })
+      .limit(50);
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Mark alert as read
+// @route   PUT /api/branch/alerts/:id/read
+// @access  Manager
+const markAlertAsRead = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const alert = await Alert.findOneAndUpdate(
+      { _id: req.params.id, branch: branch._id },
+      { isRead: true },
+      { new: true }
+    );
+    if (!alert) return res.status(404).json({ message: 'Alert not found' });
+    res.json(alert);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete alert
+// @route   DELETE /api/branch/alerts/:id
+// @access  Manager
+const deleteAlert = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const result = await Alert.deleteOne({ _id: req.params.id, branch: branch._id });
+    if (result.deletedCount === 0) return res.status(404).json({ message: 'Alert not found' });
+    res.json({ message: 'Alert deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get memos
+// @route   GET /api/branch/memos
+// @access  Manager
+const getMemos = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const memos = await Memo.find({ branch: branch._id }).sort({ createdAt: -1 });
+    res.json(memos);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create memo
+// @route   POST /api/branch/memos
+// @access  Manager
+const createMemo = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { title, content, priority } = req.body;
+    
+    const memo = await Memo.create({
+      branch: branch._id,
+      title,
+      content,
+      priority,
+      createdBy: req.user._id
+    });
+    
+    res.status(201).json(memo);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update memo
+// @route   PUT /api/branch/memos/:id
+// @access  Manager
+const updateMemo = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { title, content, priority } = req.body;
+    
+    const memo = await Memo.findOneAndUpdate(
+      { _id: req.params.id, branch: branch._id },
+      { title, content, priority },
+      { new: true }
+    );
+    
+    if (!memo) return res.status(404).json({ message: 'Memo not found' });
+    res.json(memo);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete memo
+// @route   DELETE /api/branch/memos/:id
+// @access  Manager
+const deleteMemo = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const result = await Memo.deleteOne({ _id: req.params.id, branch: branch._id });
+    if (result.deletedCount === 0) return res.status(404).json({ message: 'Memo not found' });
+    res.json({ message: 'Memo deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
   updateItemAvailability,
+  addMenuItem,
+  updateMenuItem,
+  deleteMenuItem,
   mergeTables,
   getBranchDetails,
-  createTable
+  createTable,
+  updateTable,
+  deleteTable,
+  updateTableStatus,
+  getAnalytics,
+  getAlerts,
+  markAlertAsRead,
+  deleteAlert,
+  getMemos,
+  createMemo,
+  updateMemo,
+  deleteMemo
 };

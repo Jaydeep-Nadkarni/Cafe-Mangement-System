@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { getTableSession } from '../utils/sessionStorage';
 import MobileNumberModal from '../components/MobileNumberModal';
+import SkeletonList from '../../components/skeletons/SkeletonList';
 import { ShoppingCart, Lightbulb, ArrowRight, Tag, Check, X, CreditCard, Banknote, AlertCircle } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function OrderSummaryPage() {
   const navigate = useNavigate();
@@ -16,6 +18,14 @@ export default function OrderSummaryPage() {
   const [branchCode, setBranchCode] = useState('');
   const [tableNumber, setTableNumber] = useState('');
   const [session, setSession] = useState(null);
+  const [chefNotes, setChefNotes] = useState('');
+  const [loading, setLoading] = useState(true);
+
+  // Simulate loading check
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 600);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Retrieve branch code and table number from persistent session
   useEffect(() => {
@@ -33,6 +43,19 @@ export default function OrderSummaryPage() {
 
   // Get cart items as array
   const cartItems = getCartItems();
+
+  if (loading) {
+    return (
+      <div className="px-4 py-6 max-w-3xl mx-auto">
+        <div className="h-8 w-48 bg-gray-200 rounded mb-6 animate-pulse" />
+        <SkeletonList count={3} />
+        <div className="mt-8 space-y-4">
+          <div className="h-12 bg-gray-200 rounded animate-pulse" />
+          <div className="h-12 bg-gray-200 rounded animate-pulse" />
+        </div>
+      </div>
+    );
+  }
 
   // Redirect if no items in cart
   if (cartItems.length === 0) {
@@ -157,16 +180,32 @@ export default function OrderSummaryPage() {
                       )}
                     </h3>
                     <p className="text-sm text-gray-500 font-mono mt-1">
-                      {quantity} x ₹{price}
+                      {quantity} x {formatCurrency(price)}
                     </p>
                   </div>
                 </div>
-                <span className="font-bold text-gray-900 font-mono">₹{itemTotal}</span>
+                <span className="font-bold text-gray-900 font-mono">{formatCurrency(itemTotal)}</span>
               </div>
             );
           })}
         </div>
         
+        <div className="my-6 border-t border-gray-100" />
+
+        {/* Chef Notes Section */}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Lightbulb className="w-4 h-4 text-amber-500" />
+            <label className="text-sm font-bold text-gray-700">Note for Chef (Optional)</label>
+          </div>
+          <textarea
+            value={chefNotes}
+            onChange={(e) => setChefNotes(e.target.value)}
+            placeholder="E.g., Less spicy, no onions, extra cheese..."
+            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-sm resize-none h-24"
+          />
+        </div>
+
         <div className="my-6 border-t border-gray-100" />
 
         {/* Coupon Section */}
@@ -214,21 +253,21 @@ export default function OrderSummaryPage() {
         <div className="space-y-3 text-sm">
           <div className="flex justify-between text-gray-600">
             <span>Subtotal</span>
-            <span className="font-mono">₹{subtotal.toFixed(2)}</span>
+            <span className="font-mono">{formatCurrency(subtotal)}</span>
           </div>
           <div className="flex justify-between text-gray-600">
             <span>Tax (5%)</span>
-            <span className="font-mono">₹{tax.toFixed(2)}</span>
+            <span className="font-mono">{formatCurrency(tax)}</span>
           </div>
           {appliedCoupon && (
             <div className="flex justify-between text-green-600 font-medium">
               <span>Discount</span>
-              <span className="font-mono">-₹{discountAmount.toFixed(2)}</span>
+              <span className="font-mono">-{formatCurrency(discountAmount)}</span>
             </div>
           )}
           <div className="border-t border-dashed border-gray-200 my-3 pt-3 flex justify-between items-end">
             <span className="font-bold text-gray-900 text-lg font-display">Total</span>
-            <span className="font-bold text-gray-900 text-2xl font-mono">₹{total.toFixed(2)}</span>
+            <span className="font-bold text-gray-900 text-2xl font-mono">{formatCurrency(total)}</span>
           </div>
         </div>
       </div>
@@ -281,7 +320,8 @@ export default function OrderSummaryPage() {
             orderId: `ORD_${Date.now()}`,
             branchCode: session?.branchCode || branchCode,
             tableNumber: session?.tableNumber || tableNumber,
-            items: cartItems
+            items: cartItems,
+            chefNotes: chefNotes
           }}
           paymentMethod={paymentMethod}
         />

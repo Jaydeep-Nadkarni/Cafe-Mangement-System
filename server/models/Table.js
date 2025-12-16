@@ -25,7 +25,7 @@ const tableSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['available', 'occupied', 'reserved', 'maintenance'],
+      enum: ['available', 'occupied', 'reserved', 'maintenance', 'paid'],
       default: 'available'
     },
     currentOrder: {
@@ -40,6 +40,10 @@ const tableSchema = new mongoose.Schema(
     notes: {
       type: String,
       default: ''
+    },
+    currentOccupancy: {
+      type: Number,
+      default: 0
     },
     isActive: {
       type: Boolean,

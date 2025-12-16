@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useNavigate, useLocation, useSearchParams } from 'react-router-dom';
 import { Coffee, Search, X } from 'lucide-react';
 import { MENU_ITEMS } from '../data/menuItems';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function Header() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -137,7 +138,7 @@ export default function Header() {
                       <p className="font-medium text-gray-900 text-sm truncate">{item.name}</p>
                       <p className="text-xs text-gray-500 capitalize">{item.category.replace('-', ' ')}</p>
                     </div>
-                    <span className="text-sm font-mono text-gray-600">₹{item.price}</span>
+                    <span className="text-sm font-mono text-gray-600">{formatCurrency(item.price)}</span>
                   </button>
                 ))}
               </div>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { AlertTriangle, Check, ClipboardList, Bell, Clock, Phone, Home } from 'lucide-react';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function PaymentSuccessPage() {
   const navigate = useNavigate();
@@ -127,6 +128,15 @@ export default function PaymentSuccessPage() {
               ? 'Please complete your payment at the counter.'
               : 'A confirmation has been sent to your registered mobile number'}
           </p>
+          
+          {/* Show message if items were added to existing order */}
+          {paymentData.isAddedToExisting && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+              <p className="text-sm text-blue-700 font-medium">
+                ✓ Items have been added to your existing order
+              </p>
+            </div>
+          )}
         </div>
 
         {/* Order Details Card */}
@@ -147,7 +157,7 @@ export default function PaymentSuccessPage() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Amount Paid</span>
               <span className="font-bold text-gray-900 text-lg">
-                ₹{paymentData.amount.toFixed(2)}
+                {formatCurrency(paymentData.amount)}
               </span>
             </div>
 

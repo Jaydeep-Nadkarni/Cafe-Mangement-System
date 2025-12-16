@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
 import { Check, AlertCircle, Loader2, Lock, ArrowRight } from 'lucide-react';
 import axios from 'axios';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData, paymentMethod }) {
   const navigate = useNavigate();
@@ -50,7 +51,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         items: orderItems,
         customerCount: 1,
         customerName: customerName,
-        customerPhone: customerPhone
+        customerPhone: customerPhone,
+        chefNotes: orderData?.chefNotes || ''
       };
 
       console.log('Saving order to database:', orderPayload);
@@ -106,7 +108,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
     try {
       savedOrder = await saveOrderToDatabase(customerName, phoneNumber);
     } catch (error) {
-      setError('Failed to create order. Please try again.');
+      setError('Failed to process order. Please try again.');
       setIsSubmitting(false);
       return;
     }
@@ -123,7 +125,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
             method: 'cash',
             amount: totalAmount,
             customerName: customerName,
-            customerPhone: phoneNumber
+            customerPhone: phoneNumber,
+            isAddedToExisting: savedOrder?.isExistingOrder || false
           },
           orderItems: currentCart,
           savedOrderId: savedOrder?._id
@@ -145,6 +148,26 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         customerPhone: phoneNumber,
         onSuccess: (paymentResponse) => {
           console.log('Payment successful:', paymentResponse);
+          
+          // Call backend to confirm payment
+          fetch(`${API_URL}/api/public/orders/${savedOrder._id}/confirm-payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentMethod: 'online',
+              razorpayPaymentId: paymentResponse.razorpayPaymentId,
+              razorpayOrderId: paymentResponse.razorpayOrderId,
+              razorpaySignature: paymentResponse.razorpaySignature
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Payment confirmed on backend:', data);
+          })
+          .catch(err => {
+            console.error('Failed to confirm payment on backend:', err);
+          });
+          
           clearCart();
           // Navigate to success page with payment data
           navigate('/payment-success', {
@@ -284,7 +307,7 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 </>
               ) : (
                 <>
-                  <span>{paymentMethod === 'cash' ? 'Confirm Order' : `Pay ₹${orderData?.totalAmount?.toFixed(2)}`}</span>
+                  <span>{paymentMethod === 'cash' ? 'Confirm Order' : `Pay ${formatCurrency(orderData?.totalAmount)}`}</span>
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </>
               )}

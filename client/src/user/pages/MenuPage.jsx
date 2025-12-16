@@ -4,6 +4,7 @@ import { useCart } from '../context/CartContext';
 import { saveTableSession, getTableSession, getSessionDisplayString } from '../utils/sessionStorage';
 import FilterChips from '../components/FilterChips';
 import MenuCard from '../components/MenuCard';
+import SkeletonCard from '../../components/skeletons/SkeletonCard';
 import { MENU_ITEMS } from '../data/menuItems';
 import { AlertCircle, Clock } from 'lucide-react';
 
@@ -16,6 +17,13 @@ export default function MenuPage() {
   const tableNumber = searchParams.get('table') || ''; // e.g., 7
   const [activeFilter, setActiveFilter] = useState('all');
   const [currentSession, setCurrentSession] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // Simulate loading state on initial load only
+  useEffect(() => {
+    const timer = setTimeout(() => setLoading(false), 800);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Handle URL params and session management
   useEffect(() => {
@@ -76,8 +84,14 @@ export default function MenuPage() {
         />
       </div>
 
-      {/* Menu Grid */}
-      {filteredItems.length > 0 ? (
+      {/* Menu Grid - Show skeletons while loading */}
+      {loading ? (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <SkeletonCard key={i} />
+          ))}
+        </div>
+      ) : filteredItems.length > 0 ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredItems.map(item => (
             <MenuCard key={item.id} item={item} />

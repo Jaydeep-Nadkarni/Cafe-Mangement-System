@@ -23,7 +23,8 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       onNewOrder,
       onOrderStatusChange,
       onPaymentConfirmation,
-      onTableMerge
+      onTableMerge,
+      onNewAlert
     } = callbacks;
 
     // Set up event listeners
@@ -31,6 +32,7 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
     if (onOrderStatusChange) socket.on('order_status_change', onOrderStatusChange);
     if (onPaymentConfirmation) socket.on('payment_confirmation', onPaymentConfirmation);
     if (onTableMerge) socket.on('table_merge', onTableMerge);
+    if (onNewAlert) socket.on('new_alert', onNewAlert);
 
     // Cleanup
     return () => {
@@ -38,6 +40,7 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       if (onOrderStatusChange) socket.off('order_status_change', onOrderStatusChange);
       if (onPaymentConfirmation) socket.off('payment_confirmation', onPaymentConfirmation);
       if (onTableMerge) socket.off('table_merge', onTableMerge);
+      if (onNewAlert) socket.off('new_alert', onNewAlert);
       
       leaveBranchRoom(branchId);
     };

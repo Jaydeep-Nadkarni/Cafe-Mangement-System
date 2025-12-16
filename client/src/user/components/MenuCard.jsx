@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCart } from '../context/CartContext';
 import { Plus, Minus, Sparkles } from 'lucide-react';
 import AIOptionsModal from './AIOptionsModal';
+import { formatCurrency } from '../../utils/formatCurrency';
 
 export default function MenuCard({ item }) {
   const { addItem, removeItem, getQuantity, getItemPrice, getTotalQuantityForItem } = useCart();
@@ -88,7 +89,7 @@ export default function MenuCard({ item }) {
                   >
                     <div className="flex flex-col items-center">
                       <span>{size.label}</span>
-                      <span className="text-xs opacity-75">₹{size.price}</span>
+                      <span className="text-xs opacity-75">{formatCurrency(size.price)}</span>
                     </div>
                   </button>
                 ))}
@@ -100,7 +101,7 @@ export default function MenuCard({ item }) {
           <div className="mt-auto flex items-center justify-between gap-4">
             <div className="flex flex-col">
               <span className="text-xs text-gray-400 font-medium uppercase tracking-wide">Price</span>
-              <span className="text-2xl font-bold text-gray-900 font-mono">₹{currentPrice}</span>
+              <span className="text-2xl font-bold text-gray-900 font-mono">{formatCurrency(currentPrice)}</span>
             </div>
 
             {/* Quantity Selector */}

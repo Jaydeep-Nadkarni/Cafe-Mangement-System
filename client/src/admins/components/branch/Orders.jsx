@@ -1,0 +1,547 @@
+import React, { useState, useMemo } from 'react';
+import { 
+  Coffee, XCircle, MessageCircle, Printer, CheckCircle, 
+  Plus, Trash2, CreditCard, Banknote, Smartphone, 
+  ArrowRightLeft, AlertCircle, Search, X
+} from 'lucide-react';
+import axios from 'axios';
+import { formatCurrency } from '../../../utils/formatCurrency';
+
+export default function Orders({ tables, menu = [], onRefresh }) {
+  const [selectedOrder, setSelectedOrder] = useState(null);
+  const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
+  const [cashReceived, setCashReceived] = useState('');
+  const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [showAddItem, setShowAddItem] = useState(false);
+  const [itemSearch, setItemSearch] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Derived state
+  const activeTables = useMemo(() => 
+    tables.filter(t => t.currentOrder && t.currentOrder._id !== selectedOrder?._id),
+    [tables, selectedOrder]
+  );
+
+  const filteredMenu = useMemo(() => 
+    menu.filter(item => 
+      item.isAvailable && 
+      item.name.toLowerCase().includes(itemSearch.toLowerCase())
+    ),
+    [menu, itemSearch]
+  );
+
+  // Actions
+  const handleAddItem = async (menuItem) => {
+    if (!selectedOrder) return;
+    try {
+      setLoading(true);
+      const res = await axios.put(`${API_URL}/api/orders/${selectedOrder._id}/items`, {
+        items: [{ menuItemId: menuItem._id, quantity: 1 }]
+      });
+      setSelectedOrder(res.data);
+      onRefresh();
+      setShowAddItem(false);
+    } catch (error) {
+      alert('Failed to add item: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleRemoveItem = async (itemId) => {
+    if (!window.confirm('Remove this item from order?')) return;
+    try {
+      setLoading(true);
+      const res = await axios.delete(`${API_URL}/api/orders/${selectedOrder._id}/items/${itemId}`);
+      setSelectedOrder(res.data);
+      onRefresh();
+    } catch (error) {
+      alert('Failed to remove item: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCancelOrder = async () => {
+    if (!window.confirm('Are you sure you want to CANCEL this entire order? This cannot be undone.')) return;
+    try {
+      setLoading(true);
+      await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/cancel`);
+      setSelectedOrder(null);
+      onRefresh();
+    } catch (error) {
+      alert('Failed to cancel order: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMergeOrder = async () => {
+    if (!mergeTargetId) return alert('Please select a table to merge with');
+    if (!window.confirm('Merge this order into the selected table? The current table will become available.')) return;
+    
+    try {
+      setLoading(true);
+      // Target is the one we are merging INTO (keeping). Source is selectedOrder.
+      // Wait, usually you merge INTO the selected order or merge selected order INTO another?
+      // Let's say we merge selectedOrder (Source) INTO mergeTargetId (Target).
+      const targetOrder = tables.find(t => t._id === mergeTargetId)?.currentOrder;
+      if (!targetOrder) return alert('Target order not found');
+
+      await axios.post(`${API_URL}/api/orders/merge`, {
+        sourceOrderId: selectedOrder._id,
+        targetOrderId: targetOrder._id
+      });
+      
+      setSelectedOrder(null);
+      setShowMergeModal(false);
+      onRefresh();
+    } catch (error) {
+      alert('Failed to merge orders: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCheckout = async () => {
+    if (paymentMode === 'cash' && (!cashReceived || parseFloat(cashReceived) < selectedOrder.total)) {
+      return alert('Please enter valid cash amount');
+    }
+
+    if (!window.confirm(`Confirm payment of ${formatCurrency(selectedOrder.total)} via ${paymentMode.toUpperCase()}?`)) return;
+
+    try {
+      setLoading(true);
+      await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/checkout`, {
+        paymentMethod: paymentMode,
+        amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
+      });
+      setSelectedOrder(null);
+      onRefresh();
+    } catch (error) {
+      alert('Checkout failed: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSendBill = async (orderId, phoneNumber) => {
+    if (!phoneNumber) return alert('Please enter a phone number');
+    try {
+      await axios.post(`${API_URL}/api/orders/${orderId}/send-whatsapp-bill`, {
+        phoneNumber
+      });
+      alert('Bill sent successfully!');
+    } catch (error) {
+      alert('Failed to send bill');
+    }
+  };
+
+  return (
+    <div className="h-full">
+      <div className="mb-6 flex justify-between items-center">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Live Orders</h2>
+          <p className="text-gray-500">Manage active table orders</p>
+        </div>
+        <div className="flex gap-2">
+          <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+            <span>Paid</span>
+          </div>
+          <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
+            <div className="w-3 h-3 rounded-full bg-red-500"></div>
+            <span>Unpaid</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {tables.filter(t => t.currentOrder).map(table => (
+          <div 
+            key={table._id} 
+            onClick={() => setSelectedOrder(table.currentOrder)}
+            className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${
+              table.currentOrder.paymentStatus === 'paid' ? 'border-blue-200 bg-blue-50' : 'border-red-200 bg-red-50'
+            }`}
+          >
+            <div className={`p-4 border-b flex justify-between items-center ${
+              table.currentOrder.paymentStatus === 'paid' ? 'bg-blue-100 border-blue-200' : 'bg-red-100 border-red-200'
+            }`}>
+              <div className="flex items-center">
+                <span className="font-bold text-lg text-gray-900">Table {table.tableNumber}</span>
+                <span className={`ml-2 px-2 py-0.5 text-xs rounded-full capitalize ${
+                  table.currentOrder.paymentStatus === 'paid' 
+                    ? 'bg-blue-200 text-blue-800' 
+                    : 'bg-red-200 text-red-800'
+                }`}>
+                  {table.currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
+                </span>
+              </div>
+              <span className="text-sm text-gray-500 font-mono">#{table.currentOrder.orderNumber?.slice(-6)}</span>
+            </div>
+            
+            <div className="p-4">
+              <div className="space-y-2 mb-4 min-h-[80px]">
+                {table.currentOrder.items.slice(0, 3).map((item, idx) => (
+                  <div key={idx} className="flex justify-between text-sm">
+                    <span className="text-gray-600 flex items-center gap-2">
+                      <span className="font-bold text-gray-900">{item.quantity}x</span> 
+                      {item.menuItem?.name}
+                    </span>
+                  </div>
+                ))}
+                {table.currentOrder.items.length > 3 && (
+                  <div className="text-xs text-gray-400 italic pl-6">
+                    + {table.currentOrder.items.length - 3} more items...
+                  </div>
+                )}
+              </div>
+              
+              <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                <span className="font-bold text-lg text-gray-900">{formatCurrency(table.currentOrder.total)}</span>
+                <span className="text-xs text-gray-400">
+                  {new Date(table.currentOrder.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                </span>
+              </div>
+            </div>
+          </div>
+        ))}
+        
+        {tables.filter(t => t.currentOrder).length === 0 && (
+          <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
+            <div className="bg-gray-50 p-4 rounded-full mb-4">
+              <Coffee className="h-8 w-8 text-gray-400" />
+            </div>
+            <p className="text-lg font-medium text-gray-900">No active orders</p>
+            <p className="text-sm">New orders will appear here automatically</p>
+          </div>
+        )}
+      </div>
+
+      {/* Order Details Modal */}
+      {selectedOrder && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row">
+            
+            {/* LEFT COLUMN: Items & Actions */}
+            <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50">
+              {/* Header */}
+              <div className="p-4 border-b border-gray-200 bg-white flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Order #{selectedOrder.orderNumber}</h2>
+                  <div className="flex items-center gap-2 text-sm text-gray-500">
+                    <span>Table {selectedOrder.table?.tableNumber || '?'}</span>
+                    <span>•</span>
+                    <span>{selectedOrder.items.length} Items</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button 
+                    onClick={() => setShowMergeModal(true)}
+                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                    title="Merge Order"
+                  >
+                    <ArrowRightLeft className="w-5 h-5" />
+                  </button>
+                  <button 
+                    onClick={handleCancelOrder}
+                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    title="Cancel Order"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </div>
+              </div>
+
+              {/* Items List */}
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {selectedOrder.items.map((item, idx) => (
+                  <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between group">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-gray-100 px-2 py-1 rounded text-sm font-bold">{item.quantity}x</span>
+                        <span className="font-medium text-gray-900">{item.menuItem?.name}</span>
+                      </div>
+                      {item.specialInstructions && (
+                        <p className="text-xs text-gray-500 mt-1 ml-9 italic">"{item.specialInstructions}"</p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-4">
+                      <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
+                      <button 
+                        onClick={() => handleRemoveItem(item._id)}
+                        className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
+                      >
+                        <XCircle className="w-5 h-5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Add Item Button */}
+                <button 
+                  onClick={() => setShowAddItem(true)}
+                  className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-green-500 hover:text-green-600 transition-colors flex items-center justify-center gap-2 font-medium"
+                >
+                  <Plus className="w-5 h-5" />
+                  Add Item
+                </button>
+              </div>
+
+              {/* Chef Notes */}
+              {selectedOrder.chefNotes && (
+                <div className="p-4 bg-amber-50 border-t border-amber-100">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
+                    <div>
+                      <p className="text-xs font-bold text-amber-700 uppercase">Chef Notes</p>
+                      <p className="text-sm text-amber-800">{selectedOrder.chefNotes}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* RIGHT COLUMN: Payment & Summary */}
+            <div className="w-full md:w-96 bg-white flex flex-col h-full">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+                <h3 className="font-bold text-gray-900">Bill Summary</h3>
+                <button onClick={() => setSelectedOrder(null)} className="p-1 hover:bg-gray-100 rounded-full">
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto p-6">
+                {/* Customer Info */}
+                <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                  <div className="flex justify-between items-start mb-2">
+                    <div>
+                      <p className="text-xs text-gray-500 uppercase font-bold">Customer</p>
+                      <p className="font-medium text-gray-900">{selectedOrder.customerName || 'Guest'}</p>
+                    </div>
+                    {selectedOrder.customerPhone && (
+                      <button 
+                        onClick={() => handleSendBill(selectedOrder._id, selectedOrder.customerPhone)}
+                        className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors"
+                        title="WhatsApp Bill"
+                      >
+                        <MessageCircle className="w-5 h-5" />
+                      </button>
+                    )}
+                  </div>
+                  {selectedOrder.customerPhone && (
+                    <p className="text-sm text-gray-500">{selectedOrder.customerPhone}</p>
+                  )}
+                </div>
+
+                {/* Bill Details */}
+                <div className="space-y-3 text-sm">
+                  <div className="flex justify-between text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(selectedOrder.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-gray-600">
+                    <span>Tax (10%)</span>
+                    <span>{formatCurrency(selectedOrder.tax)}</span>
+                  </div>
+                  {selectedOrder.discount > 0 && (
+                    <div className="flex justify-between text-green-600">
+                      <span>Discount</span>
+                      <span>-{formatCurrency(selectedOrder.discount)}</span>
+                    </div>
+                  )}
+                  {selectedOrder.coupon && (
+                    <div className="flex justify-between text-green-600 text-xs bg-green-50 px-2 py-1 rounded">
+                      <span>Coupon Applied</span>
+                      <span>{selectedOrder.coupon.code}</span>
+                    </div>
+                  )}
+                  
+                  <div className="border-t border-dashed border-gray-300 pt-3 mt-3">
+                    <div className="flex justify-between items-end">
+                      <span className="font-bold text-gray-900 text-lg">Total</span>
+                      <span className="font-bold text-gray-900 text-2xl">{formatCurrency(selectedOrder.total)}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payment Section */}
+                <div className="mt-8">
+                  <p className="text-xs font-bold text-gray-500 uppercase mb-3">Payment Method</p>
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <button 
+                      onClick={() => setPaymentMode('cash')}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
+                        paymentMode === 'cash' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Banknote className="w-6 h-6 mb-1" />
+                      <span className="text-xs font-medium">Cash</span>
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMode('card')}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
+                        paymentMode === 'card' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <CreditCard className="w-6 h-6 mb-1" />
+                      <span className="text-xs font-medium">Card</span>
+                    </button>
+                    <button 
+                      onClick={() => setPaymentMode('upi')}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
+                        paymentMode === 'upi' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                      }`}
+                    >
+                      <Smartphone className="w-6 h-6 mb-1" />
+                      <span className="text-xs font-medium">UPI</span>
+                    </button>
+                  </div>
+
+                  {paymentMode === 'cash' && (
+                    <div className="bg-gray-50 p-4 rounded-xl mb-4">
+                      <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cash Received</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
+                        <input 
+                          type="number" 
+                          value={cashReceived}
+                          onChange={(e) => setCashReceived(e.target.value)}
+                          className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                          placeholder="0.00"
+                        />
+                      </div>
+                      {cashReceived && parseFloat(cashReceived) >= selectedOrder.total && (
+                        <div className="mt-2 flex justify-between items-center text-sm">
+                          <span className="text-gray-600">Change to return:</span>
+                          <span className="font-bold text-green-600">{formatCurrency(parseFloat(cashReceived) - selectedOrder.total)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="p-4 border-t border-gray-200 bg-gray-50">
+                <button 
+                  onClick={handleCheckout}
+                  disabled={loading}
+                  className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-6 h-6" />
+                      Complete Payment
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Modal */}
+      {showMergeModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <h3 className="text-lg font-bold mb-4">Merge Order</h3>
+            <p className="text-gray-500 mb-4 text-sm">Select a table to merge the current order into.</p>
+            
+            <div className="space-y-2 max-h-60 overflow-y-auto mb-6">
+              {activeTables.length === 0 ? (
+                <p className="text-center text-gray-400 py-4">No other active tables available.</p>
+              ) : (
+                activeTables.map(table => (
+                  <button
+                    key={table._id}
+                    onClick={() => setMergeTargetId(table._id)}
+                    className={`w-full p-3 rounded-lg border flex justify-between items-center ${
+                      mergeTargetId === table._id 
+                        ? 'border-green-500 bg-green-50 text-green-700' 
+                        : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <span className="font-bold">Table {table.tableNumber}</span>
+                    <span className="text-sm">{formatCurrency(table.currentOrder.total)}</span>
+                  </button>
+                ))
+              )}
+            </div>
+
+            <div className="flex gap-3">
+              <button 
+                onClick={() => setShowMergeModal(false)}
+                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleMergeOrder}
+                disabled={!mergeTargetId || loading}
+                className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
+              >
+                Merge
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {showAddItem && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-lg w-full h-[80vh] flex flex-col">
+            <div className="p-4 border-b flex justify-between items-center">
+              <h3 className="text-lg font-bold">Add Item to Order</h3>
+              <button onClick={() => setShowAddItem(false)}><X className="w-6 h-6 text-gray-400" /></button>
+            </div>
+            
+            <div className="p-4 border-b">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
+                <input 
+                  type="text"
+                  placeholder="Search menu items..."
+                  value={itemSearch}
+                  onChange={(e) => setItemSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-2">
+              <div className="grid grid-cols-1 gap-2">
+                {filteredMenu.map(item => (
+                  <button
+                    key={item._id}
+                    onClick={() => handleAddItem(item)}
+                    className="flex justify-between items-center p-3 hover:bg-gray-50 rounded-lg border border-transparent hover:border-gray-200 transition-all text-left"
+                  >
+                    <div>
+                      <p className="font-medium text-gray-900">{item.name}</p>
+                      <p className="text-sm text-gray-500">{item.category}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="font-bold text-gray-900">{formatCurrency(item.price)}</span>
+                      <div className="w-8 h-8 rounded-full bg-green-100 text-green-600 flex items-center justify-center">
+                        <Plus className="w-5 h-5" />
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

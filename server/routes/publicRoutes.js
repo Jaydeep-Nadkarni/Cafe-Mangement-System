@@ -58,7 +58,7 @@ const getTableByNumberAndBranch = async (req, res) => {
 // @access  Public
 const createQROrder = async (req, res) => {
   try {
-    const { branchCode, tableNumber, items, customerCount, customerName, customerPhone } = req.body;
+    const { branchCode, tableNumber, items, customerCount, customerName, customerPhone, chefNotes } = req.body;
 
     console.log('Creating QR Order:', { branchCode, tableNumber, itemCount: items?.length, customerName });
 
@@ -88,8 +88,104 @@ const createQROrder = async (req, res) => {
     console.log('Table found:', table._id);
 
     if (table.currentOrder) {
-      console.error('Table already has an active order:', table.currentOrder);
-      return res.status(400).json({ message: 'Table is already occupied. Please contact staff.' });
+      console.log('Table already has an active order, adding items to existing order:', table.currentOrder);
+      
+      // Add items to existing order instead of creating a new one
+      const existingOrder = await Order.findById(table.currentOrder);
+      
+      if (!existingOrder) {
+        return res.status(404).json({ message: 'Active order not found for this table' });
+      }
+      
+      // Process new items
+      let additionalSubtotal = 0;
+      
+      for (const item of items) {
+        // Find the menu item by name or try to use the ID as a fallback
+        let menuItem;
+        
+        if (item.menuItem && typeof item.menuItem === 'string' && item.menuItem.match(/^[0-9a-fA-F]{24}$/)) {
+          // It's a MongoDB ObjectId
+          menuItem = await MenuItem.findById(item.menuItem);
+        } else if (item.name) {
+          // Search by name
+          menuItem = await MenuItem.findOne({ name: item.name });
+        } else {
+          console.error('Invalid menu item:', item);
+          return res.status(400).json({ message: `Invalid menu item: missing name or valid ObjectId` });
+        }
+
+        if (!menuItem) {
+          console.error('Menu item not found:', item.name || item.menuItem);
+          return res.status(404).json({ message: `Menu item not found: ${item.name || item.menuItem}` });
+        }
+
+        if (!menuItem.isAvailable) {
+          console.error('Menu item unavailable:', menuItem.name);
+          return res.status(400).json({ message: `Menu item is not available: ${menuItem.name}` });
+        }
+
+        const itemTotal = menuItem.price * item.quantity;
+        additionalSubtotal += itemTotal;
+
+        // Check if item already exists in order
+        const existingItemIndex = existingOrder.items.findIndex(
+          orderItem => orderItem.menuItem.toString() === menuItem._id.toString()
+        );
+
+        if (existingItemIndex !== -1) {
+          // Item already exists, increment quantity
+          existingOrder.items[existingItemIndex].quantity += item.quantity;
+          console.log('  Updated item quantity:', menuItem.name, '- New quantity:', existingOrder.items[existingItemIndex].quantity);
+        } else {
+          // Add new item to order
+          existingOrder.items.push({
+            menuItem: menuItem._id,
+            quantity: item.quantity,
+            price: menuItem.price,
+            specialInstructions: item.specialInstructions || '',
+            status: 'pending'
+          });
+          console.log('  Added new item:', item.quantity, 'x', menuItem.name);
+        }
+      }
+
+      // Recalculate totals
+      const subtotal = existingOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const taxRate = 0.10;
+      const tax = subtotal * taxRate;
+      const total = subtotal + tax;
+
+      existingOrder.subtotal = subtotal;
+      existingOrder.tax = tax;
+      existingOrder.total = total;
+      
+      // Update customer info if provided
+      if (customerName) existingOrder.customerName = customerName;
+      if (customerPhone) existingOrder.customerPhone = customerPhone;
+      if (chefNotes) existingOrder.chefNotes = (existingOrder.chefNotes || '') + '\n' + chefNotes;
+
+      const updatedOrder = await existingOrder.save();
+      console.log('Order updated:', updatedOrder._id, 'New total:', updatedOrder.total);
+
+      // Populate order details before returning
+      const populatedOrder = await Order.findById(updatedOrder._id)
+        .populate('branch')
+        .populate('table')
+        .populate('items.menuItem');
+
+      // Emit real-time event to branch manager
+      const branchRoom = `branch_${populatedOrder.branch._id}`;
+      req.io.to(branchRoom).emit('order_updated', {
+        orderId: populatedOrder._id,
+        data: populatedOrder,
+        timestamp: new Date()
+      });
+      console.log('Emitted order_updated event to room:', branchRoom);
+
+      // Return with 200 OK instead of 201 Created since it's an update
+      res.status(200).json(populatedOrder);
+      return;
     }
 
     // Process items - convert local IDs to MongoDB ObjectIds and validate
@@ -153,7 +249,8 @@ const createQROrder = async (req, res) => {
       paymentMethod: null, // Will be set when payment is made
       customerCount: customerCount || 1,
       customerName: customerName || null,
-      customerPhone: customerPhone || null
+      customerPhone: customerPhone || null,
+      chefNotes: chefNotes || ''
     });
 
     const savedOrder = await order.save();
@@ -187,9 +284,55 @@ const createQROrder = async (req, res) => {
   }
 };
 
+// @desc    Confirm online payment for an order
+// @route   POST /api/public/orders/:orderId/confirm-payment
+// @access  Public
+const confirmPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentMethod, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+
+    console.log('Confirming payment for order:', orderId);
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Update payment status
+    order.paymentStatus = 'paid';
+    order.paymentMethod = paymentMethod || 'online';
+    order.status = 'in_progress';
+    
+    // Store Razorpay payment details if available
+    if (razorpayPaymentId) {
+      order.razorpayPaymentId = razorpayPaymentId;
+      order.razorpayOrderId = razorpayOrderId;
+      order.razorpaySignature = razorpaySignature;
+    }
+
+    await order.save();
+    console.log('Payment confirmed for order:', order.orderNumber);
+
+    // Emit real-time event to branch manager
+    const branchRoom = `branch_${order.branch}`;
+    req.io.to(branchRoom).emit('payment_confirmation', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      timestamp: new Date()
+    });
+
+    res.json({ success: true, order });
+  } catch (error) {
+    console.error('Error confirming payment:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Routes
 router.get('/branch/:code', getBranchByCode);
 router.get('/table/:branchCode/:tableNumber', getTableByNumberAndBranch);
 router.post('/orders', createQROrder);
+router.post('/orders/:orderId/confirm-payment', confirmPayment);
 
 module.exports = router;

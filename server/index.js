@@ -117,8 +117,74 @@ const seedMenuItems = async () => {
   }
 };
 
+// Seed admin user and sample branch
+const seedAdminAndBranch = async () => {
+  try {
+    const Admin = require('./models/Admin');
+    const Branch = require('./models/Branch');
+
+    // Check if admin exists
+    let admin = await Admin.findOne({ email: 'admin@cafe.com' });
+    
+    if (!admin) {
+      console.log('Creating admin user...');
+      admin = await Admin.create({
+        username: 'admin',
+        email: 'admin@cafe.com',
+        password: 'admin123', // Password will be hashed by the model
+        role: 'admin',
+        isActive: true
+      });
+      console.log('Admin created successfully');
+    }
+
+    // Check if manager exists
+    let manager = await Admin.findOne({ email: 'manager@cafe.com', role: 'manager' });
+    
+    if (!manager) {
+      console.log('Creating manager user...');
+      manager = await Admin.create({
+        username: 'manager',
+        email: 'manager@cafe.com',
+        password: 'manager123', // Password will be hashed by the model
+        role: 'manager',
+        isActive: true
+      });
+      console.log('Manager created successfully');
+    }
+
+    // Check if sample branch exists
+    let branch = await Branch.findOne({ branchCode: 'MAIN' });
+
+    if (!branch) {
+      console.log('Creating sample branch...');
+      branch = await Branch.create({
+        name: 'Main Branch',
+        branchCode: 'MAIN',
+        email: 'main@cafe.com',
+        mobileNumber: '9876543210',
+        address: {
+          street: '123 Coffee Street',
+          city: 'Tech City',
+          state: 'State',
+          zipCode: '123456',
+          country: 'India'
+        },
+        manager: manager._id,
+        totalTables: 10,
+        isActive: true
+      });
+      console.log('Sample branch created successfully');
+    }
+
+  } catch (error) {
+    console.error('Error seeding admin and branch:', error.message);
+  }
+};
+
 // Run seeding after a short delay to ensure DB connection
 setTimeout(seedMenuItems, 1000);
+setTimeout(seedAdminAndBranch, 2000);
 
 // ==================== MIDDLEWARE ====================
 app.use(cors({
@@ -505,6 +571,13 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
       return res.status(400).json({ success: false, error: 'Customer phone number is required' });
     }
 
+    const formatCurrency = (val) => {
+      return new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: 'INR'
+      }).format(val);
+    };
+
     console.log(`Generating bill for Order ${orderId} to ${customerPhone}`);
 
     // 1. Generate PDF
@@ -574,8 +647,8 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
             if (itemName) {
                 doc.text(itemName, 50, y);
                 doc.text(qty.toString(), 300, y);
-                doc.text(`₹${price.toFixed(2)}`, 350, y);
-                doc.text(`₹${lineTotal.toFixed(2)}`, 450, y);
+                doc.text(formatCurrency(price), 350, y);
+                doc.text(formatCurrency(lineTotal), 450, y);
                 y += 20;
             }
         });
@@ -586,7 +659,7 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
     
     // Total
     doc.fontSize(14).font('Helvetica-Bold');
-    doc.text(`Total Amount: ₹${amount.toFixed(2)}`, 350, y);
+    doc.text(`Total Amount: ${formatCurrency(amount)}`, 350, y);
     
     // Footer
     doc.fontSize(10).font('Helvetica');

@@ -75,7 +75,7 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'completed', 'cancelled'],
+      enum: ['pending', 'in_progress', 'completed', 'cancelled', 'merged'],
       default: 'pending',
       index: true
     },
@@ -87,7 +87,19 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: [null, 'cash', 'card', 'upi', 'wallet'],
+      enum: [null, 'cash', 'card', 'upi', 'wallet', 'online'],
+      default: null
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: null
+    },
+    razorpayOrderId: {
+      type: String,
+      default: null
+    },
+    razorpaySignature: {
+      type: String,
       default: null
     },
     customerName: {
@@ -99,6 +111,10 @@ const orderSchema = new mongoose.Schema(
       default: null
     },
     notes: {
+      type: String,
+      default: ''
+    },
+    chefNotes: {
       type: String,
       default: ''
     },
@@ -144,7 +160,7 @@ orderSchema.pre('save', async function(next) {
     // Calculate totals
     if (this.items && this.items.length > 0) {
       this.subtotal = this.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      this.tax = this.tax || 0;
+      this.tax = this.subtotal * 0.10; // 10% tax
       this.discount = this.discount || 0;
       this.total = this.subtotal + this.tax - this.discount;
     }
