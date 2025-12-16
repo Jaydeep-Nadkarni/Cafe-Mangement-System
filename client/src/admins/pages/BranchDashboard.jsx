@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { useBranchSocket } from '../../hooks/useBranchSocket';
+import { useAuth } from '../../user/context/AuthContext';
+import { useBranchSocket } from '../../user/hooks/useBranchSocket';
 import { 
   LogOut, 
   Store, 
