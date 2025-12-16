@@ -87,9 +87,9 @@ export default function BranchDashboard() {
       case 'settings':
         return <Settings />;
       case 'alerts':
-        return <Alerts />;
+        return <Alerts branch={branch} />;
       case 'memos':
-        return <Memos />;
+        return <Memos branch={branch} />;
       default:
         return <Orders tables={tables} onRefresh={fetchData} />;
     }

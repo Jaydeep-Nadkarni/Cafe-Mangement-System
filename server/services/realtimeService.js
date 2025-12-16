@@ -1,4 +1,5 @@
 const Order = require('../models/Order');
+const Alert = require('../models/Alert');
 
 /**
  * Initialize Real-time Service
@@ -59,7 +60,7 @@ const initRealtime = (io) => {
  * @param {Object} change - MongoDB Change Stream event
  * @param {Server} io - Socket.io Server instance
  */
-const processOrderChange = (change, io) => {
+const processOrderChange = async (change, io) => {
   const order = change.fullDocument;
   
   // Ensure we have an order and a branch ID to route the event
@@ -75,9 +76,17 @@ const processOrderChange = (change, io) => {
     timestamp: new Date()
   };
 
+  let alertData = null;
+
   switch (change.operationType) {
     case 'insert':
       eventType = 'new_order';
+      alertData = {
+        type: 'order',
+        title: 'New Order',
+        message: `New order #${order.orderNumber || order._id.toString().slice(-4)} received`,
+        relatedId: order._id
+      };
       break;
       
     case 'update':
@@ -87,8 +96,23 @@ const processOrderChange = (change, io) => {
       if (updatedFields.status) {
         eventType = 'order_status_change';
         payload.status = updatedFields.status;
+        
+        if (['ready', 'completed', 'cancelled'].includes(updatedFields.status)) {
+           alertData = {
+            type: 'system',
+            title: 'Order Update',
+            message: `Order #${order.orderNumber || order._id.toString().slice(-4)} is ${updatedFields.status}`,
+            relatedId: order._id
+          };
+        }
       } else if (updatedFields.paymentMethod || updatedFields.amountPaid) {
         eventType = 'payment_confirmation';
+        alertData = {
+            type: 'payment',
+            title: 'Payment Received',
+            message: `Payment received for Order #${order.orderNumber || order._id.toString().slice(-4)}`,
+            relatedId: order._id
+          };
       } else if (updatedFields.table) {
         eventType = 'table_merge';
       } else {
@@ -105,6 +129,21 @@ const processOrderChange = (change, io) => {
     // Emit to specific branch room
     io.to(room).emit(eventType, payload);
     console.log(`Emitted ${eventType} to ${room}`);
+  }
+
+  // Create and emit alert if applicable
+  if (alertData) {
+    try {
+      const alert = await Alert.create({
+        branch: branchId,
+        ...alertData
+      });
+      
+      io.to(room).emit('new_alert', alert);
+      console.log(`Emitted new_alert to ${room}`);
+    } catch (error) {
+      console.error('Error creating alert:', error);
+    }
   }
 };
 

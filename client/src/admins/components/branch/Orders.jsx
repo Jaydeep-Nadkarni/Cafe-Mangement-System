@@ -155,7 +155,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         </div>
         <div className="flex gap-2">
           <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
             <span>Paid</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
@@ -171,18 +171,18 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             key={table._id} 
             onClick={() => setSelectedOrder(table.currentOrder)}
             className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${
-              table.currentOrder.paymentStatus === 'paid' ? 'border-green-200 bg-green-50/30' : 'border-red-200 bg-white'
+              table.currentOrder.paymentStatus === 'paid' ? 'border-blue-200 bg-blue-50' : 'border-red-200 bg-red-50'
             }`}
           >
             <div className={`p-4 border-b flex justify-between items-center ${
-              table.currentOrder.paymentStatus === 'paid' ? 'bg-green-50 border-green-100' : 'bg-gray-50 border-gray-100'
+              table.currentOrder.paymentStatus === 'paid' ? 'bg-blue-100 border-blue-200' : 'bg-red-100 border-red-200'
             }`}>
               <div className="flex items-center">
                 <span className="font-bold text-lg text-gray-900">Table {table.tableNumber}</span>
                 <span className={`ml-2 px-2 py-0.5 text-xs rounded-full capitalize ${
                   table.currentOrder.paymentStatus === 'paid' 
-                    ? 'bg-green-100 text-green-800' 
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-blue-200 text-blue-800' 
+                    : 'bg-red-200 text-red-800'
                 }`}>
                   {table.currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
                 </span>
