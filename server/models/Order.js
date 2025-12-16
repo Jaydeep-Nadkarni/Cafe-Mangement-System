@@ -87,7 +87,19 @@ const orderSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: [null, 'cash', 'card', 'upi', 'wallet'],
+      enum: [null, 'cash', 'card', 'upi', 'wallet', 'online'],
+      default: null
+    },
+    razorpayPaymentId: {
+      type: String,
+      default: null
+    },
+    razorpayOrderId: {
+      type: String,
+      default: null
+    },
+    razorpaySignature: {
+      type: String,
       default: null
     },
     customerName: {

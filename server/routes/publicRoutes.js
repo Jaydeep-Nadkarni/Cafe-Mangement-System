@@ -284,9 +284,55 @@ const createQROrder = async (req, res) => {
   }
 };
 
+// @desc    Confirm online payment for an order
+// @route   POST /api/public/orders/:orderId/confirm-payment
+// @access  Public
+const confirmPayment = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const { paymentMethod, razorpayPaymentId, razorpayOrderId, razorpaySignature } = req.body;
+
+    console.log('Confirming payment for order:', orderId);
+
+    const order = await Order.findById(orderId);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Update payment status
+    order.paymentStatus = 'paid';
+    order.paymentMethod = paymentMethod || 'online';
+    order.status = 'in_progress';
+    
+    // Store Razorpay payment details if available
+    if (razorpayPaymentId) {
+      order.razorpayPaymentId = razorpayPaymentId;
+      order.razorpayOrderId = razorpayOrderId;
+      order.razorpaySignature = razorpaySignature;
+    }
+
+    await order.save();
+    console.log('Payment confirmed for order:', order.orderNumber);
+
+    // Emit real-time event to branch manager
+    const branchRoom = `branch_${order.branch}`;
+    req.io.to(branchRoom).emit('payment_confirmation', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      timestamp: new Date()
+    });
+
+    res.json({ success: true, order });
+  } catch (error) {
+    console.error('Error confirming payment:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Routes
 router.get('/branch/:code', getBranchByCode);
 router.get('/table/:branchCode/:tableNumber', getTableByNumberAndBranch);
 router.post('/orders', createQROrder);
+router.post('/orders/:orderId/confirm-payment', confirmPayment);
 
 module.exports = router;

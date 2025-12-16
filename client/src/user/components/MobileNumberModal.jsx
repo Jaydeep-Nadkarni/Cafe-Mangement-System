@@ -148,6 +148,26 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
         customerPhone: phoneNumber,
         onSuccess: (paymentResponse) => {
           console.log('Payment successful:', paymentResponse);
+          
+          // Call backend to confirm payment
+          fetch(`${API_URL}/api/public/orders/${savedOrder._id}/confirm-payment`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentMethod: 'online',
+              razorpayPaymentId: paymentResponse.razorpayPaymentId,
+              razorpayOrderId: paymentResponse.razorpayOrderId,
+              razorpaySignature: paymentResponse.razorpaySignature
+            })
+          })
+          .then(res => res.json())
+          .then(data => {
+            console.log('Payment confirmed on backend:', data);
+          })
+          .catch(err => {
+            console.error('Failed to confirm payment on backend:', err);
+          });
+          
           clearCart();
           // Navigate to success page with payment data
           navigate('/payment-success', {
