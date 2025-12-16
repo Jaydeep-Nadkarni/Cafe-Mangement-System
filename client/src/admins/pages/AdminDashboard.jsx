@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { useAuth } from '../context/AuthContext';
-import QRCodeGenerator from '../components/QRCodeGenerator';
+import { useAuth } from '../../context/AuthContext';
+import QRCodeGenerator from '../../components/QRCodeGenerator';
 import { 
   LogOut, 
   Store, 

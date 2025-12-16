@@ -62,7 +62,7 @@ export default function GamesPage() {
       {/* Session Banner */}
       {currentSession && (
         <div className="mb-6 bg-blue-50 border border-blue-200 rounded-xl p-4 flex items-center gap-3 animate-fade-in-up">
-          <Clock className="h-5 w-5 text-blue-600 flex-shrink-0" />
+          <Clock className="h-5 w-5 text-blue-600 shrink-0" />
           <div className="flex-1">
             <p className="text-sm font-medium text-blue-900">
               🎯 {getSessionDisplayString()}
