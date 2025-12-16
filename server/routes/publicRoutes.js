@@ -336,13 +336,24 @@ const getPublicMenu = async (req, res) => {
   try {
     const { branchCode } = req.query;
     
-    // Get menu items - if branchCode provided, filter by branch
+    // Get menu items - filter by availability
     let query = { isAvailable: true };
     
+    // If branchCode is provided, filter by that branch OR items with no branch assigned (global items)
     if (branchCode) {
       const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
       if (branch) {
-        query.branch = branch._id;
+        query.$or = [
+          { branch: branch._id },
+          { branch: null },
+          { branch: { $exists: false } }
+        ];
+      } else {
+        // If branch not found, still show global items
+        query.$or = [
+          { branch: null },
+          { branch: { $exists: false } }
+        ];
       }
     }
 
