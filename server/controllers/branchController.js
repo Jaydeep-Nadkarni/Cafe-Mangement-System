@@ -4,7 +4,17 @@ const MenuItem = require('../models/MenuItem');
 const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
-const { getBranchStats } = require('../services/analyticsService');
+const { 
+  getBranchStats,
+  getRevenueByPaymentMethod,
+  getTableOccupancy,
+  getMenuItemVelocity,
+  getPaymentReliability,
+  getPeakDetection,
+  getRealTimeStats,
+  getHourlyRevenuePattern,
+  getDailyRevenuePattern
+} = require('../services/analyticsService');
 
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
@@ -551,6 +561,117 @@ const deleteMemo = async (req, res) => {
   }
 };
 
+// ==================== ADVANCED ANALYTICS ENDPOINTS ====================
+
+// @desc    Get revenue breakdown by payment method
+// @route   GET /api/branch/analytics/revenue-by-payment?range=today
+// @access  Manager
+const getRevenueByPayment = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getRevenueByPaymentMethod(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get table occupancy heatmap
+// @route   GET /api/branch/analytics/table-heatmap?range=today
+// @access  Manager
+const getTableHeatmap = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getTableOccupancy(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get menu item velocity (sales rate)
+// @route   GET /api/branch/analytics/item-velocity?range=today
+// @access  Manager
+const getItemVelocity = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getMenuItemVelocity(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get payment success/failure statistics
+// @route   GET /api/branch/analytics/payment-stats?range=7d
+// @access  Manager
+const getPaymentStats = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const data = await getPaymentReliability(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get peak hours detection
+// @route   GET /api/branch/analytics/peak-hours?range=7d
+// @access  Manager
+const getPeakHours = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const data = await getPeakDetection(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get real-time dashboard stats
+// @route   GET /api/branch/analytics/realtime?range=1h
+// @access  Manager
+const getRealTimeData = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '1h';
+    
+    const data = await getRealTimeStats(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get revenue pattern (hourly or daily)
+// @route   GET /api/branch/analytics/revenue-pattern?range=today&type=hourly
+// @access  Manager
+const getRevenuePattern = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    const type = req.query.type || 'hourly';
+    
+    const data = type === 'hourly' 
+      ? await getHourlyRevenuePattern(branch._id, timeRange)
+      : await getDailyRevenuePattern(branch._id, timeRange);
+    
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -571,5 +692,12 @@ module.exports = {
   getMemos,
   createMemo,
   updateMemo,
-  deleteMemo
+  deleteMemo,
+  getRevenueByPayment,
+  getTableHeatmap,
+  getItemVelocity,
+  getPaymentStats,
+  getPeakHours,
+  getRealTimeData,
+  getRevenuePattern
 };

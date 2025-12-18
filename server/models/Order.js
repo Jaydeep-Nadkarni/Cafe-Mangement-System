@@ -173,8 +173,13 @@ orderSchema.pre('save', async function(next) {
 
 // Index for frequently queried fields
 orderSchema.index({ branch: 1, status: 1 });
+orderSchema.index({ branch: 1, createdAt: -1 });
+orderSchema.index({ branch: 1, paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ branch: 1, paymentMethod: 1 });
 orderSchema.index({ table: 1, status: 1 });
+orderSchema.index({ table: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ customerPhone: 1, branch: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

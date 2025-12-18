@@ -21,14 +21,29 @@ const {
   getMemos,
   createMemo,
   updateMemo,
-  deleteMemo
+  deleteMemo,
+  getRevenueByPayment,
+  getTableHeatmap,
+  getItemVelocity,
+  getPaymentStats,
+  getPeakHours,
+  getRealTimeData,
+  getRevenuePattern
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
 router.use(protect);
 router.use(requireBranch);
 
+// Analytics routes
 router.get('/analytics', getAnalytics);
+router.get('/analytics/revenue-by-payment', getRevenueByPayment);
+router.get('/analytics/table-heatmap', getTableHeatmap);
+router.get('/analytics/item-velocity', getItemVelocity);
+router.get('/analytics/payment-stats', getPaymentStats);
+router.get('/analytics/peak-hours', getPeakHours);
+router.get('/analytics/realtime', getRealTimeData);
+router.get('/analytics/revenue-pattern', getRevenuePattern);
 
 // Alerts
 router.get('/alerts', getAlerts);
