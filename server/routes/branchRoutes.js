@@ -28,7 +28,8 @@ const {
   getPaymentStats,
   getPeakHours,
   getRealTimeData,
-  getRevenuePattern
+  getRevenuePattern,
+  getAIData
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -44,6 +45,7 @@ router.get('/analytics/payment-stats', getPaymentStats);
 router.get('/analytics/peak-hours', getPeakHours);
 router.get('/analytics/realtime', getRealTimeData);
 router.get('/analytics/revenue-pattern', getRevenuePattern);
+router.get('/analytics/ai-data', getAIData);
 
 // Alerts
 router.get('/alerts', getAlerts);

@@ -13,7 +13,8 @@ const {
   getPeakDetection,
   getRealTimeStats,
   getHourlyRevenuePattern,
-  getDailyRevenuePattern
+  getDailyRevenuePattern,
+  getAIInsights
 } = require('../services/analyticsService');
 const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
 
@@ -693,6 +694,22 @@ const getRevenuePattern = async (req, res) => {
   }
 };
 
+// @desc    Get AI insights for the branch
+// @route   GET /api/branch/analytics/ai-data?range=7d
+// @access  Manager
+const getAIData = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const aiInsights = await getAIInsights(branch._id, timeRange);
+    
+    res.json(aiInsights);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -720,5 +737,6 @@ module.exports = {
   getPaymentStats,
   getPeakHours,
   getRealTimeData,
-  getRevenuePattern
+  getRevenuePattern,
+  getAIData
 };

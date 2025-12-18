@@ -98,5 +98,8 @@ const gameSessionSchema = new mongoose.Schema(
 gameSessionSchema.index({ gameType: 1, sessionDate: -1 });
 gameSessionSchema.index({ status: 1, createdAt: -1 });
 gameSessionSchema.index({ branch: 1, sessionDate: -1 });
+gameSessionSchema.index({ branch: 1, sessionDate: -1, score: -1 }); // Branch engagement metrics
+gameSessionSchema.index({ gameType: 1, branch: 1, sessionDate: -1 }); // Game-specific analysis
+gameSessionSchema.index({ status: 1, completedAt: -1 }); // Completion analysis
 
 module.exports = mongoose.model('GameSession', gameSessionSchema);
