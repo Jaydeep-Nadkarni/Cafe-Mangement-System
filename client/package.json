@@ -26,12 +26,16 @@
     "d3-hierarchy": "^3.1.2",
     "d3-scale": "^4.0.2",
     "html2canvas": "^1.4.1",
+    "html2pdf.js": "^0.12.1",
     "lucide-react": "^0.561.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-is": "^19.2.3",
+    "react-markdown": "^10.1.0",
     "react-router-dom": "^6.20.0",
     "recharts": "^3.6.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1",
     "socket.io-client": "^4.8.1"
   },
   "scripts": {

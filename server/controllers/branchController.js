@@ -16,7 +16,7 @@ const {
   getDailyRevenuePattern,
   getAIInsights
 } = require('../services/analyticsService');
-const { getAIAnalysis, clearCache, getCacheStats } = require('../services/aiService');
+const { getAIAnalysis: getAIAnalysisFromService, clearCache, getCacheStats } = require('../services/aiService');
 const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
 
 /**
@@ -725,7 +725,7 @@ const getAIAnalysis = async (req, res) => {
       await clearCache(branch._id, timeRange);
     }
     
-    const analysis = await getAIAnalysis(branch._id, branch.name, timeRange);
+    const analysis = await getAIAnalysisFromService(branch._id, branch.name, timeRange);
     
     res.json({
       success: true,
