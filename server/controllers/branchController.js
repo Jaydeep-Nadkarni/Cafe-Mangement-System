@@ -285,21 +285,53 @@ const updateTableStatus = async (req, res) => {
     const { status } = req.body;
     const branch = await getManagerBranch(req.user._id);
 
+    // Validate status is one of the allowed values
+    const validStatuses = ['available', 'occupied', 'reserved', 'maintenance', 'paid'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+      });
+    }
+
     const table = await Table.findOne({ _id: id, branch: branch._id });
     if (!table) {
       return res.status(404).json({ message: 'Table not found' });
     }
 
-    // If manually setting to available, ensure no active order
+    const previousStatus = table.status;
+
+    // If manually setting to available, clear any active order reference
     if (status === 'available' && table.currentOrder) {
-      // Optional: Could force close order here, but safer to require order closure first
-      // For now, we'll just clear the reference if the user forces it
       table.currentOrder = null;
     }
 
     table.status = status;
-    await table.save();
-    res.json(table);
+    const updatedTable = await table.save();
+
+    // Populate order details for response
+    await updatedTable.populate({
+      path: 'currentOrder',
+      select: 'orderNumber status total items',
+      populate: {
+        path: 'items.menuItem',
+        select: 'name'
+      }
+    });
+
+    console.log(`Table ${table.tableNumber} status updated: ${previousStatus} → ${status}`);
+
+    // Emit real-time update via Socket.IO if available
+    if (req.io) {
+      req.io.to(`branch-${branch._id}`).emit('tableStatusUpdated', {
+        tableId: updatedTable._id,
+        tableNumber: updatedTable.tableNumber,
+        previousStatus,
+        newStatus: status,
+        timestamp: new Date()
+      });
+    }
+
+    res.json(updatedTable);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
