@@ -93,9 +93,9 @@ export default function BranchDashboard() {
       case 'tables':
         return <Tables tables={tables} onRefresh={fetchData} />;
       case 'stats':
-        return <Stats />;
+        return <Stats branch={branch} />;
       case 'reports':
-        return <Reports />;
+        return <Reports branch={branch} />;
       case 'settings':
         return <Settings />;
       case 'alerts':

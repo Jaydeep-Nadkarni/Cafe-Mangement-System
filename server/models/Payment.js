@@ -90,4 +90,11 @@ paymentSchema.index({ transactionId: 1 });
 paymentSchema.index({ status: 1, createdAt: -1 });
 paymentSchema.index({ branch: 1, createdAt: -1 });
 
+// Analytics optimization indexes
+paymentSchema.index({ branch: 1, status: 1, createdAt: -1 }); // Payment reliability
+paymentSchema.index({ branch: 1, paymentMethod: 1, createdAt: -1 }); // Payment method analysis
+paymentSchema.index({ branch: 1, status: 1, amount: 1 }); // Revenue by status
+paymentSchema.index({ branch: 1, completedAt: -1 }); // Successful payments timeline
+paymentSchema.index({ paymentMethod: 1, status: 1, createdAt: -1 }); // Method reliability
+
 module.exports = mongoose.model('Payment', paymentSchema);
