@@ -15,6 +15,27 @@ const {
   getHourlyRevenuePattern,
   getDailyRevenuePattern
 } = require('../services/analyticsService');
+const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
+
+/**
+ * REAL-TIME BROADCASTING USAGE:
+ * 
+ * The realtimeService now provides helper functions for manual event emission:
+ * 
+ * 1. emitToBranch(branchId, eventType, payload)
+ *    - Emit custom events to a branch room
+ *    - Example: emitToBranch(branchId, 'inventory_updated', { items: updatedItems })
+ * 
+ * 2. triggerStatsUpdate(branchId)
+ *    - Force immediate stats update for a branch
+ *    - Use after critical operations that affect metrics
+ * 
+ * Automatic events handled by Change Streams:
+ * - new_order, order_status_change, payment_confirmation (Order changes)
+ * - table_occupancy_change, table_added, table_removed (Table changes)
+ * - stats_update (Periodic, every 7 seconds)
+ * - critical_metric_update (Instant for critical events)
+ */
 
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
