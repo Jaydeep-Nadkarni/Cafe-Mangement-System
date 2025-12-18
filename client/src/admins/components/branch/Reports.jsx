@@ -323,7 +323,7 @@ export default function Reports({ branch }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6">
+    <div className="h-full overflow-y-auto p-6">
       {/* Header */}
       <div className="mb-6 flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
         <div>
@@ -334,7 +334,7 @@ export default function Reports({ branch }) {
           <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           
           {/* Granularity Toggle */}
-          <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-lg p-1">
+          <div className="flex items-center gap-2 border border-gray-300 rounded-lg p-1">
             {['daily', 'weekly', 'monthly'].map(g => (
               <button
                 key={g}
@@ -672,7 +672,7 @@ export default function Reports({ branch }) {
 function Section({ title, icon, children }) {
   return (
     <div className="mb-8">
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-300">
         <div className="text-orange-600">{icon}</div>
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
       </div>
@@ -684,7 +684,7 @@ function Section({ title, icon, children }) {
 // Chart Card Component
 function ChartCard({ title, children, className = '' }) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm p-4 border border-gray-200 ${className}`}>
+    <div className={`rounded-lg p-4 border border-gray-300 ${className}`}>
       {title && <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>}
       {children}
     </div>
@@ -694,7 +694,7 @@ function ChartCard({ title, children, className = '' }) {
 // Metric Card Component
 function MetricCard({ label, value, icon, status, valueClassName = '' }) {
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+    <div className="rounded-lg p-4 border border-gray-300">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
@@ -712,27 +712,27 @@ function ScoreCard({ label, score, icon, description, reverse = false }) {
   const getColor = () => {
     if (reverse) {
       // For risk index, lower is better
-      if (numericScore >= 70) return 'text-red-600 bg-red-50';
-      if (numericScore >= 40) return 'text-yellow-600 bg-yellow-50';
-      return 'text-green-600 bg-green-50';
+      if (numericScore >= 70) return 'text-red-600';
+      if (numericScore >= 40) return 'text-yellow-600';
+      return 'text-green-600';
     } else {
       // For other scores, higher is better
-      if (numericScore >= 70) return 'text-green-600 bg-green-50';
-      if (numericScore >= 40) return 'text-yellow-600 bg-yellow-50';
-      return 'text-red-600 bg-red-50';
+      if (numericScore >= 70) return 'text-green-600';
+      if (numericScore >= 40) return 'text-yellow-600';
+      return 'text-red-600';
     }
   };
 
   const colorClass = getColor();
 
   return (
-    <div className={`rounded-lg shadow-sm p-6 border ${colorClass.split(' ')[1].replace('bg-', 'border-')}`}>
+    <div className={`rounded-lg p-6 border border-gray-300`}>
       <div className="flex items-center justify-between mb-3">
-        <div className={`p-3 rounded-lg ${colorClass.split(' ')[1]}`}>
+        <div className={`p-3 rounded-lg bg-gray-100`}>
           {icon}
         </div>
         <div className="text-right">
-          <p className={`text-3xl font-bold ${colorClass.split(' ')[0]}`}>{score}</p>
+          <p className={`text-3xl font-bold ${colorClass}`}>{score}</p>
           <p className="text-xs text-gray-500 mt-1">/ 100</p>
         </div>
       </div>

@@ -168,7 +168,7 @@ export default function Stats({ branch }) {
   }
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50 p-6">
+    <div className="h-full overflow-y-auto p-6">
       {/* Header with Time Range Selector */}
       <div className="mb-6 flex justify-between items-center">
         <div>
@@ -514,7 +514,7 @@ export default function Stats({ branch }) {
 function Section({ title, icon, children }) {
   return (
     <div className="mb-8">
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-200">
+      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-300">
         <div className="text-orange-600">{icon}</div>
         <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
       </div>
@@ -526,7 +526,7 @@ function Section({ title, icon, children }) {
 // KPI Card Component
 function KPICard({ label, value, trend, icon, realtime, valueClassName = '' }) {
   return (
-    <div className="bg-white rounded-lg shadow-sm p-4 border border-gray-200">
+    <div className="rounded-lg p-4 border border-gray-300">
       <div className="flex items-start justify-between">
         <div className="flex-1">
           <div className="flex items-center gap-2 mb-1">
@@ -554,7 +554,7 @@ function KPICard({ label, value, trend, icon, realtime, valueClassName = '' }) {
 // Chart Card Component
 function ChartCard({ title, children, className = '' }) {
   return (
-    <div className={`bg-white rounded-lg shadow-sm p-4 border border-gray-200 ${className}`}>
+    <div className={`rounded-lg p-4 border border-gray-300 ${className}`}>
       {title && <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>}
       {children}
     </div>
