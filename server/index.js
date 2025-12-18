@@ -249,7 +249,6 @@ const seedMenuItems = async () => {
 const seedAdminAndBranch = async () => {
   try {
     const Admin = require('./models/Admin');
-    const Branch = require('./models/Branch');
 
     // Check if admin exists
     let admin = await Admin.findOne({ email: 'admin@cafe.com' });
@@ -281,32 +280,8 @@ const seedAdminAndBranch = async () => {
       console.log('Manager created successfully');
     }
 
-    // Check if sample branch exists
-    let branch = await Branch.findOne({ branchCode: 'MAIN' });
-
-    if (!branch) {
-      console.log('Creating sample branch...');
-      branch = await Branch.create({
-        name: 'Main Branch',
-        branchCode: 'MAIN',
-        email: 'main@cafe.com',
-        mobileNumber: '9876543210',
-        address: {
-          street: '123 Coffee Street',
-          city: 'Tech City',
-          state: 'State',
-          zipCode: '123456',
-          country: 'India'
-        },
-        manager: manager._id,
-        totalTables: 10,
-        isActive: true
-      });
-      console.log('Sample branch created successfully');
-    }
-
   } catch (error) {
-    console.error('Error seeding admin and branch:', error.message);
+    console.error('Error seeding admin and manager:', error.message);
   }
 };
 

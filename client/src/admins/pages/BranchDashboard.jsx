@@ -9,6 +9,7 @@ import Orders from '../components/branch/Orders';
 import Inventory from '../components/branch/Inventory';
 import Tables from '../components/branch/Tables';
 import Stats from '../components/branch/Stats';
+import AIAnalysis from '../components/branch/AIAnalysis';
 import Reports from '../components/branch/Reports';
 import Settings from '../components/branch/Settings';
 import Alerts from '../components/branch/Alerts';
@@ -93,9 +94,11 @@ export default function BranchDashboard() {
       case 'tables':
         return <Tables tables={tables} onRefresh={fetchData} />;
       case 'stats':
-        return <Stats />;
+        return <Stats branch={branch} />;
+      case 'ai-analysis':
+        return <AIAnalysis branch={branch} />;
       case 'reports':
-        return <Reports />;
+        return <Reports branch={branch} />;
       case 'settings':
         return <Settings />;
       case 'alerts':
@@ -108,7 +111,7 @@ export default function BranchDashboard() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex">
+    <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
       <Sidebar 
         activeTab={activeTab} 

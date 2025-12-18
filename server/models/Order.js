@@ -173,8 +173,22 @@ orderSchema.pre('save', async function(next) {
 
 // Index for frequently queried fields
 orderSchema.index({ branch: 1, status: 1 });
+orderSchema.index({ branch: 1, createdAt: -1 });
+orderSchema.index({ branch: 1, paymentStatus: 1, createdAt: -1 });
+orderSchema.index({ branch: 1, paymentMethod: 1 });
 orderSchema.index({ table: 1, status: 1 });
+orderSchema.index({ table: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ paymentStatus: 1 });
+orderSchema.index({ customerPhone: 1, branch: 1 });
+
+// Analytics optimization indexes
+orderSchema.index({ branch: 1, createdAt: -1, status: 1 }); // Revenue pattern queries
+orderSchema.index({ branch: 1, createdAt: -1, paymentMethod: 1 }); // Payment breakdown
+orderSchema.index({ branch: 1, createdAt: -1, paymentStatus: 1, total: 1 }); // Revenue calculations
+orderSchema.index({ table: 1, createdAt: -1, status: 1 }); // Table occupancy
+orderSchema.index({ 'items.menuItem': 1, createdAt: -1 }); // Menu velocity
+orderSchema.index({ branch: 1, completedAt: -1 }); // Completed orders analysis
+orderSchema.index({ branch: 1, paidAt: -1 }); // Payment timing analysis
 
 module.exports = mongoose.model('Order', orderSchema);

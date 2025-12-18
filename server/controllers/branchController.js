@@ -4,7 +4,40 @@ const MenuItem = require('../models/MenuItem');
 const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
-const { getBranchStats } = require('../services/analyticsService');
+const { 
+  getBranchStats,
+  getRevenueByPaymentMethod,
+  getTableOccupancy,
+  getMenuItemVelocity,
+  getPaymentReliability,
+  getPeakDetection,
+  getRealTimeStats,
+  getHourlyRevenuePattern,
+  getDailyRevenuePattern,
+  getAIInsights
+} = require('../services/analyticsService');
+const { getAIAnalysis: getAIAnalysisFromService, clearCache, getCacheStats } = require('../services/aiService');
+const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
+
+/**
+ * REAL-TIME BROADCASTING USAGE:
+ * 
+ * The realtimeService now provides helper functions for manual event emission:
+ * 
+ * 1. emitToBranch(branchId, eventType, payload)
+ *    - Emit custom events to a branch room
+ *    - Example: emitToBranch(branchId, 'inventory_updated', { items: updatedItems })
+ * 
+ * 2. triggerStatsUpdate(branchId)
+ *    - Force immediate stats update for a branch
+ *    - Use after critical operations that affect metrics
+ * 
+ * Automatic events handled by Change Streams:
+ * - new_order, order_status_change, payment_confirmation (Order changes)
+ * - table_occupancy_change, table_added, table_removed (Table changes)
+ * - stats_update (Periodic, every 7 seconds)
+ * - critical_metric_update (Instant for critical events)
+ */
 
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
@@ -285,21 +318,53 @@ const updateTableStatus = async (req, res) => {
     const { status } = req.body;
     const branch = await getManagerBranch(req.user._id);
 
+    // Validate status is one of the allowed values
+    const validStatuses = ['available', 'occupied', 'reserved', 'maintenance', 'paid'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ 
+        message: `Invalid status. Must be one of: ${validStatuses.join(', ')}` 
+      });
+    }
+
     const table = await Table.findOne({ _id: id, branch: branch._id });
     if (!table) {
       return res.status(404).json({ message: 'Table not found' });
     }
 
-    // If manually setting to available, ensure no active order
+    const previousStatus = table.status;
+
+    // If manually setting to available, clear any active order reference
     if (status === 'available' && table.currentOrder) {
-      // Optional: Could force close order here, but safer to require order closure first
-      // For now, we'll just clear the reference if the user forces it
       table.currentOrder = null;
     }
 
     table.status = status;
-    await table.save();
-    res.json(table);
+    const updatedTable = await table.save();
+
+    // Populate order details for response
+    await updatedTable.populate({
+      path: 'currentOrder',
+      select: 'orderNumber status total items',
+      populate: {
+        path: 'items.menuItem',
+        select: 'name'
+      }
+    });
+
+    console.log(`Table ${table.tableNumber} status updated: ${previousStatus} → ${status}`);
+
+    // Emit real-time update via Socket.IO if available
+    if (req.io) {
+      req.io.to(`branch-${branch._id}`).emit('tableStatusUpdated', {
+        tableId: updatedTable._id,
+        tableNumber: updatedTable.tableNumber,
+        previousStatus,
+        newStatus: status,
+        timestamp: new Date()
+      });
+    }
+
+    res.json(updatedTable);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -519,6 +584,216 @@ const deleteMemo = async (req, res) => {
   }
 };
 
+// ==================== ADVANCED ANALYTICS ENDPOINTS ====================
+
+// @desc    Get revenue breakdown by payment method
+// @route   GET /api/branch/analytics/revenue-by-payment?range=today
+// @access  Manager
+const getRevenueByPayment = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getRevenueByPaymentMethod(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get table occupancy heatmap
+// @route   GET /api/branch/analytics/table-heatmap?range=today
+// @access  Manager
+const getTableHeatmap = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getTableOccupancy(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get menu item velocity (sales rate)
+// @route   GET /api/branch/analytics/item-velocity?range=today
+// @access  Manager
+const getItemVelocity = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const data = await getMenuItemVelocity(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get payment success/failure statistics
+// @route   GET /api/branch/analytics/payment-stats?range=7d
+// @access  Manager
+const getPaymentStats = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const data = await getPaymentReliability(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get peak hours detection
+// @route   GET /api/branch/analytics/peak-hours?range=7d
+// @access  Manager
+const getPeakHours = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const data = await getPeakDetection(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get real-time dashboard stats
+// @route   GET /api/branch/analytics/realtime?range=1h
+// @access  Manager
+const getRealTimeData = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '1h';
+    
+    const data = await getRealTimeStats(branch._id, timeRange);
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get revenue pattern (hourly or daily)
+// @route   GET /api/branch/analytics/revenue-pattern?range=today&type=hourly
+// @access  Manager
+const getRevenuePattern = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    const type = req.query.type || 'hourly';
+    
+    const data = type === 'hourly' 
+      ? await getHourlyRevenuePattern(branch._id, timeRange)
+      : await getDailyRevenuePattern(branch._id, timeRange);
+    
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get AI insights for the branch
+// @route   GET /api/branch/analytics/ai-data?range=7d
+// @access  Manager
+const getAIData = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    
+    const aiInsights = await getAIInsights(branch._id, timeRange);
+    
+    res.json(aiInsights);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get AI analysis with Gemini insights (10 sections)
+// @route   GET /api/branch/analytics/ai-analysis?range=7d
+// @access  Manager
+const getAIAnalysis = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    const forceRefresh = req.query.refresh === 'true';
+    
+    // Clear cache if force refresh requested
+    if (forceRefresh) {
+      await clearCache(branch._id, timeRange);
+    }
+    
+    const analysis = await getAIAnalysisFromService(branch._id, branch.name, timeRange);
+    
+    res.json({
+      success: true,
+      data: analysis,
+      branch: {
+        id: branch._id,
+        name: branch.name
+      },
+      timeRange,
+      cached: analysis.cached || false
+    });
+  } catch (error) {
+    console.error('AI Analysis Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to generate AI analysis',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// @desc    Clear AI analysis cache for branch
+// @route   DELETE /api/branch/analytics/ai-cache
+// @access  Manager
+const clearAICache = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || null;
+    
+    const deletedCount = await clearCache(branch._id, timeRange);
+    
+    res.json({
+      success: true,
+      message: `Cleared ${deletedCount} cache entries`,
+      deletedCount
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// @desc    Get AI cache statistics
+// @route   GET /api/branch/analytics/ai-cache-stats
+// @access  Manager
+const getAICacheStats = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const stats = await getCacheStats(branch._id);
+    
+    res.json({
+      success: true,
+      data: stats,
+      branch: {
+        id: branch._id,
+        name: branch.name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -539,5 +814,16 @@ module.exports = {
   getMemos,
   createMemo,
   updateMemo,
-  deleteMemo
+  deleteMemo,
+  getRevenueByPayment,
+  getTableHeatmap,
+  getItemVelocity,
+  getPaymentStats,
+  getPeakHours,
+  getRealTimeData,
+  getRevenuePattern,
+  getAIData,
+  getAIAnalysis,
+  clearAICache,
+  getAICacheStats
 };

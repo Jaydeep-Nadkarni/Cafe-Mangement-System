@@ -83,5 +83,8 @@ const couponSchema = new mongoose.Schema(
 // Index for frequently queried fields
 couponSchema.index({ code: 1 });
 couponSchema.index({ isActive: 1, validFrom: 1, validUntil: 1 });
+couponSchema.index({ applicableBranches: 1, isActive: 1, createdAt: -1 }); // Branch-specific active coupons
+couponSchema.index({ code: 1, usageCount: 1 }); // Coupon usage analysis
+couponSchema.index({ createdAt: -1 }); // Recent coupons
 
 module.exports = mongoose.model('Coupon', couponSchema);

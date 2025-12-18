@@ -225,10 +225,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       {/* Order Details Modal */}
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row">
+          <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row md:h-[90vh]">
             
             {/* LEFT COLUMN: Items & Actions */}
-            <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50">
+            <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0">
               {/* Header */}
               <div className="p-4 border-b border-gray-200 bg-white flex justify-between items-center">
                 <div>
@@ -307,8 +307,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             </div>
 
             {/* RIGHT COLUMN: Payment & Summary */}
-            <div className="w-full md:w-96 bg-white flex flex-col h-full">
-              <div className="p-4 border-b border-gray-100 flex justify-between items-center">
+            <div className="w-full md:w-96 bg-white flex flex-col md:min-h-0">
+              <div className="p-4 border-b border-gray-100 flex justify-between items-center shrink-0">
                 <h3 className="font-bold text-gray-900">Bill Summary</h3>
                 <button onClick={() => setSelectedOrder(null)} className="p-1 hover:bg-gray-100 rounded-full">
                   <X className="w-6 h-6 text-gray-400" />
@@ -427,7 +427,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               </div>
 
               {/* Footer Actions */}
-              <div className="p-4 border-t border-gray-200 bg-gray-50">
+              <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
                 <button 
                   onClick={handleCheckout}
                   disabled={loading}
