@@ -16,6 +16,7 @@ const {
   getDailyRevenuePattern,
   getAIInsights
 } = require('../services/analyticsService');
+const { getAIAnalysis, clearCache, getCacheStats } = require('../services/aiService');
 const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
 
 /**
@@ -710,6 +711,89 @@ const getAIData = async (req, res) => {
   }
 };
 
+// @desc    Get AI analysis with Gemini insights (10 sections)
+// @route   GET /api/branch/analytics/ai-analysis?range=7d
+// @access  Manager
+const getAIAnalysis = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '7d';
+    const forceRefresh = req.query.refresh === 'true';
+    
+    // Clear cache if force refresh requested
+    if (forceRefresh) {
+      await clearCache(branch._id, timeRange);
+    }
+    
+    const analysis = await getAIAnalysis(branch._id, branch.name, timeRange);
+    
+    res.json({
+      success: true,
+      data: analysis,
+      branch: {
+        id: branch._id,
+        name: branch.name
+      },
+      timeRange,
+      cached: analysis.cached || false
+    });
+  } catch (error) {
+    console.error('AI Analysis Error:', error);
+    res.status(500).json({ 
+      success: false,
+      message: error.message || 'Failed to generate AI analysis',
+      error: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
+  }
+};
+
+// @desc    Clear AI analysis cache for branch
+// @route   DELETE /api/branch/analytics/ai-cache
+// @access  Manager
+const clearAICache = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || null;
+    
+    const deletedCount = await clearCache(branch._id, timeRange);
+    
+    res.json({
+      success: true,
+      message: `Cleared ${deletedCount} cache entries`,
+      deletedCount
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
+// @desc    Get AI cache statistics
+// @route   GET /api/branch/analytics/ai-cache-stats
+// @access  Manager
+const getAICacheStats = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const stats = await getCacheStats(branch._id);
+    
+    res.json({
+      success: true,
+      data: stats,
+      branch: {
+        id: branch._id,
+        name: branch.name
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      success: false,
+      message: error.message 
+    });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -738,5 +822,8 @@ module.exports = {
   getPeakHours,
   getRealTimeData,
   getRevenuePattern,
-  getAIData
+  getAIData,
+  getAIAnalysis,
+  clearAICache,
+  getAICacheStats
 };

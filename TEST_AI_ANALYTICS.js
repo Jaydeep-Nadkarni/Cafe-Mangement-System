@@ -9,21 +9,6 @@
 // ============================================================================
 
 // Get AI insights with default 7-day range
-curl -X GET http://localhost:5000/api/branch/analytics/ai-data \
-  -H "Authorization: Bearer YOUR_MANAGER_TOKEN" \
-  -H "Content-Type: application/json"
-
-// Get AI insights for last 30 days
-curl -X GET http://localhost:5000/api/branch/analytics/ai-data?range=30d \
-  -H "Authorization: Bearer YOUR_MANAGER_TOKEN"
-
-// Get AI insights for today
-curl -X GET http://localhost:5000/api/branch/analytics/ai-data?range=today \
-  -H "Authorization: Bearer YOUR_MANAGER_TOKEN"
-
-// Get AI insights for last hour
-curl -X GET http://localhost:5000/api/branch/analytics/ai-data?range=1h \
-  -H "Authorization: Bearer YOUR_MANAGER_TOKEN"
 
 
 // ============================================================================
