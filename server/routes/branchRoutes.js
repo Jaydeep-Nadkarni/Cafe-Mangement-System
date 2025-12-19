@@ -14,6 +14,8 @@ const {
   addMenuItem,
   updateMenuItem,
   deleteMenuItem,
+  duplicateMenuItem,
+  bulkUpdateMenuItems,
   getAnalytics,
   getAlerts,
   markAlertAsRead,
@@ -71,9 +73,11 @@ router.put('/tables/:id', updateTable);
 router.delete('/tables/:id', deleteTable);
 router.put('/tables/:id/status', updateTableStatus);
 router.get('/menu', getMenu);
+router.put('/menu/bulk', bulkUpdateMenuItems);
 router.post('/menu', addMenuItem);
 router.put('/menu/:id', updateMenuItem);
 router.delete('/menu/:id', deleteMenuItem);
+router.post('/menu/:id/duplicate', duplicateMenuItem);
 router.put('/menu/:id/availability', updateItemAvailability);
 router.post('/tables/merge', mergeTables);
 
