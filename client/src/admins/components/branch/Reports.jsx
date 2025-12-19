@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
+import { useSocket } from '../../../user/context/SocketContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area, ComposedChart
@@ -31,6 +32,7 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function Reports({ branch }) {
+  const { socket, joinBranchRoom } = useSocket();
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState('30d');
   const [granularity, setGranularity] = useState('daily'); // daily, weekly, monthly
@@ -304,9 +306,12 @@ export default function Reports({ branch }) {
   useEffect(() => {
     if (!socket || !branch?._id) return;
 
+    // Join branch room to receive updates
+    joinBranchRoom(branch._id);
+
     // Listen for order completions and stats updates
     const handleOrderUpdate = () => {
-      console.log('Order update received, refreshing analytics...');
+      console.log('Order update received, refreshing reports...');
       fetchAnalytics();
     };
 
@@ -314,12 +319,16 @@ export default function Reports({ branch }) {
     socket.on('order_completed', handleOrderUpdate);
     socket.on('payment_confirmation', handleOrderUpdate);
     socket.on('critical_metric_update', handleOrderUpdate);
+    socket.on('new_order', handleOrderUpdate);
+    socket.on('order_updated', handleOrderUpdate);
 
     return () => {
       socket.off('stats_update', handleOrderUpdate);
       socket.off('order_completed', handleOrderUpdate);
       socket.off('payment_confirmation', handleOrderUpdate);
       socket.off('critical_metric_update', handleOrderUpdate);
+      socket.off('new_order', handleOrderUpdate);
+      socket.off('order_updated', handleOrderUpdate);
     };
   }, [socket, branch?._id, timeRange, granularity]);
 

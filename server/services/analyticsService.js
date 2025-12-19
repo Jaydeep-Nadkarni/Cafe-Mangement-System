@@ -667,13 +667,13 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
   const { start, end } = getTimeRange(timeRange);
 
   const [revenue, orders, tableOccupancy, activeOrders] = await Promise.all([
-    // Revenue in time range
+    // Revenue in time range (paid orders only, using paidAt)
     Order.aggregate([
       {
         $match: {
           branch: branchId,
           paymentStatus: 'paid',
-          createdAt: { $gte: start, $lte: end }
+          paidAt: { $gte: start, $lte: end }
         }
       },
       {
@@ -753,12 +753,12 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
       $match: {
         branch: branchId,
         paymentStatus: 'paid',
-        createdAt: { $gte: start, $lte: end }
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
       $group: {
-        _id: { $hour: '$createdAt' },
+        _id: { $hour: '$paidAt' },
         revenue: { $sum: '$total' },
         orders: { $sum: 1 }
       }
@@ -791,12 +791,12 @@ const getDailyRevenuePattern = async (branchId, timeRange = '30d') => {
       $match: {
         branch: branchId,
         paymentStatus: 'paid',
-        createdAt: { $gte: start, $lte: end }
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
       $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
         revenue: { $sum: '$total' },
         orders: { $sum: 1 }
       }

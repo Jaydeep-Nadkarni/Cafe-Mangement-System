@@ -120,43 +120,59 @@ export default function Stats({ branch }) {
     // Join branch room
     joinBranchRoom(branch._id);
 
-      // Listen for stats updates (throttled, every 7s)
-      socket.on('stats_update', (data) => {
-        setRealtimeStats(prev => ({ ...prev, ...data }));
-      });
+    // Listen for stats updates (throttled, every 7s)
+    socket.on('stats_update', (data) => {
+      console.log('Stats update received:', data);
+      setRealtimeStats(prev => ({ ...prev, ...data }));
+    });
 
-      // Listen for critical metrics (instant)
-      socket.on('critical_metric_update', (data) => {
-        setRealtimeStats(prev => ({ ...prev, ...data }));
-      });
+    // Listen for critical metrics (instant)
+    socket.on('critical_metric_update', (data) => {
+      console.log('Critical metric update:', data);
+      setRealtimeStats(prev => ({ ...prev, ...data }));
+    });
 
-      // Listen for order completions - refetch all analytics
-      socket.on('order_completed', () => {
-        console.log('Order completed, refreshing analytics...');
-        fetchAnalytics();
-      });
+    // Listen for order completions - refetch all analytics
+    socket.on('order_completed', () => {
+      console.log('Order completed, refreshing analytics...');
+      fetchAnalytics();
+    });
 
-      // Listen for payment confirmations - refetch all analytics
-      socket.on('payment_confirmation', () => {
-        console.log('Payment confirmed, refreshing analytics...');
-        fetchAnalytics();
-      });
+    // Listen for payment confirmations - refetch all analytics
+    socket.on('payment_confirmation', () => {
+      console.log('Payment confirmed, refreshing analytics...');
+      fetchAnalytics();
+    });
 
-      // Listen for table occupancy changes
-      socket.on('table_occupancy_change', () => {
-        // Refetch table heatmap
-        axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
-          .then(res => setTableHeatmap(res.data.heatmap || []))
-          .catch(console.error);
-      });
+    // Listen for new orders - refetch all analytics
+    socket.on('new_order', () => {
+      console.log('New order received, refreshing analytics...');
+      fetchAnalytics();
+    });
 
-      return () => {
-        socket.off('stats_update');
-        socket.off('critical_metric_update');
-        socket.off('order_completed');
-        socket.off('payment_confirmation');
-        socket.off('table_occupancy_change');
-      };
+    // Listen for order updates - refetch all analytics
+    socket.on('order_updated', () => {
+      console.log('Order updated, refreshing analytics...');
+      fetchAnalytics();
+    });
+
+    // Listen for table occupancy changes
+    socket.on('table_occupancy_change', () => {
+      // Refetch table heatmap
+      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
+        .then(res => setTableHeatmap(res.data.heatmap || []))
+        .catch(console.error);
+    });
+
+    return () => {
+      socket.off('stats_update');
+      socket.off('critical_metric_update');
+      socket.off('order_completed');
+      socket.off('payment_confirmation');
+      socket.off('new_order');
+      socket.off('order_updated');
+      socket.off('table_occupancy_change');
+    };
   }, [socket, branch, timeRange]);
 
   if (!branch) {
