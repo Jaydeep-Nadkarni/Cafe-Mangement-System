@@ -797,20 +797,22 @@ const getRevenuePattern = async (req, res) => {
     const timeRange = req.query.range || 'today';
     const type = req.query.type || 'hourly';
     
+    console.log(`[Controller] getRevenuePattern - Branch: ${branch._id}, Range: ${timeRange}, Type: ${type}`);
+    
     const data = type === 'hourly' 
       ? await getHourlyRevenuePattern(branch._id, timeRange)
       : await getDailyRevenuePattern(branch._id, timeRange);
     
-    // Transform data to have 'label' property for chart x-axis
-    const pattern = data.map(item => ({
-      ...item,
-      label: type === 'hourly' 
-        ? `${item.hour}:00`
-        : item.date
-    }));
+    // For daily data, add label property
+    const pattern = type === 'daily' 
+      ? data.map(item => ({ ...item, label: item.date }))
+      : data;  // Hourly already has label from service
+    
+    console.log(`[Controller] getRevenuePattern response pattern length: ${pattern.length}`);
     
     res.json({ pattern, type, timeRange });
   } catch (error) {
+    console.error('[Controller] getRevenuePattern error:', error);
     res.status(500).json({ message: error.message });
   }
 };

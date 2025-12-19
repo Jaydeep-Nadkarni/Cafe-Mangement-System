@@ -58,6 +58,8 @@ export default function Stats({ branch }) {
     try {
       setLoading(true);
       
+      console.log('[Stats] Fetching analytics with timeRange:', timeRange);
+      
       const [
         realtimeRes,
         revenueByPaymentRes,
@@ -76,13 +78,25 @@ export default function Stats({ branch }) {
         axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
       ]);
 
+      console.log('[Stats] Revenue Pattern Response:', revenuePatternRes.data);
+      console.log('[Stats] Peak Hours Response:', peakHoursRes.data);
+      console.log('[Stats] Realtime Stats:', realtimeRes.data);
+
       setRealtimeStats(realtimeRes.data);
       setPaymentBreakdown(revenueByPaymentRes.data.breakdown || []);
       setTableHeatmap(tableHeatmapRes.data.heatmap || []);
       setMenuVelocity(velocityRes.data.items || []);
       setPaymentStats(paymentStatsRes.data);
-      setPeakHours(peakHoursRes.data.hourlyPattern || []);
-      setRevenuePattern(revenuePatternRes.data.pattern || []);
+      
+      // Set peak hours data - filter to only show hours with activity
+      const hourlyData = peakHoursRes.data.hourlyPattern || [];
+      setPeakHours(hourlyData);
+      console.log('[Stats] Setting peakHours:', hourlyData);
+      
+      // Set revenue pattern data
+      const patternData = revenuePatternRes.data.pattern || [];
+      setRevenuePattern(patternData);
+      console.log('[Stats] Setting revenuePattern:', patternData);
 
       // Generate order distribution for box plot
       const orders = realtimeRes.data?.recentOrders || [];
@@ -241,48 +255,78 @@ export default function Stats({ branch }) {
           {/* Revenue Pattern Chart */}
           <div ref={revenueChartRef}>
             <ChartCard title="Revenue Pattern">
-              <ResponsiveContainer width="100%" height={250}>
-                <AreaChart data={revenuePattern}>
-                  <defs>
-                    <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#757575" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#757575" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                  <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="#666" />
-                  <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                    formatter={(value) => [`₹${value}`, 'Revenue']}
-                  />
-                  <Area type="monotone" dataKey="revenue" stroke="#424242" fillOpacity={1} fill="url(#colorRevenue)" />
-                </AreaChart>
-              </ResponsiveContainer>
+              {revenuePattern && revenuePattern.length > 0 ? (
+                <ResponsiveContainer width="100%" height={250}>
+                  <AreaChart data={revenuePattern}>
+                    <defs>
+                      <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="#757575" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="#757575" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                    <XAxis 
+                      dataKey="label" 
+                      tick={{ fontSize: 10 }} 
+                      stroke="#666"
+                      interval={2}
+                    />
+                    <YAxis 
+                      tick={{ fontSize: 11 }} 
+                      stroke="#666" 
+                      domain={[0, (dataMax) => Math.max(dataMax, 100)]}
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                      formatter={(value) => [`₹${value}`, 'Revenue']}
+                    />
+                    <Area type="monotone" dataKey="revenue" stroke="#424242" fillOpacity={1} fill="url(#colorRevenue)" />
+                  </AreaChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[250px] flex items-center justify-center text-gray-400">
+                  No revenue data for this period
+                </div>
+              )}
             </ChartCard>
           </div>
         </div>
 
         {/* Peak Hours Chart */}
         <ChartCard title="Peak Hours Analysis" className="mt-6">
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={peakHours}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-              <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#666" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                formatter={(value, name) => {
-                  if (name === 'orders') return [value, 'Orders'];
-                  if (name === 'revenue') return [`₹${value}`, 'Revenue'];
-                  return [value, name];
-                }}
-              />
-              <Legend />
-              <Bar dataKey="orders" fill="#9e9e9e" name="Orders" />
-              <Bar dataKey="revenue" fill="#616161" name="Revenue" />
-            </BarChart>
-          </ResponsiveContainer>
+          {peakHours && peakHours.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={peakHours}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis 
+                  dataKey="hour" 
+                  tick={{ fontSize: 10 }} 
+                  stroke="#666"
+                  interval={2}
+                />
+                <YAxis 
+                  tick={{ fontSize: 11 }} 
+                  stroke="#666" 
+                  domain={[0, (dataMax) => Math.max(dataMax, 10)]}
+                />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                  formatter={(value, name) => {
+                    if (name === 'orders') return [value, 'Orders'];
+                    if (name === 'revenue') return [`₹${value}`, 'Revenue'];
+                    return [value, name];
+                  }}
+                />
+                <Legend />
+                <Bar dataKey="orders" fill="#9e9e9e" name="Orders" />
+                <Bar dataKey="revenue" fill="#616161" name="Revenue" />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No order data for this period
+            </div>
+          )}
         </ChartCard>
       </Section>
 
@@ -348,34 +392,46 @@ export default function Stats({ branch }) {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Menu Velocity Chart */}
           <ChartCard title="Item Velocity (orders/hour)">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={menuVelocity.slice(0, 10)} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="#666" />
-                <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} stroke="#666" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                  formatter={(value) => [value.toFixed(2), 'Velocity']}
-                />
-                <Bar dataKey="velocity" fill="#757575" />
-              </BarChart>
-            </ResponsiveContainer>
+            {menuVelocity.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={menuVelocity.slice(0, 10)} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis type="number" tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
+                  <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} stroke="#666" />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                    formatter={(value) => [value.toFixed(2), 'Velocity']}
+                  />
+                  <Bar dataKey="velocity" fill="#757575" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-400">
+                No menu item data for this period
+              </div>
+            )}
           </ChartCard>
 
           {/* Top Items by Revenue */}
           <ChartCard title="Revenue by Item (Top 10)">
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={menuVelocity.slice(0, 10)}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis dataKey="name" tick={{ fontSize: 9, angle: -45 }} height={80} stroke="#666" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                  formatter={(value) => [`₹${value}`, 'Revenue']}
-                />
-                <Bar dataKey="revenue" fill="#616161" />
-              </BarChart>
-            </ResponsiveContainer>
+            {menuVelocity.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={menuVelocity.slice(0, 10)}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                  <XAxis dataKey="name" tick={{ fontSize: 9, angle: -45 }} height={80} stroke="#666" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                    formatter={(value) => [`₹${value}`, 'Revenue']}
+                  />
+                  <Bar dataKey="revenue" fill="#616161" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[300px] flex items-center justify-center text-gray-400">
+                No revenue data for this period
+              </div>
+            )}
           </ChartCard>
         </div>
       </Section>
@@ -405,31 +461,37 @@ export default function Stats({ branch }) {
 
           {/* Payment Method Breakdown */}
           <ChartCard title="Revenue by Payment Method" className="lg:col-span-2">
-            <ResponsiveContainer width="100%" height={280}>
-              <PieChart>
-                <Pie
-                  data={paymentBreakdown}
-                  dataKey="revenue"
-                  nameKey="method"
-                  cx="50%"
-                  cy="50%"
-                  outerRadius={100}
-                  label={(entry) => `${entry.method}: ₹${entry.revenue}`}
-                >
-                  {paymentBreakdown.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                  formatter={(value, name) => {
-                    if (name === 'revenue') return [`₹${value}`, 'Revenue'];
-                    return [value, name];
-                  }}
-                />
-                <Legend />
-              </PieChart>
-            </ResponsiveContainer>
+            {paymentBreakdown.length > 0 ? (
+              <ResponsiveContainer width="100%" height={280}>
+                <PieChart>
+                  <Pie
+                    data={paymentBreakdown}
+                    dataKey="revenue"
+                    nameKey="method"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    label={(entry) => `${entry.method}: ₹${entry.revenue}`}
+                  >
+                    {paymentBreakdown.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                    formatter={(value, name) => {
+                      if (name === 'revenue') return [`₹${value}`, 'Revenue'];
+                      return [value, name];
+                    }}
+                  />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="h-[280px] flex items-center justify-center text-gray-400">
+                No payment data for this period
+              </div>
+            )}
           </ChartCard>
         </div>
 
@@ -491,33 +553,39 @@ export default function Stats({ branch }) {
 
         {/* Peak Hours Indicator */}
         <ChartCard title="Hourly Activity Intensity">
-          <ResponsiveContainer width="100%" height={250}>
-            <LineChart data={peakHours}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-              <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#666" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-              <Tooltip 
-                contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-              />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="orders" 
-                stroke="#616161" 
-                strokeWidth={2}
-                dot={{ fill: '#616161', r: 4 }}
-                name="Order Count"
-              />
-              <Line 
-                type="monotone" 
-                dataKey="avgWaitTime" 
-                stroke="#9e9e9e" 
-                strokeWidth={2}
-                dot={{ fill: '#9e9e9e', r: 4 }}
-                name="Avg Wait (min)"
-              />
-            </LineChart>
-          </ResponsiveContainer>
+          {peakHours.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <LineChart data={peakHours}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#666" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
+                <Tooltip 
+                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
+                />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="orders" 
+                  stroke="#616161" 
+                  strokeWidth={2}
+                  dot={{ fill: '#616161', r: 4 }}
+                  name="Order Count"
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="avgWaitTime" 
+                  stroke="#9e9e9e" 
+                  strokeWidth={2}
+                  dot={{ fill: '#9e9e9e', r: 4 }}
+                  name="Avg Wait (min)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[250px] flex items-center justify-center text-gray-400">
+              No activity data for this period
+            </div>
+          )}
         </ChartCard>
       </Section>
 
