@@ -300,6 +300,29 @@ export default function Reports({ branch }) {
     fetchAnalytics();
   }, [branch, timeRange, granularity]);
 
+  // Socket.IO real-time updates for Reports
+  useEffect(() => {
+    if (!socket || !branch?._id) return;
+
+    // Listen for order completions and stats updates
+    const handleOrderUpdate = () => {
+      console.log('Order update received, refreshing analytics...');
+      fetchAnalytics();
+    };
+
+    socket.on('stats_update', handleOrderUpdate);
+    socket.on('order_completed', handleOrderUpdate);
+    socket.on('payment_confirmation', handleOrderUpdate);
+    socket.on('critical_metric_update', handleOrderUpdate);
+
+    return () => {
+      socket.off('stats_update', handleOrderUpdate);
+      socket.off('order_completed', handleOrderUpdate);
+      socket.off('payment_confirmation', handleOrderUpdate);
+      socket.off('critical_metric_update', handleOrderUpdate);
+    };
+  }, [socket, branch?._id, timeRange, granularity]);
+
   if (!branch) {
     return (
       <div className="h-full flex items-center justify-center">

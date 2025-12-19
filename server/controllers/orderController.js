@@ -193,6 +193,18 @@ const checkoutOrder = async (req, res) => {
       await table.save();
     }
 
+    // Emit real-time event to branch manager for order completion
+    if (req.io && order.branch) {
+      const branchRoom = `branch_${order.branch}`;
+      req.io.to(branchRoom).emit('order_completed', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        timestamp: new Date()
+      });
+      console.log('Emitted order_completed event to room:', branchRoom);
+    }
+
     res.json(order);
   } catch (error) {
     res.status(500).json({ message: error.message });

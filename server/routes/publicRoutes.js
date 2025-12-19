@@ -309,6 +309,7 @@ const confirmPayment = async (req, res) => {
     // Update payment status
     order.paymentStatus = 'paid';
     order.paymentMethod = paymentMethod || 'online';
+    order.paidAt = new Date();
     order.status = 'in_progress';
     
     // Store Razorpay payment details if available

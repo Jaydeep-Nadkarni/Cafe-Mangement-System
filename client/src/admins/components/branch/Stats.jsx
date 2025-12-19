@@ -130,6 +130,18 @@ export default function Stats({ branch }) {
         setRealtimeStats(prev => ({ ...prev, ...data }));
       });
 
+      // Listen for order completions - refetch all analytics
+      socket.on('order_completed', () => {
+        console.log('Order completed, refreshing analytics...');
+        fetchAnalytics();
+      });
+
+      // Listen for payment confirmations - refetch all analytics
+      socket.on('payment_confirmation', () => {
+        console.log('Payment confirmed, refreshing analytics...');
+        fetchAnalytics();
+      });
+
       // Listen for table occupancy changes
       socket.on('table_occupancy_change', () => {
         // Refetch table heatmap
@@ -141,6 +153,8 @@ export default function Stats({ branch }) {
       return () => {
         socket.off('stats_update');
         socket.off('critical_metric_update');
+        socket.off('order_completed');
+        socket.off('payment_confirmation');
         socket.off('table_occupancy_change');
       };
   }, [socket, branch, timeRange]);

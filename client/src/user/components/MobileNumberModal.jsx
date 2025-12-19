@@ -14,6 +14,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
   // Load saved customer data from localStorage when modal opens
   useEffect(() => {
     if (isOpen) {
