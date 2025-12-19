@@ -336,8 +336,11 @@ const getPublicMenu = async (req, res) => {
   try {
     const { branchCode } = req.query;
     
-    // Get menu items - filter by availability
-    let query = { isAvailable: true };
+    // Get menu items - filter by availability and not deleted
+    let query = { 
+      isAvailable: true,
+      isDeleted: { $ne: true }
+    };
     
     // If branchCode is provided, filter by that branch OR items with no branch assigned (global items)
     if (branchCode) {
@@ -357,7 +360,7 @@ const getPublicMenu = async (req, res) => {
       }
     }
 
-    const menuItems = await MenuItem.find(query).sort({ category: 1, name: 1 });
+    const menuItems = await MenuItem.find(query).sort({ sortOrder: 1, category: 1, name: 1 });
     
     // Transform to match frontend expected format
     const transformedItems = menuItems.map(item => ({
@@ -380,10 +383,52 @@ const getPublicMenu = async (req, res) => {
   }
 };
 
+// @desc    Get public categories (only categories with available items)
+// @route   GET /api/public/categories
+// @access  Public
+const getPublicCategories = async (req, res) => {
+  try {
+    const { branchCode } = req.query;
+    
+    // Build branch query
+    let branchQuery = {};
+    if (branchCode) {
+      const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
+      if (branch) {
+        branchQuery.$or = [
+          { branch: branch._id },
+          { branch: null },
+          { branch: { $exists: false } }
+        ];
+      }
+    }
+
+    // Get all available menu items
+    const menuItems = await MenuItem.find({
+      isAvailable: true,
+      isDeleted: { $ne: true },
+      ...branchQuery
+    }).distinct('category');
+
+    // Get categories that have available items
+    const Category = require('../models/Category');
+    const categories = await Category.find({
+      slug: { $in: menuItems },
+      isActive: true
+    }).sort({ sortOrder: 1, name: 1 });
+
+    res.json(categories);
+  } catch (error) {
+    console.error('Error fetching public categories:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Routes
 router.get('/branch/:code', getBranchByCode);
 router.get('/table/:branchCode/:tableNumber', getTableByNumberAndBranch);
 router.get('/menu', getPublicMenu);
+router.get('/categories', getPublicCategories);
 router.post('/orders', createQROrder);
 router.post('/orders/:orderId/confirm-payment', confirmPayment);
 

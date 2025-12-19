@@ -34,7 +34,11 @@ const {
   getAIData,
   getAIAnalysis,
   clearAICache,
-  getAICacheStats
+  getAICacheStats,
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -67,6 +71,13 @@ router.put('/memos/:id', updateMemo);
 router.delete('/memos/:id', deleteMemo);
 
 router.get('/details', getBranchDetails);
+
+// Category routes
+router.get('/categories', getCategories);
+router.post('/categories', addCategory);
+router.put('/categories/:id', updateCategory);
+router.delete('/categories/:id', deleteCategory);
+
 router.get('/tables', getTables);
 router.post('/tables', createTable);
 router.put('/tables/:id', updateTable);

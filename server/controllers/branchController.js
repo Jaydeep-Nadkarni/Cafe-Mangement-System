@@ -4,6 +4,7 @@ const MenuItem = require('../models/MenuItem');
 const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
+const Category = require('../models/Category');
 const { 
   getBranchStats,
   getRevenueByPaymentMethod,
@@ -899,6 +900,131 @@ const getAICacheStats = async (req, res) => {
   }
 };
 
+// ==================== CATEGORY MANAGEMENT ====================
+
+// @desc    Get all categories for branch
+// @route   GET /api/branch/categories
+// @access  Manager
+const getCategories = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const categories = await Category.find({
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ],
+      isActive: true
+    }).sort({ sortOrder: 1, name: 1 });
+    
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Add new category
+// @route   POST /api/branch/categories
+// @access  Manager
+const addCategory = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { name, color, icon, sortOrder } = req.body;
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    const category = new Category({
+      name,
+      slug,
+      branch: branch._id,
+      color: color || '#6B7280',
+      icon: icon || 'tag',
+      sortOrder: sortOrder || 0
+    });
+
+    const savedCategory = await category.save();
+    res.status(201).json(savedCategory);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Category already exists' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update category
+// @route   PUT /api/branch/categories/:id
+// @access  Manager
+const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+    const { name, color, icon, sortOrder } = req.body;
+
+    const category = await Category.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    if (name) {
+      category.name = name;
+      category.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
+    if (color) category.color = color;
+    if (icon) category.icon = icon;
+    if (sortOrder !== undefined) category.sortOrder = sortOrder;
+
+    const updatedCategory = await category.save();
+    res.json(updatedCategory);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete category
+// @route   DELETE /api/branch/categories/:id
+// @access  Manager
+const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+
+    // Check if category has items
+    const itemCount = await MenuItem.countDocuments({ 
+      category: id,
+      isDeleted: { $ne: true }
+    });
+
+    if (itemCount > 0) {
+      return res.status(400).json({ 
+        message: `Cannot delete category with ${itemCount} items. Please reassign or delete items first.` 
+      });
+    }
+
+    const category = await Category.findOne({ 
+      _id: id, 
+      branch: branch._id 
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found or unauthorized' });
+    }
+
+    category.isActive = false;
+    await category.save();
+
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -932,5 +1058,9 @@ module.exports = {
   getAIData,
   getAIAnalysis,
   clearAICache,
-  getAICacheStats
+  getAICacheStats,
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory
 };

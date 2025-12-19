@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Utensils, Search, Plus, Edit2, Trash2, X, Image as ImageIcon, 
-  Check, Copy, Filter
+  Check, Copy, Filter, Tag, Settings
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
@@ -36,6 +36,125 @@ const Drawer = ({ isOpen, onClose, title, children }) => {
   );
 };
 
+const CategoryModal = ({ isOpen, onClose, onSave, editingCategory }) => {
+  const [formData, setFormData] = useState({
+    name: '',
+    color: '#6B7280',
+    sortOrder: 0
+  });
+
+  useEffect(() => {
+    if (editingCategory) {
+      setFormData({
+        name: editingCategory.name,
+        color: editingCategory.color || '#6B7280',
+        sortOrder: editingCategory.sortOrder || 0
+      });
+    } else {
+      setFormData({ name: '', color: '#6B7280', sortOrder: 0 });
+    }
+  }, [editingCategory, isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  if (!isOpen) return null;
+
+  const colorOptions = [
+    { name: 'Gray', value: '#6B7280' },
+    { name: 'Red', value: '#EF4444' },
+    { name: 'Orange', value: '#F97316' },
+    { name: 'Amber', value: '#F59E0B' },
+    { name: 'Yellow', value: '#EAB308' },
+    { name: 'Lime', value: '#84CC16' },
+    { name: 'Green', value: '#10B981' },
+    { name: 'Emerald', value: '#059669' },
+    { name: 'Teal', value: '#14B8A6' },
+    { name: 'Cyan', value: '#06B6D4' },
+    { name: 'Sky', value: '#0EA5E9' },
+    { name: 'Blue', value: '#3B82F6' },
+    { name: 'Indigo', value: '#6366F1' },
+    { name: 'Violet', value: '#8B5CF6' },
+    { name: 'Purple', value: '#A855F7' },
+    { name: 'Fuchsia', value: '#D946EF' },
+    { name: 'Pink', value: '#EC4899' },
+    { name: 'Rose', value: '#F43F5E' },
+  ];
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-xl max-w-md w-full">
+        <div className="p-4 border-b flex justify-between items-center">
+          <h3 className="text-lg font-bold">{editingCategory ? 'Edit Category' : 'Add New Category'}</h3>
+          <button onClick={onClose}><X className="w-6 h-6 text-gray-400" /></button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Category Name</label>
+            <input 
+              required
+              type="text"
+              value={formData.name}
+              onChange={e => setFormData({...formData, name: e.target.value})}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+              placeholder="e.g. Beverages"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Color</label>
+            <div className="grid grid-cols-6 gap-2">
+              {colorOptions.map(color => (
+                <button
+                  key={color.value}
+                  type="button"
+                  onClick={() => setFormData({...formData, color: color.value})}
+                  className={`w-10 h-10 rounded-lg border-2 transition-all ${
+                    formData.color === color.value ? 'border-gray-900 scale-110' : 'border-transparent'
+                  }`}
+                  style={{ backgroundColor: color.value }}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Sort Order</label>
+            <input 
+              type="number"
+              value={formData.sortOrder}
+              onChange={e => setFormData({...formData, sortOrder: parseInt(e.target.value) || 0})}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
+              placeholder="0"
+            />
+            <p className="text-xs text-gray-500 mt-1">Lower numbers appear first</p>
+          </div>
+
+          <div className="pt-4 flex gap-3">
+            <button 
+              type="button"
+              onClick={onClose}
+              className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+            <button 
+              type="submit"
+              className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+            >
+              {editingCategory ? 'Save Changes' : 'Add Category'}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
+
 export default function Inventory({ menu, setMenu }) {
   const [showDrawer, setShowDrawer] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
@@ -43,12 +162,16 @@ export default function Inventory({ menu, setMenu }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedItems, setSelectedItems] = useState([]);
   const [filterCategory, setFilterCategory] = useState('all');
+  const [categories, setCategories] = useState([]);
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [editingCategory, setEditingCategory] = useState(null);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
   
   const [formData, setFormData] = useState({
     name: '',
     description: '',
     price: '',
-    category: 'coffee',
+    category: '',
     image: '',
     isVegetarian: false,
     isVegan: false,
@@ -57,14 +180,54 @@ export default function Inventory({ menu, setMenu }) {
   });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-  const categories = ['coffee', 'tea', 'pastry', 'sandwich', 'dessert', 'beverage', 'snack', 'special'];
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/branch/categories`);
+      setCategories(res.data);
+      if (res.data.length > 0 && !formData.category) {
+        setFormData(prev => ({ ...prev, category: res.data[0].slug }));
+      }
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const handleSaveCategory = async (categoryData) => {
+    try {
+      if (editingCategory) {
+        await axios.put(`${API_URL}/api/branch/categories/${editingCategory._id}`, categoryData);
+      } else {
+        await axios.post(`${API_URL}/api/branch/categories`, categoryData);
+      }
+      fetchCategories();
+      setShowCategoryModal(false);
+      setEditingCategory(null);
+    } catch (error) {
+      alert('Failed to save category: ' + (error.response?.data?.message || error.message));
+    }
+  };
+
+  const handleDeleteCategory = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this category?')) return;
+    try {
+      await axios.delete(`${API_URL}/api/branch/categories/${id}`);
+      fetchCategories();
+    } catch (error) {
+      alert('Failed to delete category: ' + (error.response?.data?.message || error.message));
+    }
+  };
 
   const resetForm = () => {
     setFormData({
       name: '',
       description: '',
       price: '',
-      category: 'coffee',
+      category: categories.length > 0 ? categories[0].slug : '',
       image: '',
       isVegetarian: false,
       isVegan: false,
@@ -197,6 +360,13 @@ export default function Inventory({ menu, setMenu }) {
         </div>
         <div className="flex gap-3">
           <button 
+            onClick={() => setShowCategoryManager(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all shadow-sm font-medium text-sm"
+          >
+            <Settings className="w-4 h-4" />
+            Manage Categories
+          </button>
+          <button 
             onClick={() => { resetForm(); setShowDrawer(true); }}
             className="flex items-center gap-2 px-4 py-2.5 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-sm hover:shadow-md font-medium text-sm"
           >
@@ -228,7 +398,7 @@ export default function Inventory({ menu, setMenu }) {
             >
               <option value="all">All Categories</option>
               {categories.map(c => (
-                <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                <option key={c._id} value={c.slug}>{c.name}</option>
               ))}
             </select>
           </div>
@@ -299,9 +469,17 @@ export default function Inventory({ menu, setMenu }) {
                     {formatCurrency(item.price)}
                   </td>
                   <td className="p-4">
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800 capitalize">
-                      {item.category}
-                    </span>
+                    {(() => {
+                      const cat = categories.find(c => c.slug === item.category);
+                      return (
+                        <span 
+                          className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium text-white capitalize"
+                          style={{ backgroundColor: cat?.color || '#6B7280' }}
+                        >
+                          {cat?.name || item.category}
+                        </span>
+                      );
+                    })()}
                   </td>
                   <td className="p-4">
                     <button 
@@ -416,7 +594,7 @@ export default function Inventory({ menu, setMenu }) {
                   className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500/20 focus:border-green-500"
                 >
                   {categories.map(c => (
-                    <option key={c} value={c}>{c.charAt(0).toUpperCase() + c.slice(1)}</option>
+                    <option key={c._id} value={c.slug}>{c.name}</option>
                   ))}
                 </select>
               </div>
@@ -509,6 +687,86 @@ export default function Inventory({ menu, setMenu }) {
             </button>
           </div>
         </form>
+      </Drawer>
+
+      {/* Category Management Modal */}
+      <CategoryModal 
+        isOpen={showCategoryModal}
+        onClose={() => {
+          setShowCategoryModal(false);
+          setEditingCategory(null);
+        }}
+        onSave={handleSaveCategory}
+        editingCategory={editingCategory}
+      />
+
+      {/* Category Manager Drawer */}
+      <Drawer
+        isOpen={showCategoryManager}
+        onClose={() => setShowCategoryManager(false)}
+        title="Manage Categories"
+      >
+        <div className="space-y-4">
+          <button
+            onClick={() => {
+              setEditingCategory(null);
+              setShowCategoryModal(true);
+            }}
+            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl hover:bg-green-700 transition-all shadow-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Add New Category
+          </button>
+
+          <div className="space-y-2">
+            {categories.map(category => (
+              <div 
+                key={category._id}
+                className="p-4 bg-gray-50 rounded-lg border border-gray-100 hover:border-gray-200 transition-colors"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div 
+                      className="w-10 h-10 rounded-lg flex items-center justify-center"
+                      style={{ backgroundColor: category.color }}
+                    >
+                      <Tag className="w-5 h-5 text-white" />
+                    </div>
+                    <div>
+                      <div className="font-medium text-gray-900">{category.name}</div>
+                      <div className="text-xs text-gray-500">Sort: {category.sortOrder}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        setEditingCategory(category);
+                        setShowCategoryModal(true);
+                      }}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteCategory(category._id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {categories.length === 0 && (
+            <div className="text-center py-8 text-gray-500">
+              <Tag className="w-12 h-12 mx-auto mb-3 opacity-20" />
+              <p>No categories yet</p>
+              <p className="text-sm">Create your first category to get started</p>
+            </div>
+          )}
+        </div>
       </Drawer>
     </div>
   );
