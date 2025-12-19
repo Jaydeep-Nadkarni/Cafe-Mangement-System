@@ -183,9 +183,12 @@ const createQROrder = async (req, res) => {
       });
       console.log('Emitted order_updated event to room:', branchRoom);
 
-      // Return with 200 OK instead of 201 Created since it's an update
-      res.status(200).json(populatedOrder);
-      return;
+      // Return with 200 OK and indicate this was an update to existing order
+      return res.status(200).json({
+        ...populatedOrder.toObject(),
+        isExistingOrder: true,
+        message: 'Items added to existing order'
+      });
     }
 
     // Process items - convert local IDs to MongoDB ObjectIds and validate
@@ -277,7 +280,11 @@ const createQROrder = async (req, res) => {
     });
     console.log('Emitted new_order event to room:', branchRoom);
 
-    res.status(201).json(populatedOrder);
+    res.status(201).json({
+      ...populatedOrder.toObject(),
+      isExistingOrder: false,
+      message: 'New order created successfully'
+    });
   } catch (error) {
     console.error('Error creating QR order:', error.message);
     res.status(500).json({ message: error.message });

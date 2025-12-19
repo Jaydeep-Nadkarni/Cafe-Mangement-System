@@ -202,7 +202,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 ...paymentResponse,
                 orderId: orderId,
                 customerName: customerName,
-                customerPhone: phoneNumber
+                customerPhone: phoneNumber,
+                isAddedToExisting: savedOrder?.isExistingOrder || false
               },
               orderItems: currentCart,
               savedOrderId: savedOrder?._id

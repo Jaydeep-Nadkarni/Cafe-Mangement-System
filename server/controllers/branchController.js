@@ -79,7 +79,7 @@ const getTables = async (req, res) => {
     const tables = await Table.find(query)
       .populate({
         path: 'currentOrder',
-        select: 'orderNumber status total items',
+        select: 'orderNumber status total subtotal tax discount items customerName customerPhone chefNotes paymentStatus paymentMethod coupon createdAt',
         populate: {
           path: 'items.menuItem',
           select: 'name'
