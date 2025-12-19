@@ -6,6 +6,15 @@ const Table = require('../models/Table');
 const Coupon = require('../models/Coupon');
 const GameSession = require('../models/GameSession');
 const Payment = require('../models/Payment');
+const mongoose = require('mongoose');
+
+/**
+ * Helper to convert branchId to ObjectId
+ */
+const toObjectId = (id) => {
+  if (!id) return null;
+  return typeof id === 'string' ? new mongoose.Types.ObjectId(id) : id;
+};
 
 /**
  * ANALYTICS SERVICE
@@ -101,7 +110,7 @@ const getGlobalStats = async () => {
   ] = await Promise.all([
     // Total Revenue (All time)
     Order.aggregate([
-      { $match: { status: 'completed' } },
+      { $match: { paymentStatus: 'paid' } },
       { $group: { _id: null, total: { $sum: '$total' } } }
     ]),
 
@@ -109,8 +118,8 @@ const getGlobalStats = async () => {
     Order.aggregate([
       { 
         $match: { 
-          status: 'completed',
-          createdAt: { $gte: today }
+          paymentStatus: 'paid',
+          paidAt: { $gte: today }
         } 
       },
       { $group: { _id: null, total: { $sum: '$total' } } }
@@ -120,8 +129,8 @@ const getGlobalStats = async () => {
     Order.aggregate([
       { 
         $match: { 
-          status: 'completed',
-          createdAt: { $gte: startOfMonth }
+          paymentStatus: 'paid',
+          paidAt: { $gte: startOfMonth }
         } 
       },
       { $group: { _id: null, total: { $sum: '$total' } } }
@@ -138,7 +147,7 @@ const getGlobalStats = async () => {
 
     // Top 5 Selling Items
     Order.aggregate([
-      { $match: { status: 'completed' } },
+      { $match: { paymentStatus: 'paid' } },
       { $unwind: '$items' },
       {
         $group: {
@@ -191,7 +200,7 @@ const getGlobalStats = async () => {
  */
 const getBranchPerformance = async () => {
   return await Order.aggregate([
-    { $match: { status: 'completed' } },
+    { $match: { paymentStatus: 'paid' } },
     {
       $group: {
         _id: '$branch',
@@ -228,11 +237,13 @@ const getBranchStats = async (branchId, startDate, endDate) => {
   const start = new Date(startDate);
   const end = new Date(endDate);
   end.setHours(23, 59, 59, 999);
+  
+  const branchObjectId = toObjectId(branchId);
 
   const matchStage = {
-    branch: branchId,
-    status: { $in: ['completed', 'paid'] }, // Include both completed and paid statuses
-    createdAt: { $gte: start, $lte: end }
+    branch: branchObjectId,
+    paymentStatus: 'paid',
+    paidAt: { $gte: start, $lte: end }
   };
 
   const [
@@ -353,9 +364,9 @@ const getBranchStats = async (branchId, startDate, endDate) => {
   const prevEnd = new Date(start.getTime() - 1);
 
   const prevMatchStage = {
-    branch: branchId,
-    status: { $in: ['completed', 'paid'] },
-    createdAt: { $gte: prevStart, $lte: prevEnd }
+    branch: branchObjectId,
+    paymentStatus: 'paid',
+    paidAt: { $gte: prevStart, $lte: prevEnd }
   };
 
   const [prevSummary] = await Order.aggregate([
@@ -395,11 +406,12 @@ const getBranchStats = async (branchId, startDate, endDate) => {
  */
 const getRevenueByPaymentMethod = async (branchId, timeRange = 'today') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   const matchStage = {
-    branch: branchId,
+    branch: branchObjectId,
     paymentStatus: 'paid',
-    createdAt: { $gte: start, $lte: end }
+    paidAt: { $gte: start, $lte: end }
   };
 
   const result = await Order.aggregate([
@@ -433,15 +445,16 @@ const getRevenueByPaymentMethod = async (branchId, timeRange = 'today') => {
  */
 const getTableOccupancy = async (branchId, timeRange = 'today') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   // Get all tables for the branch
-  const tables = await Table.find({ branch: branchId }).lean();
+  const tables = await Table.find({ branch: branchObjectId }).lean();
 
   // Get order frequency per table
   const tableStats = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
+        branch: branchObjectId,
         table: { $exists: true, $ne: null },
         createdAt: { $gte: start, $lte: end }
       }
@@ -491,12 +504,13 @@ const getTableOccupancy = async (branchId, timeRange = 'today') => {
 const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
   const { start, end } = getTimeRange(timeRange);
   const hoursDiff = Math.max(1, (end - start) / (1000 * 60 * 60));
+  const branchObjectId = toObjectId(branchId);
 
   const result = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
-        status: { $in: ['completed', 'paid', 'in_progress'] },
+        branch: branchObjectId,
+        status: { $in: ['pending', 'in_progress', 'completed'] },
         createdAt: { $gte: start, $lte: end }
       }
     },
@@ -541,11 +555,12 @@ const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
  */
 const getPaymentReliability = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   const stats = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
+        branch: branchObjectId,
         createdAt: { $gte: start, $lte: end }
       }
     },
@@ -595,13 +610,14 @@ const getPaymentReliability = async (branchId, timeRange = '7d') => {
  */
 const getPeakDetection = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   const hourlyData = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
-        status: { $in: ['completed', 'paid'] },
-        createdAt: { $gte: start, $lte: end }
+        branch: branchObjectId,
+        paymentStatus: 'paid',
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
@@ -625,9 +641,9 @@ const getPeakDetection = async (branchId, timeRange = '7d') => {
   const hourlyAvg = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
-        status: { $in: ['completed', 'paid'] },
-        createdAt: { $gte: start, $lte: end }
+        branch: branchObjectId,
+        paymentStatus: 'paid',
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
@@ -653,8 +669,15 @@ const getPeakDetection = async (branchId, timeRange = '7d') => {
     avgRevenue: h.avgRevenue
   }));
 
+  // Transform hourlyPattern to have 'hour' property for chart display
+  const hourlyPattern = hourlyAvg.map(h => ({
+    hour: `${h._id}:00`,
+    orders: h.totalOrders,
+    revenue: h.avgRevenue * h.totalOrders
+  }));
+
   return {
-    hourlyPattern: hourlyAvg,
+    hourlyPattern,
     peakHours,
     detailedPattern: hourlyData
   };
@@ -665,15 +688,20 @@ const getPeakDetection = async (branchId, timeRange = '7d') => {
  */
 const getRealTimeStats = async (branchId, timeRange = '1h') => {
   const { start, end } = getTimeRange(timeRange);
+  
+  // Ensure branchId is an ObjectId
+  const branchObjectId = toObjectId(branchId);
+
+  console.log(`[Analytics] getRealTimeStats - Branch: ${branchObjectId}, Range: ${timeRange}, Start: ${start}, End: ${end}`);
 
   const [revenue, orders, tableOccupancy, activeOrders] = await Promise.all([
-    // Revenue in time range
+    // Revenue in time range (paid orders only, using paidAt)
     Order.aggregate([
       {
         $match: {
-          branch: branchId,
+          branch: branchObjectId,
           paymentStatus: 'paid',
-          createdAt: { $gte: start, $lte: end }
+          paidAt: { $gte: start, $lte: end }
         }
       },
       {
@@ -689,7 +717,7 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
     Order.aggregate([
       {
         $match: {
-          branch: branchId,
+          branch: branchObjectId,
           createdAt: { $gte: start, $lte: end }
         }
       },
@@ -704,7 +732,7 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
     // Table occupancy
     Table.aggregate([
       {
-        $match: { branch: branchId }
+        $match: { branch: branchObjectId }
       },
       {
         $group: {
@@ -716,7 +744,7 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
 
     // Active orders count
     Order.countDocuments({
-      branch: branchId,
+      branch: branchObjectId,
       status: { $in: ['pending', 'in_progress'] }
     })
   ]);
@@ -732,9 +760,21 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
     return acc;
   }, {});
 
+  const totalRevenue = revenueData.total || 0;
+  const totalOrders = revenueData.count || 0;
+  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+
+  console.log(`[Analytics] Results - Revenue: ${totalRevenue}, Orders: ${totalOrders}, Active: ${activeOrders}`);
+
   return {
-    revenue: revenueData.total,
-    transactions: revenueData.count,
+    // Legacy fields
+    revenue: totalRevenue,
+    transactions: totalOrders,
+    // New fields expected by frontend
+    totalRevenue,
+    totalOrders,
+    avgOrderValue,
+    // Other data
     orders: ordersByStatus,
     tables: tablesByStatus,
     activeOrders,
@@ -747,18 +787,21 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
  */
 const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
   const { start, end } = getTimeRange(timeRange);
+  
+  // Ensure branchId is an ObjectId
+  const branchObjectId = toObjectId(branchId);
 
   const data = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
+        branch: branchObjectId,
         paymentStatus: 'paid',
-        createdAt: { $gte: start, $lte: end }
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
       $group: {
-        _id: { $hour: '$createdAt' },
+        _id: { $hour: '$paidAt' },
         revenue: { $sum: '$total' },
         orders: { $sum: 1 }
       }
@@ -785,18 +828,21 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
  */
 const getDailyRevenuePattern = async (branchId, timeRange = '30d') => {
   const { start, end } = getTimeRange(timeRange);
+  
+  // Ensure branchId is an ObjectId
+  const branchObjectId = toObjectId(branchId);
 
   const data = await Order.aggregate([
     {
       $match: {
-        branch: branchId,
+        branch: branchObjectId,
         paymentStatus: 'paid',
-        createdAt: { $gte: start, $lte: end }
+        paidAt: { $gte: start, $lte: end }
       }
     },
     {
       $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
+        _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
         revenue: { $sum: '$total' },
         orders: { $sum: 1 }
       }
@@ -820,14 +866,15 @@ const calculatePerformanceScore = async (branchId, timeRange = '7d') => {
   const periodLength = end - start;
   const prevStart = new Date(start.getTime() - periodLength);
   const prevEnd = new Date(start.getTime());
+  const branchObjectId = toObjectId(branchId);
 
   const [current, previous] = await Promise.all([
     Order.aggregate([
-      { $match: { branch: branchId, status: { $in: ['completed', 'paid'] }, createdAt: { $gte: start, $lte: end } } },
+      { $match: { branch: branchObjectId, paymentStatus: 'paid', paidAt: { $gte: start, $lte: end } } },
       { $group: { _id: null, revenue: { $sum: '$total' }, orders: { $sum: 1 } } }
     ]),
     Order.aggregate([
-      { $match: { branch: branchId, status: { $in: ['completed', 'paid'] }, createdAt: { $gte: prevStart, $lte: prevEnd } } },
+      { $match: { branch: branchObjectId, paymentStatus: 'paid', paidAt: { $gte: prevStart, $lte: prevEnd } } },
       { $group: { _id: null, revenue: { $sum: '$total' }, orders: { $sum: 1 } } }
     ])
   ]);
@@ -840,8 +887,8 @@ const calculatePerformanceScore = async (branchId, timeRange = '7d') => {
   const revenueScore = Math.min(40, Math.max(0, (revenueGrowth + 20) * 2));
 
   // Order completion rate (0-30 points)
-  const allOrders = await Order.countDocuments({ branch: branchId, createdAt: { $gte: start, $lte: end } });
-  const completedOrders = await Order.countDocuments({ branch: branchId, status: { $in: ['completed', 'paid'] }, createdAt: { $gte: start, $lte: end } });
+  const allOrders = await Order.countDocuments({ branch: branchObjectId, createdAt: { $gte: start, $lte: end } });
+  const completedOrders = await Order.countDocuments({ branch: branchObjectId, paymentStatus: 'paid', paidAt: { $gte: start, $lte: end } });
   const completionRate = allOrders > 0 ? (completedOrders / allOrders) * 100 : 0;
   const completionScore = (completionRate / 100) * 30;
 
@@ -852,13 +899,13 @@ const calculatePerformanceScore = async (branchId, timeRange = '7d') => {
 
   // Customer retention (0-10 points)
   const uniqueCustomers = await Order.aggregate([
-    { $match: { branch: branchId, customerPhone: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, customerPhone: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$customerPhone' } },
     { $count: 'total' }
   ]);
   const totalCustomers = uniqueCustomers[0]?.total || 1;
   const returningCustomers = await Order.aggregate([
-    { $match: { branch: branchId, customerPhone: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, customerPhone: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$customerPhone', count: { $sum: 1 } } },
     { $match: { count: { $gt: 1 } } },
     { $count: 'total' }
@@ -885,11 +932,12 @@ const calculatePerformanceScore = async (branchId, timeRange = '7d') => {
  */
 const calculateEfficiencyScore = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   // Table utilization (0-30 points)
-  const tables = await Table.countDocuments({ branch: branchId });
+  const tables = await Table.countDocuments({ branch: branchObjectId });
   const ordersPerTable = await Order.aggregate([
-    { $match: { branch: branchId, table: { $exists: true }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, table: { $exists: true }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$table' } },
     { $count: 'total' }
   ]);
@@ -898,18 +946,18 @@ const calculateEfficiencyScore = async (branchId, timeRange = '7d') => {
 
   // Menu diversity (0-20 points)
   const uniqueItems = await Order.aggregate([
-    { $match: { branch: branchId, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, createdAt: { $gte: start, $lte: end } } },
     { $unwind: '$items' },
     { $group: { _id: '$items.menuItem' } },
     { $count: 'total' }
   ]);
-  const menuItems = await MenuItem.countDocuments({ branch: branchId });
+  const menuItems = await MenuItem.countDocuments({ branch: branchObjectId });
   const diversityRate = menuItems > 0 ? ((uniqueItems[0]?.total || 0) / menuItems) * 100 : 0;
   const diversityScore = Math.min(20, (diversityRate / 100) * 20);
 
   // Peak hour efficiency (0-25 points)
   const peakHours = await Order.aggregate([
-    { $match: { branch: branchId, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, createdAt: { $gte: start, $lte: end } } },
     { $project: { hour: { $hour: '$createdAt' }, total: 1 } },
     { $group: { _id: '$hour', revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
     { $sort: { orders: -1 } },
@@ -920,7 +968,7 @@ const calculateEfficiencyScore = async (branchId, timeRange = '7d') => {
 
   // Payment success rate (0-25 points)
   const payments = await Payment.aggregate([
-    { $match: { branch: branchId, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$status', count: { $sum: 1 } } }
   ]);
   const successCount = payments.find(p => p._id === 'success')?.count || 0;
@@ -947,13 +995,14 @@ const calculateEfficiencyScore = async (branchId, timeRange = '7d') => {
  */
 const calculateRiskScore = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
   const periodLength = end - start;
   const prevStart = new Date(start.getTime() - periodLength);
   const prevEnd = new Date(start.getTime());
 
   // Payment failure rate (0-25 risk points)
   const payments = await Payment.aggregate([
-    { $match: { branch: branchId, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$status', count: { $sum: 1 } } }
   ]);
   const failureCount = payments.find(p => p._id === 'failed')?.count || 0;
@@ -962,19 +1011,19 @@ const calculateRiskScore = async (branchId, timeRange = '7d') => {
   const paymentRisk = Math.min(25, (failureRate / 100) * 25);
 
   // Order cancellation rate (0-25 risk points)
-  const totalOrders = await Order.countDocuments({ branch: branchId, createdAt: { $gte: start, $lte: end } });
-  const cancelledOrders = await Order.countDocuments({ branch: branchId, status: 'cancelled', createdAt: { $gte: start, $lte: end } });
+  const totalOrders = await Order.countDocuments({ branch: branchObjectId, createdAt: { $gte: start, $lte: end } });
+  const cancelledOrders = await Order.countDocuments({ branch: branchObjectId, status: 'cancelled', createdAt: { $gte: start, $lte: end } });
   const cancellationRate = totalOrders > 0 ? (cancelledOrders / totalOrders) * 100 : 0;
   const cancellationRisk = Math.min(25, (cancellationRate / 100) * 25);
 
   // Revenue decline (0-25 risk points)
   const [current, previous] = await Promise.all([
     Order.aggregate([
-      { $match: { branch: branchId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
+      { $match: { branch: branchObjectId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
       { $group: { _id: null, revenue: { $sum: '$total' } } }
     ]),
     Order.aggregate([
-      { $match: { branch: branchId, paymentStatus: 'paid', createdAt: { $gte: prevStart, $lte: prevEnd } } },
+      { $match: { branch: branchObjectId, paymentStatus: 'paid', createdAt: { $gte: prevStart, $lte: prevEnd } } },
       { $group: { _id: null, revenue: { $sum: '$total' } } }
     ])
   ]);
@@ -985,9 +1034,9 @@ const calculateRiskScore = async (branchId, timeRange = '7d') => {
   const revenueRisk = Math.min(25, (revenueDrop / 100) * 25);
 
   // Low table utilization (0-25 risk points)
-  const tables = await Table.countDocuments({ branch: branchId });
+  const tables = await Table.countDocuments({ branch: branchObjectId });
   const activeTableCount = await Order.aggregate([
-    { $match: { branch: branchId, table: { $exists: true }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, table: { $exists: true }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$table' } },
     { $count: 'total' }
   ]);
@@ -1013,16 +1062,17 @@ const calculateRiskScore = async (branchId, timeRange = '7d') => {
  */
 const calculateCouponUplift = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   // Orders with coupons
   const ordersWithCoupons = await Order.aggregate([
-    { $match: { branch: branchId, coupon: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, coupon: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: null, count: { $sum: 1 }, revenue: { $sum: '$total' }, avgValue: { $avg: '$total' } } }
   ]);
 
   // Orders without coupons
   const ordersWithoutCoupons = await Order.aggregate([
-    { $match: { branch: branchId, coupon: { $exists: false }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, coupon: { $exists: false }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: null, count: { $sum: 1 }, revenue: { $sum: '$total' }, avgValue: { $avg: '$total' } } }
   ]);
 
@@ -1031,7 +1081,7 @@ const calculateCouponUplift = async (branchId, timeRange = '7d') => {
 
   // Most effective coupons
   const topCoupons = await Order.aggregate([
-    { $match: { branch: branchId, coupon: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, coupon: { $exists: true, $ne: null }, createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: '$coupon', count: { $sum: 1 }, totalDiscount: { $sum: '$discountAmount' }, revenue: { $sum: '$total' } } },
     { $lookup: { from: 'coupons', localField: '_id', foreignField: '_id', as: 'couponInfo' } },
     { $unwind: '$couponInfo' },
@@ -1053,7 +1103,7 @@ const calculateCouponUplift = async (branchId, timeRange = '7d') => {
       orderValueUplift: upliftPercentage.toFixed(2) + '%',
       couponPenetration: ((withCoupons.count / (withCoupons.count + withoutCoupons.count)) * 100).toFixed(2) + '%',
       totalDiscountsGiven: Math.round(await Order.aggregate([
-        { $match: { branch: branchId, discountAmount: { $gt: 0 }, createdAt: { $gte: start, $lte: end } } },
+        { $match: { branch: branchObjectId, discountAmount: { $gt: 0 }, createdAt: { $gte: start, $lte: end } } },
         { $group: { _id: null, total: { $sum: '$discountAmount' } } }
       ]).then(r => r[0]?.total || 0))
     },
@@ -1067,10 +1117,11 @@ const calculateCouponUplift = async (branchId, timeRange = '7d') => {
  */
 const calculateForecast = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   // Get daily data for the period
   const dailyData = await Order.aggregate([
-    { $match: { branch: branchId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
     { $group: { _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } }, revenue: { $sum: '$total' }, orders: { $sum: 1 } } },
     { $sort: { _id: 1 } }
   ]);
@@ -1133,10 +1184,11 @@ const calculateForecast = async (branchId, timeRange = '7d') => {
  */
 const calculateDeviations = async (branchId, timeRange = '7d') => {
   const { start, end } = getTimeRange(timeRange);
+  const branchObjectId = toObjectId(branchId);
 
   // Get hourly revenue
   const hourlyData = await Order.aggregate([
-    { $match: { branch: branchId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
+    { $match: { branch: branchObjectId, paymentStatus: 'paid', createdAt: { $gte: start, $lte: end } } },
     { $project: { hour: { $hour: '$createdAt' }, total: 1 } },
     { $group: { _id: '$hour', revenue: { $avg: '$total' }, count: { $sum: 1 } } },
     { $sort: { _id: 1 } }

@@ -14,6 +14,8 @@ const {
   addMenuItem,
   updateMenuItem,
   deleteMenuItem,
+  duplicateMenuItem,
+  bulkUpdateMenuItems,
   getAnalytics,
   getAlerts,
   markAlertAsRead,
@@ -32,7 +34,11 @@ const {
   getAIData,
   getAIAnalysis,
   clearAICache,
-  getAICacheStats
+  getAICacheStats,
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -65,15 +71,24 @@ router.put('/memos/:id', updateMemo);
 router.delete('/memos/:id', deleteMemo);
 
 router.get('/details', getBranchDetails);
+
+// Category routes
+router.get('/categories', getCategories);
+router.post('/categories', addCategory);
+router.put('/categories/:id', updateCategory);
+router.delete('/categories/:id', deleteCategory);
+
 router.get('/tables', getTables);
 router.post('/tables', createTable);
 router.put('/tables/:id', updateTable);
 router.delete('/tables/:id', deleteTable);
 router.put('/tables/:id/status', updateTableStatus);
 router.get('/menu', getMenu);
+router.put('/menu/bulk', bulkUpdateMenuItems);
 router.post('/menu', addMenuItem);
 router.put('/menu/:id', updateMenuItem);
 router.delete('/menu/:id', deleteMenuItem);
+router.post('/menu/:id/duplicate', duplicateMenuItem);
 router.put('/menu/:id/availability', updateItemAvailability);
 router.post('/tables/merge', mergeTables);
 

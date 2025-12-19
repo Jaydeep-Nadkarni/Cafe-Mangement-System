@@ -168,11 +168,13 @@ const checkoutOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status !== 'active') {
-      return res.status(400).json({ message: 'Order is not active' });
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      return res.status(400).json({ message: 'Order is already ' + order.status });
     }
 
     order.paymentMethod = paymentMethod;
+    order.paymentStatus = 'paid';
+    order.paidAt = Date.now();
     order.status = 'completed';
     order.completedAt = Date.now();
     
@@ -189,6 +191,18 @@ const checkoutOrder = async (req, res) => {
       table.currentOrder = null;
       table.status = 'available';
       await table.save();
+    }
+
+    // Emit real-time event to branch manager for order completion
+    if (req.io && order.branch) {
+      const branchRoom = `branch_${order.branch}`;
+      req.io.to(branchRoom).emit('order_completed', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        total: order.total,
+        timestamp: new Date()
+      });
+      console.log('Emitted order_completed event to room:', branchRoom);
     }
 
     res.json(order);

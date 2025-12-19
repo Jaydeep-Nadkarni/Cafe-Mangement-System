@@ -4,6 +4,7 @@ const MenuItem = require('../models/MenuItem');
 const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
+const Category = require('../models/Category');
 const { 
   getBranchStats,
   getRevenueByPaymentMethod,
@@ -78,7 +79,7 @@ const getTables = async (req, res) => {
     const tables = await Table.find(query)
       .populate({
         path: 'currentOrder',
-        select: 'orderNumber status total items',
+        select: 'orderNumber status total subtotal tax discount items customerName customerPhone chefNotes paymentStatus paymentMethod coupon createdAt',
         populate: {
           path: 'items.menuItem',
           select: 'name'
@@ -103,8 +104,9 @@ const getMenu = async (req, res) => {
       $or: [
         { branch: branch._id },
         { branch: null }
-      ]
-    }).sort({ category: 1, name: 1 });
+      ],
+      isDeleted: { $ne: true }
+    }).sort({ sortOrder: 1, category: 1, name: 1 });
     
     res.json(menuItems);
   } catch (error) {
@@ -378,7 +380,7 @@ const addMenuItem = async (req, res) => {
     const branch = await getManagerBranch(req.user._id);
     const { 
       name, description, price, category, 
-      isVegetarian, isVegan, isSpicy, image 
+      isVegetarian, isVegan, isSpicy, image, sortOrder 
     } = req.body;
 
     const menuItem = new MenuItem({
@@ -391,7 +393,8 @@ const addMenuItem = async (req, res) => {
       isVegan,
       isSpicy,
       branch: branch._id, // Associate with this branch
-      isAvailable: true
+      isAvailable: true,
+      sortOrder: sortOrder || 0
     });
 
     const savedItem = await menuItem.save();
@@ -410,7 +413,13 @@ const updateMenuItem = async (req, res) => {
     const updates = req.body;
     const branch = await getManagerBranch(req.user._id);
 
-    const menuItem = await MenuItem.findOne({ _id: id, branch: branch._id });
+    const menuItem = await MenuItem.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
     if (!menuItem) {
       return res.status(404).json({ message: 'Item not found or unauthorized' });
     }
@@ -426,21 +435,124 @@ const updateMenuItem = async (req, res) => {
   }
 };
 
-// @desc    Delete menu item
+// @desc    Delete menu item (Soft Delete)
 // @route   DELETE /api/branch/menu/:id
 // @access  Manager
 const deleteMenuItem = async (req, res) => {
   try {
     const { id } = req.params;
+    console.log(`[DELETE] Attempting to delete menu item: ${id}, User: ${req.user?._id}`);
+    
     const branch = await getManagerBranch(req.user._id);
 
-    const result = await MenuItem.deleteOne({ _id: id, branch: branch._id });
+    const menuItem = await MenuItem.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
     
-    if (result.deletedCount === 0) {
+    if (!menuItem) {
+      console.log(`[DELETE] Item ${id} not found for branch ${branch._id}`);
       return res.status(404).json({ message: 'Item not found or unauthorized' });
     }
 
+    menuItem.isDeleted = true;
+    await menuItem.save();
+    console.log(`[DELETE] Item ${id} marked as deleted successfully`);
+
     res.json({ message: 'Item deleted successfully' });
+  } catch (error) {
+    console.error('[DELETE ERROR]:', error.message);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Duplicate menu item
+// @route   POST /api/branch/menu/:id/duplicate
+// @access  Manager
+const duplicateMenuItem = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+
+    const originalItem = await MenuItem.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
+    if (!originalItem) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    const newItem = new MenuItem({
+      name: `${originalItem.name} (Copy)`,
+      description: originalItem.description,
+      price: originalItem.price,
+      category: originalItem.category,
+      image: originalItem.image,
+      isVegetarian: originalItem.isVegetarian,
+      isVegan: originalItem.isVegan,
+      isSpicy: originalItem.isSpicy,
+      branch: branch._id,
+      isAvailable: false, // Default to unavailable for safety
+      sortOrder: originalItem.sortOrder,
+      isDeleted: false
+    });
+
+    const savedItem = await newItem.save();
+    res.status(201).json(savedItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Bulk update menu items
+// @route   PUT /api/branch/menu/bulk
+// @access  Manager
+const bulkUpdateMenuItems = async (req, res) => {
+  try {
+    const { items, action, value } = req.body; // items is array of IDs
+    const branch = await getManagerBranch(req.user._id);
+
+    if (!items || !Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ message: 'No items selected' });
+    }
+
+    let update = {};
+    
+    switch (action) {
+      case 'delete':
+        update = { isDeleted: true };
+        break;
+      case 'availability':
+        update = { isAvailable: value };
+        break;
+      case 'disableUntil':
+        update = { disabledUntil: value, isAvailable: false };
+        break;
+      case 'category':
+        update = { category: value };
+        break;
+      default:
+        return res.status(400).json({ message: 'Invalid action' });
+    }
+
+    const result = await MenuItem.updateMany(
+      { 
+        _id: { $in: items }, 
+        $or: [
+          { branch: branch._id },
+          { branch: null }
+        ]
+      },
+      { $set: update }
+    );
+
+    res.json({ message: `Updated ${result.modifiedCount} items`, modifiedCount: result.modifiedCount });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -689,7 +801,15 @@ const getRevenuePattern = async (req, res) => {
       ? await getHourlyRevenuePattern(branch._id, timeRange)
       : await getDailyRevenuePattern(branch._id, timeRange);
     
-    res.json(data);
+    // Transform data to have 'label' property for chart x-axis
+    const pattern = data.map(item => ({
+      ...item,
+      label: type === 'hourly' 
+        ? `${item.hour}:00`
+        : item.date
+    }));
+    
+    res.json({ pattern, type, timeRange });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -794,6 +914,131 @@ const getAICacheStats = async (req, res) => {
   }
 };
 
+// ==================== CATEGORY MANAGEMENT ====================
+
+// @desc    Get all categories for branch
+// @route   GET /api/branch/categories
+// @access  Manager
+const getCategories = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const categories = await Category.find({
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ],
+      isActive: true
+    }).sort({ sortOrder: 1, name: 1 });
+    
+    res.json(categories);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Add new category
+// @route   POST /api/branch/categories
+// @access  Manager
+const addCategory = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { name, color, icon, sortOrder } = req.body;
+
+    const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+
+    const category = new Category({
+      name,
+      slug,
+      branch: branch._id,
+      color: color || '#6B7280',
+      icon: icon || 'tag',
+      sortOrder: sortOrder || 0
+    });
+
+    const savedCategory = await category.save();
+    res.status(201).json(savedCategory);
+  } catch (error) {
+    if (error.code === 11000) {
+      return res.status(400).json({ message: 'Category already exists' });
+    }
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update category
+// @route   PUT /api/branch/categories/:id
+// @access  Manager
+const updateCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+    const { name, color, icon, sortOrder } = req.body;
+
+    const category = await Category.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found' });
+    }
+
+    if (name) {
+      category.name = name;
+      category.slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    }
+    if (color) category.color = color;
+    if (icon) category.icon = icon;
+    if (sortOrder !== undefined) category.sortOrder = sortOrder;
+
+    const updatedCategory = await category.save();
+    res.json(updatedCategory);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete category
+// @route   DELETE /api/branch/categories/:id
+// @access  Manager
+const deleteCategory = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const branch = await getManagerBranch(req.user._id);
+
+    // Check if category has items
+    const itemCount = await MenuItem.countDocuments({ 
+      category: id,
+      isDeleted: { $ne: true }
+    });
+
+    if (itemCount > 0) {
+      return res.status(400).json({ 
+        message: `Cannot delete category with ${itemCount} items. Please reassign or delete items first.` 
+      });
+    }
+
+    const category = await Category.findOne({ 
+      _id: id, 
+      branch: branch._id 
+    });
+
+    if (!category) {
+      return res.status(404).json({ message: 'Category not found or unauthorized' });
+    }
+
+    category.isActive = false;
+    await category.save();
+
+    res.json({ message: 'Category deleted successfully' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -801,6 +1046,8 @@ module.exports = {
   addMenuItem,
   updateMenuItem,
   deleteMenuItem,
+  duplicateMenuItem,
+  bulkUpdateMenuItems,
   mergeTables,
   getBranchDetails,
   createTable,
@@ -825,5 +1072,9 @@ module.exports = {
   getAIData,
   getAIAnalysis,
   clearAICache,
-  getAICacheStats
+  getAICacheStats,
+  getCategories,
+  addCategory,
+  updateCategory,
+  deleteCategory
 };

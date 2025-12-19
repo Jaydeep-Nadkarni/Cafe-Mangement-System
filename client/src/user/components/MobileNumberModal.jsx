@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { initiatePayment } from '../utils/razorpay';
@@ -13,6 +13,24 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
   const [customerName, setCustomerName] = useState('');
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Load saved customer data from localStorage when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const savedCustomerData = localStorage.getItem('customerData');
+      if (savedCustomerData) {
+        try {
+          const { name, mobile } = JSON.parse(savedCustomerData);
+          if (name) setCustomerName(name);
+          if (mobile) setMobileNumber(mobile);
+        } catch (error) {
+          console.error('Error loading saved customer data:', error);
+        }
+      }
+    }
+  }, [isOpen]);
 
   const validateMobileNumber = (number) => {
     const cleanedNumber = number.replace(/\D/g, '');
@@ -115,6 +133,16 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
 
     const orderId = savedOrder?.orderNumber || `ORD_${Date.now()}`;
 
+    // Save customer data to localStorage for future orders
+    try {
+      localStorage.setItem('customerData', JSON.stringify({
+        name: customerName,
+        mobile: phoneNumber
+      }));
+    } catch (error) {
+      console.error('Error saving customer data to localStorage:', error);
+    }
+
     if (paymentMethod === 'cash') {
       clearCart();
       navigate('/payment-success', {
@@ -176,7 +204,8 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
                 ...paymentResponse,
                 orderId: orderId,
                 customerName: customerName,
-                customerPhone: phoneNumber
+                customerPhone: phoneNumber,
+                isAddedToExisting: savedOrder?.isExistingOrder || false
               },
               orderItems: currentCart,
               savedOrderId: savedOrder?._id
@@ -227,7 +256,10 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
               Confirm & Pay
             </h2>
             <p className="text-sm text-gray-600">
-              Enter your details to complete the payment
+              {(customerName || mobileNumber) ? 
+                'Welcome back! Your details have been saved for faster checkout' : 
+                'Enter your details to complete the payment'
+              }
             </p>
           </div>
 
@@ -235,8 +267,13 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
           <form onSubmit={handleSubmit} className="space-y-4">
             {/* Name Input */}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
                 Full Name
+                {customerName && (
+                  <span className="text-green-600 text-xs flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Saved
+                  </span>
+                )}
               </label>
               <input
                 type="text"
@@ -254,8 +291,13 @@ export default function MobileNumberModal({ isOpen, onClose, onSubmit, orderData
 
             {/* Country Code + Mobile Input */}
             <div>
-              <label className="block text-xs font-semibold text-gray-600 mb-2">
+              <label className="flex items-center gap-2 text-xs font-semibold text-gray-600 mb-2">
                 Mobile Number
+                {mobileNumber && mobileNumber.length === 10 && (
+                  <span className="text-green-600 text-xs flex items-center gap-1">
+                    <Check className="w-3 h-3" /> Saved
+                  </span>
+                )}
               </label>
               <div className="flex gap-2">
                 <div className="shrink-0 px-3 py-3 bg-gray-100 rounded-2xl flex items-center text-gray-600 font-semibold whitespace-nowrap">

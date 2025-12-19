@@ -19,23 +19,29 @@ export default function MenuPage() {
   const [currentSession, setCurrentSession] = useState(null);
   const [loading, setLoading] = useState(true);
   const [menuItems, setMenuItems] = useState([]);
+  const [categories, setCategories] = useState([]);
   const [error, setError] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
-  // Fetch menu from database
+  // Fetch menu and categories from database
   useEffect(() => {
-    const fetchMenu = async () => {
+    const fetchMenuData = async () => {
       try {
         setLoading(true);
         const session = getTableSession();
         const branch = branchCode || session?.branchCode || '';
         
-        const response = await axios.get(`${API_URL}/api/public/menu`, {
-          params: branch ? { branchCode: branch } : {}
-        });
+        const params = branch ? { branchCode: branch } : {};
         
-        setMenuItems(response.data);
+        // Fetch both menu items and categories
+        const [menuResponse, categoriesResponse] = await Promise.all([
+          axios.get(`${API_URL}/api/public/menu`, { params }),
+          axios.get(`${API_URL}/api/public/categories`, { params })
+        ]);
+        
+        setMenuItems(menuResponse.data);
+        setCategories(categoriesResponse.data);
         setError(null);
       } catch (err) {
         console.error('Error fetching menu:', err);
@@ -45,7 +51,7 @@ export default function MenuPage() {
       }
     };
 
-    fetchMenu();
+    fetchMenuData();
   }, [branchCode, API_URL]);
 
   // Handle URL params and session management
@@ -95,13 +101,6 @@ export default function MenuPage() {
 
     return items;
   }, [searchQuery, activeFilter, validMenuItems]);
-
-  // Extract unique categories from menu items
-  const categories = useMemo(() => {
-    const validItems = menuItems.filter(item => item && item.category);
-    const uniqueCategories = [...new Set(validItems.map(item => item.category))];
-    return uniqueCategories.sort();
-  }, [menuItems]);
 
   return (
     <div className="px-4 md:px-6 py-6 pb-32">

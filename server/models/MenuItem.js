@@ -66,6 +66,18 @@ const menuItemSchema = new mongoose.Schema(
       type: Boolean,
       default: true
     },
+    disabledUntil: {
+      type: Date,
+      default: null
+    },
+    isDeleted: {
+      type: Boolean,
+      default: false
+    },
+    sortOrder: {
+      type: Number,
+      default: 0
+    },
     branch: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Branch',
