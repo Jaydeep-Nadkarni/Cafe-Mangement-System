@@ -801,7 +801,15 @@ const getRevenuePattern = async (req, res) => {
       ? await getHourlyRevenuePattern(branch._id, timeRange)
       : await getDailyRevenuePattern(branch._id, timeRange);
     
-    res.json(data);
+    // Transform data to have 'label' property for chart x-axis
+    const pattern = data.map(item => ({
+      ...item,
+      label: type === 'hourly' 
+        ? `${item.hour}:00`
+        : item.date
+    }));
+    
+    res.json({ pattern, type, timeRange });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
