@@ -168,11 +168,13 @@ const checkoutOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status !== 'active') {
-      return res.status(400).json({ message: 'Order is not active' });
+    if (order.status === 'completed' || order.status === 'cancelled') {
+      return res.status(400).json({ message: 'Order is already ' + order.status });
     }
 
     order.paymentMethod = paymentMethod;
+    order.paymentStatus = 'paid';
+    order.paidAt = Date.now();
     order.status = 'completed';
     order.completedAt = Date.now();
     
