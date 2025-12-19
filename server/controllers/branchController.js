@@ -413,7 +413,13 @@ const updateMenuItem = async (req, res) => {
     const updates = req.body;
     const branch = await getManagerBranch(req.user._id);
 
-    const menuItem = await MenuItem.findOne({ _id: id, branch: branch._id });
+    const menuItem = await MenuItem.findOne({ 
+      _id: id, 
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ]
+    });
     if (!menuItem) {
       return res.status(404).json({ message: 'Item not found or unauthorized' });
     }
