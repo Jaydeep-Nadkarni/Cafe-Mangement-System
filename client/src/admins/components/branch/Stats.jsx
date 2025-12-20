@@ -459,37 +459,6 @@ export default function Stats({ branch }) {
             </div>
           )}
         </ChartCard>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis 
-                  dataKey="hour" 
-                  tick={{ fontSize: 10 }} 
-                  stroke="#666"
-                  interval={2}
-                />
-                <YAxis 
-                  tick={{ fontSize: 11 }} 
-                  stroke="#666" 
-                  domain={[0, (dataMax) => Math.max(dataMax, 10)]}
-                />
-                <Tooltip 
-                  contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                  formatter={(value, name) => {
-                    if (name === 'orders') return [value, 'Orders'];
-                    if (name === 'revenue') return [`₹${value}`, 'Revenue'];
-                    return [value, name];
-                  }}
-                />
-                <Legend />
-                <Bar dataKey="orders" fill="#9e9e9e" name="Orders" />
-                <Bar dataKey="revenue" fill="#616161" name="Revenue" />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <div className="h-[300px] flex items-center justify-center text-gray-400">
-              No order data for this period
-            </div>
-          )}
-        </ChartCard>
       </Section>
 
       {/* Section 2: Table & Seating Intelligence */}
@@ -753,18 +722,22 @@ export default function Stats({ branch }) {
 
       {/* Export Section */}
       <div className="mt-6 flex justify-end gap-4">
-        <ExportButton
-          chartRef={revenueChartRef}
-          data={revenuePattern}
-          filename="revenue-pattern"
-          type="both"
-        />
-        <ExportButton
-          chartRef={heatmapRef}
-          data={tableHeatmap}
-          filename="table-heatmap"
-          type="csv"
-        />
+        <div>
+          <ExportButton
+            chartRef={revenueChartRef}
+            data={revenuePattern}
+            filename="revenue-pattern"
+            type="both"
+          />
+        </div>
+        <div>
+          <ExportButton
+            chartRef={heatmapRef}
+            data={tableHeatmap}
+            filename="table-heatmap"
+            type="csv"
+          />
+        </div>
       </div>
     </div>
   );

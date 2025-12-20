@@ -532,7 +532,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               </div>
               
               <div className="p-4">
-                <div className="space-y-2 mb-4 min-h-[80px]">
+                <div className="space-y-2 mb-4 min-h-20">
                   {order.items.slice(0, 3).map((item, idx) => (
                     <div key={idx} className="flex justify-between text-sm">
                       <span className="text-gray-600 flex items-center gap-2">
@@ -572,7 +572,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Custom Date Modal */}
       {showCustomDateModal && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-bold">Custom Date Range</h3>
