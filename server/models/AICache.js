@@ -79,6 +79,73 @@ aiCacheSchema.statics.findValidCache = async function(branchId, timeRange = '7d'
   return cache;
 };
 
+// Stats Cache Schema for Incremental Aggregation
+const statsCacheSchema = new mongoose.Schema(
+  {
+    branch: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Branch',
+      required: true,
+      index: true
+    },
+    date: {
+      type: Date,
+      required: true,
+      index: true
+    },
+    timeRange: {
+      type: String,
+      enum: ['today', '7d', '30d'],
+      default: 'today'
+    },
+    // Cached aggregate data
+    aggregates: {
+      totalRevenue: { type: Number, default: 0 },
+      totalOrders: { type: Number, default: 0 },
+      avgOrderValue: { type: Number, default: 0 },
+      totalItemsSold: { type: Number, default: 0 },
+      paymentBreakdown: { type: mongoose.Schema.Types.Mixed, default: {} },
+      categoryBreakdown: { type: mongoose.Schema.Types.Mixed, default: {} },
+      hourlyPattern: [{ hour: Number, orders: Number, revenue: Number }],
+      topItems: [{ itemId: mongoose.Schema.Types.ObjectId, name: String, quantity: Number, revenue: Number }]
+    },
+    // Real-time delta (changes since last cache)
+    delta: {
+      revenue: { type: Number, default: 0 },
+      orders: { type: Number, default: 0 },
+      items: { type: Number, default: 0 }
+    },
+    lastUpdated: {
+      type: Date,
+      default: Date.now
+    },
+    expiresAt: {
+      type: Date,
+      index: true
+    }
+  },
+  { timestamps: true }
+);
+
+statsCacheSchema.index({ branch: 1, date: 1, timeRange: 1 }, { unique: true });
+statsCacheSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
+
+// Apply incremental delta to cached aggregates
+statsCacheSchema.methods.applyDelta = function(deltaData) {
+  this.aggregates.totalRevenue += deltaData.revenue || 0;
+  this.aggregates.totalOrders += deltaData.orders || 0;
+  this.aggregates.totalItemsSold += deltaData.items || 0;
+  if (this.aggregates.totalOrders > 0) {
+    this.aggregates.avgOrderValue = this.aggregates.totalRevenue / this.aggregates.totalOrders;
+  }
+  this.delta.revenue += deltaData.revenue || 0;
+  this.delta.orders += deltaData.orders || 0;
+  this.delta.items += deltaData.items || 0;
+  this.lastUpdated = new Date();
+};
+
+const StatsCache = mongoose.model('StatsCache', statsCacheSchema);
+
 // Static method to create or update cache
 aiCacheSchema.statics.createOrUpdate = async function(branchId, timeRange, aiInsights, geminiResponse, sections, metadata) {
   const today = new Date();
@@ -107,4 +174,7 @@ aiCacheSchema.statics.createOrUpdate = async function(branchId, timeRange, aiIns
   return cache;
 };
 
-module.exports = mongoose.model('AICache', aiCacheSchema);
+module.exports = {
+  AICache: mongoose.model('AICache', aiCacheSchema),
+  StatsCache
+};

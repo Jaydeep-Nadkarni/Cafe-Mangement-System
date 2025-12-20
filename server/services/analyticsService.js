@@ -1328,6 +1328,87 @@ const getAIInsights = async (branchId, timeRange = '7d') => {
   };
 };
 
+/**
+ * Get or create stats cache for incremental updates
+ */
+const getStatsCache = async (branchId, timeRange = 'today') => {
+  const { StatsCache } = require('../models/AICache');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  let cache = await StatsCache.findOne({
+    branch: branchId,
+    timeRange,
+    date: today
+  });
+  
+  if (!cache) {
+    // Create new cache with fresh aggregates
+    const stats = await getRealTimeStats(branchId, timeRange);
+    
+    cache = new StatsCache({
+      branch: branchId,
+      date: today,
+      timeRange,
+      aggregates: {
+        totalRevenue: stats.totalRevenue || 0,
+        totalOrders: stats.totalOrders || 0,
+        avgOrderValue: stats.avgOrderValue || 0,
+        totalItemsSold: stats.totalItemsSold || 0,
+        paymentBreakdown: {},
+        categoryBreakdown: {},
+        hourlyPattern: [],
+        topItems: []
+      },
+      delta: { revenue: 0, orders: 0, items: 0 },
+      expiresAt: new Date(today.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+    
+    await cache.save();
+  }
+  
+  return cache;
+};
+
+/**
+ * Apply incremental delta to cached stats
+ * Called when order is created, paid, or refunded
+ */
+const applyStatsDelta = async (branchId, deltaData) => {
+  const { StatsCache } = require('../models/AICache');
+  
+  try {
+    const cache = await getStatsCache(branchId, 'today');
+    
+    if (cache) {
+      cache.applyDelta(deltaData);
+      await cache.save();
+      
+      console.log(`[Analytics] Applied delta to cache: ${JSON.stringify(deltaData)}`);
+      return cache.aggregates;
+    }
+  } catch (error) {
+    console.error('[Analytics] Error applying stats delta:', error);
+  }
+  
+  return null;
+};
+
+/**
+ * Get stats with cached aggregates + real-time delta
+ */
+const getStatsWithCache = async (branchId, timeRange = 'today') => {
+  const cache = await getStatsCache(branchId, timeRange);
+  
+  // Return cached aggregates with delta applied
+  return {
+    ...cache.aggregates,
+    _cached: true,
+    _lastUpdated: cache.lastUpdated,
+    _delta: cache.delta
+  };
+};
+
 module.exports = {
   getGlobalStats,
   getBranchPerformance,
@@ -1341,5 +1422,8 @@ module.exports = {
   getRealTimeStats,
   getHourlyRevenuePattern,
   getDailyRevenuePattern,
-  getAIInsights
+  getAIInsights,
+  getStatsCache,
+  applyStatsDelta,
+  getStatsWithCache
 };

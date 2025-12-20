@@ -6,6 +6,7 @@ const orderService = require('../services/orderService');
 const billService = require('../services/billService');
 const whatsappService = require('../services/whatsappService');
 const { triggerStatsUpdate, emitToBranch } = require('../services/realtimeService');
+const { applyStatsDelta } = require('../services/analyticsService');
 
 // Order lifecycle: CREATED → CONFIRMED → PREPARING → READY → PAID → CLOSED
 const STATUS_FLOW = {
@@ -93,6 +94,14 @@ const createOrder = async (req, res) => {
     table.currentOrders.push(savedOrder._id);
     table.status = 'occupied';
     await table.save();
+
+    // Apply incremental stats delta (revenue=0 since unpaid initially)
+    const totalItems = calculation.items.reduce((sum, item) => sum + item.quantity, 0);
+    await applyStatsDelta(table.branch._id, {
+      revenue: 0,
+      orders: 1,
+      items: totalItems
+    });
 
     // Emit socket event for new order
     emitToBranch(table.branch._id, 'order_created', {
@@ -250,6 +259,13 @@ const checkoutOrder = async (req, res) => {
     
     await order.save();
 
+    // Apply incremental stats delta
+    await applyStatsDelta(order.branch, {
+      revenue: order.total,
+      orders: 1,
+      items: order.items.reduce((sum, item) => sum + item.quantity, 0)
+    });
+
     // Emit socket event for payment
     emitToBranch(order.branch, 'order_paid', {
       orderId: order._id,
@@ -363,8 +379,28 @@ const cancelOrder = async (req, res) => {
     }
 
     const previousStatus = order.status;
+    const wasPaid = order.status === 'paid';
     order.status = 'cancelled';
     await order.save();
+
+    // Apply incremental stats delta for cancellation
+    // If order was paid, need to apply refund delta
+    if (wasPaid) {
+      const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      await applyStatsDelta(order.branch, {
+        revenue: -order.total,
+        orders: 0,
+        items: -totalItems
+      });
+    } else {
+      // If unpaid, just decrement order count
+      const totalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+      await applyStatsDelta(order.branch, {
+        revenue: 0,
+        orders: -1,
+        items: -totalItems
+      });
+    }
 
     // Remove from table's currentOrders array
     const table = await Table.findById(order.table);
@@ -379,7 +415,16 @@ const cancelOrder = async (req, res) => {
       await table.save();
     }
 
-    // Emit socket event
+    // Emit socket event (emit refund event if order was paid)
+    if (wasPaid) {
+      emitToBranch(order.branch, 'order_refunded', {
+        orderId: order._id,
+        orderNumber: order.orderNumber,
+        amount: order.total,
+        timestamp: new Date()
+      });
+    }
+
     emitToBranch(order.branch, 'order_cancelled', {
       orderId: order._id,
       orderNumber: order.orderNumber,

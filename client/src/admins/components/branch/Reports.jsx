@@ -309,26 +309,89 @@ export default function Reports({ branch }) {
     // Join branch room to receive updates
     joinBranchRoom(branch._id);
 
-    // Listen for order completions and stats updates
-    const handleOrderUpdate = () => {
-      console.log('Order update received, refreshing reports...');
-      fetchAnalytics();
+    // Listen for stats updates - INCREMENTAL
+    const handleStatsUpdate = (data) => {
+      console.log('[Reports] Stats update received:', data);
+      // Update executive summary incrementally
+      if (executiveSummary) {
+        setExecutiveSummary(prev => ({
+          ...prev,
+          totalRevenue: data.totalRevenue || prev?.totalRevenue,
+          totalOrders: data.totalOrders || prev?.totalOrders,
+          avgOrderValue: data.avgOrderValue || prev?.avgOrderValue
+        }));
+      }
     };
 
-    socket.on('stats_update', handleOrderUpdate);
-    socket.on('order_completed', handleOrderUpdate);
-    socket.on('payment_confirmation', handleOrderUpdate);
-    socket.on('critical_metric_update', handleOrderUpdate);
-    socket.on('new_order', handleOrderUpdate);
-    socket.on('order_updated', handleOrderUpdate);
+    // Listen for order status changes
+    const handleOrderStatusChange = (data) => {
+      console.log('[Reports] Order status changed:', data);
+      // Refetch revenue growth and patterns
+      axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=${granularity === 'daily' ? 'hourly' : 'daily'}`)
+        .then(res => {
+          const revenuePattern = res.data.pattern || [];
+          processRevenueGrowth(revenuePattern);
+          processSeasonality(revenuePattern);
+          processWeekdayPattern(revenuePattern);
+        })
+        .catch(console.error);
+    };
+
+    // Listen for payments - INCREMENT revenue
+    const handlePayment = (data) => {
+      console.log('[Reports] Payment received:', data);
+      // Update revenue growth incrementally
+      setRevenueGrowth(prev => {
+        if (!prev || prev.length === 0) return prev;
+        const updated = [...prev];
+        const last = updated[updated.length - 1];
+        if (last) {
+          last.revenue = (last.revenue || 0) + (data.amount || 0);
+          last.orders = (last.orders || 0) + 1;
+        }
+        return updated;
+      });
+
+      // Update executive summary
+      setExecutiveSummary(prev => prev ? ({
+        ...prev,
+        totalRevenue: (prev.totalRevenue || 0) + (data.amount || 0),
+        totalOrders: (prev.totalOrders || 0) + 1
+      }) : null);
+    };
+
+    // Listen for refunds - DECREMENT revenue
+    const handleRefund = (data) => {
+      console.log('[Reports] Refund processed:', data);
+      setExecutiveSummary(prev => prev ? ({
+        ...prev,
+        totalRevenue: Math.max(0, (prev.totalRevenue || 0) - (data.amount || 0))
+      }) : null);
+    };
+
+    // Listen for menu item availability changes
+    const handleMenuChange = () => {
+      // Refetch menu lifecycle and treemap
+      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
+        .then(res => {
+          const menuItems = res.data.items || [];
+          processMenuLifecycle(menuItems);
+        })
+        .catch(console.error);
+    };
+
+    socket.on('stats_update', handleStatsUpdate);
+    socket.on('order_status_changed', handleOrderStatusChange);
+    socket.on('order_paid', handlePayment);
+    socket.on('order_refunded', handleRefund);
+    socket.on('menu_item_availability_changed', handleMenuChange);
 
     return () => {
-      socket.off('stats_update', handleOrderUpdate);
-      socket.off('order_completed', handleOrderUpdate);
-      socket.off('payment_confirmation', handleOrderUpdate);
-      socket.off('critical_metric_update', handleOrderUpdate);
-      socket.off('new_order', handleOrderUpdate);
-      socket.off('order_updated', handleOrderUpdate);
+      socket.off('stats_update', handleStatsUpdate);
+      socket.off('order_status_changed', handleOrderStatusChange);
+      socket.off('order_paid', handlePayment);
+      socket.off('order_refunded', handleRefund);
+      socket.off('menu_item_availability_changed', handleMenuChange);
     };
   }, [socket, branch?._id, timeRange, granularity]);
 

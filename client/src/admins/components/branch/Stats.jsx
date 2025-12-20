@@ -134,45 +134,120 @@ export default function Stats({ branch }) {
     // Join branch room
     joinBranchRoom(branch._id);
 
-    // Listen for stats updates (throttled, every 7s)
+    // Listen for stats updates (throttled, every 7s) - INCREMENTAL UPDATE
     socket.on('stats_update', (data) => {
-      console.log('Stats update received:', data);
-      setRealtimeStats(prev => ({ ...prev, ...data }));
+      console.log('[Stats] Stats update received:', data);
+      setRealtimeStats(prev => {
+        if (!prev) return data;
+        // Merge with animation-friendly transitions
+        return { ...prev, ...data };
+      });
     });
 
-    // Listen for critical metrics (instant)
+    // Listen for critical metrics (instant) - INCREMENTAL UPDATE
     socket.on('critical_metric_update', (data) => {
-      console.log('Critical metric update:', data);
+      console.log('[Stats] Critical metric update:', data);
       setRealtimeStats(prev => ({ ...prev, ...data }));
     });
 
-    // Listen for order completions - refetch all analytics
-    socket.on('order_completed', () => {
-      console.log('Order completed, refreshing analytics...');
-      fetchAnalytics();
+    // Listen for order created - INCREMENT counters
+    socket.on('order_created', (data) => {
+      console.log('[Stats] Order created:', data);
+      setRealtimeStats(prev => ({
+        ...prev,
+        totalOrders: (prev?.totalOrders || 0) + 1,
+        activeOrders: (prev?.activeOrders || 0) + 1
+      }));
     });
 
-    // Listen for payment confirmations - refetch all analytics
-    socket.on('payment_confirmation', () => {
-      console.log('Payment confirmed, refreshing analytics...');
-      fetchAnalytics();
+    // Listen for order status changes - UPDATE stats incrementally
+    socket.on('order_status_changed', (data) => {
+      console.log('[Stats] Order status changed:', data);
+      // Refetch peak hours and revenue pattern on status change
+      if (['ready', 'paid', 'closed'].includes(data.newStatus)) {
+        axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
+          .then(res => setRevenuePattern(res.data.pattern || []))
+          .catch(console.error);
+      }
     });
 
-    // Listen for new orders - refetch all analytics
-    socket.on('new_order', () => {
-      console.log('New order received, refreshing analytics...');
-      fetchAnalytics();
+    // Listen for payment - INCREMENT revenue
+    socket.on('order_paid', (data) => {
+      console.log('[Stats] Payment received:', data);
+      setRealtimeStats(prev => ({
+        ...prev,
+        totalRevenue: (prev?.totalRevenue || 0) + (data.amount || 0),
+        activeOrders: Math.max(0, (prev?.activeOrders || 0) - 1)
+      }));
+      
+      // Update payment breakdown incrementally
+      setPaymentBreakdown(prev => {
+        const updated = [...prev];
+        const methodIndex = updated.findIndex(p => p.method === data.paymentMethod);
+        if (methodIndex >= 0) {
+          updated[methodIndex] = {
+            ...updated[methodIndex],
+            revenue: updated[methodIndex].revenue + data.amount,
+            count: updated[methodIndex].count + 1
+          };
+        } else {
+          updated.push({
+            method: data.paymentMethod,
+            revenue: data.amount,
+            count: 1
+          });
+        }
+        return updated;
+      });
+
+      // Refresh revenue pattern
+      axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
+        .then(res => setRevenuePattern(res.data.pattern || []))
+        .catch(console.error);
     });
 
-    // Listen for order updates - refetch all analytics
-    socket.on('order_updated', () => {
-      console.log('Order updated, refreshing analytics...');
-      fetchAnalytics();
+    // Listen for refunds - DECREMENT revenue
+    socket.on('order_refunded', (data) => {
+      console.log('[Stats] Refund processed:', data);
+      setRealtimeStats(prev => ({
+        ...prev,
+        totalRevenue: Math.max(0, (prev?.totalRevenue || 0) - (data.amount || 0))
+      }));
+    });
+
+    // Listen for order closed
+    socket.on('order_closed', () => {
+      // Table might be freed, update table heatmap
+      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
+        .then(res => setTableHeatmap(res.data.heatmap || []))
+        .catch(console.error);
+    });
+
+    // Listen for table changes
+    socket.on('order_table_changed', () => {
+      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
+        .then(res => setTableHeatmap(res.data.heatmap || []))
+        .catch(console.error);
+    });
+
+    // Listen for item updates - refetch menu velocity
+    socket.on('order_items_updated', () => {
+      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
+        .then(res => setMenuVelocity(res.data.items || []))
+        .catch(console.error);
+    });
+
+    // Listen for menu item availability changes
+    socket.on('menu_item_availability_changed', (data) => {
+      console.log('[Stats] Menu item availability changed:', data);
+      // Update menu velocity to reflect availability
+      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
+        .then(res => setMenuVelocity(res.data.items || []))
+        .catch(console.error);
     });
 
     // Listen for table occupancy changes
     socket.on('table_occupancy_change', () => {
-      // Refetch table heatmap
       axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
         .then(res => setTableHeatmap(res.data.heatmap || []))
         .catch(console.error);
@@ -181,10 +256,14 @@ export default function Stats({ branch }) {
     return () => {
       socket.off('stats_update');
       socket.off('critical_metric_update');
-      socket.off('order_completed');
-      socket.off('payment_confirmation');
-      socket.off('new_order');
-      socket.off('order_updated');
+      socket.off('order_created');
+      socket.off('order_status_changed');
+      socket.off('order_paid');
+      socket.off('order_refunded');
+      socket.off('order_closed');
+      socket.off('order_table_changed');
+      socket.off('order_items_updated');
+      socket.off('menu_item_availability_changed');
       socket.off('table_occupancy_change');
     };
   }, [socket, branch, timeRange]);
@@ -277,10 +356,27 @@ export default function Stats({ branch }) {
                       domain={[0, (dataMax) => Math.max(dataMax, 100)]}
                     />
                     <Tooltip 
-                      contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                      formatter={(value) => [`₹${value}`, 'Revenue']}
+                      contentStyle={{ 
+                        backgroundColor: '#fff', 
+                        border: '1px solid #e0e0e0',
+                        borderRadius: '8px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                      }}
+                      formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                      labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
+                      animationDuration={200}
                     />
-                    <Area type="monotone" dataKey="revenue" stroke="#424242" fillOpacity={1} fill="url(#colorRevenue)" />
+                    <Area 
+                      type="monotone" 
+                      dataKey="revenue" 
+                      stroke="#424242" 
+                      strokeWidth={2}
+                      fillOpacity={1} 
+                      fill="url(#colorRevenue)"
+                      animationBegin={0}
+                      animationDuration={800}
+                      animationEasing="ease-in-out"
+                    />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -297,6 +393,72 @@ export default function Stats({ branch }) {
           {peakHours && peakHours.length > 0 ? (
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={peakHours}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis 
+                  dataKey="hour" 
+                  tick={{ fontSize: 11 }} 
+                  stroke="#666"
+                />
+                <YAxis 
+                  yAxisId="left"
+                  tick={{ fontSize: 11 }} 
+                  stroke="#666"
+                  label={{ value: 'Orders', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
+                />
+                <YAxis 
+                  yAxisId="right"
+                  orientation="right"
+                  tick={{ fontSize: 11 }} 
+                  stroke="#666"
+                  label={{ value: 'Revenue (₹)', angle: 90, position: 'insideRight', style: { fontSize: 11 } }}
+                />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: '#fff', 
+                    border: '1px solid #e0e0e0',
+                    borderRadius: '8px',
+                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                  }}
+                  formatter={(value, name) => {
+                    if (name === 'Orders') return [value, 'Orders'];
+                    return [`₹${value.toLocaleString()}`, 'Revenue'];
+                  }}
+                  labelFormatter={(label) => `Hour: ${label}`}
+                  animationDuration={200}
+                />
+                <Legend 
+                  verticalAlign="top"
+                  height={36}
+                  iconType="circle"
+                />
+                <Bar 
+                  yAxisId="left"
+                  dataKey="orders" 
+                  fill="#616161" 
+                  name="Orders"
+                  radius={[4, 4, 0, 0]}
+                  animationBegin={0}
+                  animationDuration={800}
+                  animationEasing="ease-in-out"
+                />
+                <Bar 
+                  yAxisId="right"
+                  dataKey="revenue" 
+                  fill="#9e9e9e" 
+                  name="Revenue"
+                  radius={[4, 4, 0, 0]}
+                  animationBegin={200}
+                  animationDuration={800}
+                  animationEasing="ease-in-out"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No peak hours data available
+            </div>
+          )}
+        </ChartCard>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                 <XAxis 
                   dataKey="hour" 
