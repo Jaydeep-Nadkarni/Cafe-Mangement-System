@@ -293,7 +293,7 @@ const getPublicMenu = async (req, res) => {
   }
 };
 
-// @desc    Get public categories (all active categories)
+// @desc    Get public categories (all active categories with available items)
 // @route   GET /api/public/categories
 // @access  Public
 const getPublicCategories = async (req, res) => {
@@ -302,9 +302,12 @@ const getPublicCategories = async (req, res) => {
     
     // Build branch query for categories
     let branchQuery = {};
+    let branchId = null;
+
     if (branchCode) {
       const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
       if (branch) {
+        branchId = branch._id;
         branchQuery.$or = [
           { branch: branch._id },
           { branch: null },
@@ -313,14 +316,50 @@ const getPublicCategories = async (req, res) => {
       }
     }
 
-    // Get all active categories
+    // 1. Get all active categories
     const Category = require('../models/Category');
-    const categories = await Category.find({
+    const allCategories = await Category.find({
       isActive: true,
       ...branchQuery
     }).sort({ sortOrder: 1, name: 1 });
 
-    res.json(categories);
+    // 2. Check for active items in each category
+    // We only want to show categories that have at least one available item
+    const MenuItem = require('../models/MenuItem');
+    
+    // Build item query
+    let itemQuery = {
+      isAvailable: true,
+      isDeleted: { $ne: true }
+    };
+
+    if (branchId) {
+      itemQuery.$or = [
+        { branch: branchId },
+        { branch: null },
+        { branch: { $exists: false } }
+      ];
+    } else {
+      itemQuery.$or = [
+        { branch: null },
+        { branch: { $exists: false } }
+      ];
+    }
+
+    // Aggregate to find categories with items
+    const activeCategoriesStats = await MenuItem.aggregate([
+      { $match: itemQuery },
+      { $group: { _id: '$category', count: { $sum: 1 } } }
+    ]);
+
+    const activeCategorySlugs = activeCategoriesStats.map(s => s._id);
+
+    // 3. Filter categories
+    const visibleCategories = allCategories.filter(cat => 
+      activeCategorySlugs.includes(cat.slug)
+    );
+
+    res.json(visibleCategories);
   } catch (error) {
     console.error('Error fetching public categories:', error.message);
     res.status(500).json({ message: error.message });

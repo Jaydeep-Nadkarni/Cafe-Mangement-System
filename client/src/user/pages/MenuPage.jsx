@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
+import { useSocket } from '../context/SocketContext';
 import { saveTableSession, getTableSession, getSessionDisplayString } from '../utils/sessionStorage';
 import FilterChips from '../components/FilterChips';
 import MenuCard from '../components/MenuCard';
@@ -21,38 +22,76 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState(null);
-
+  
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   // Fetch menu and categories from database
-  useEffect(() => {
-    const fetchMenuData = async () => {
-      try {
-        setLoading(true);
-        const session = getTableSession();
-        const branch = branchCode || session?.branchCode || '';
-        
-        const params = branch ? { branchCode: branch } : {};
-        
-        // Fetch both menu items and categories
-        const [menuResponse, categoriesResponse] = await Promise.all([
-          axios.get(`${API_URL}/api/public/menu`, { params }),
-          axios.get(`${API_URL}/api/public/categories`, { params })
-        ]);
-        
-        setMenuItems(menuResponse.data);
-        setCategories(categoriesResponse.data);
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching menu:', err);
-        setError('Failed to load menu. Please try again.');
-      } finally {
-        setLoading(false);
+  const fetchMenuData = useCallback(async () => {
+    try {
+      // Don't set loading to true on background refreshes if we already have data
+      if (menuItems.length === 0) setLoading(true);
+      
+      const session = getTableSession();
+      const branch = branchCode || session?.branchCode || '';
+      
+      const params = branch ? { branchCode: branch } : {};
+      
+      // Fetch both menu items and categories
+      const [menuResponse, categoriesResponse] = await Promise.all([
+        axios.get(`${API_URL}/api/public/menu`, { params }),
+        axios.get(`${API_URL}/api/public/categories`, { params })
+      ]);
+      
+      setMenuItems(menuResponse.data);
+      setCategories(categoriesResponse.data);
+      setError(null);
+
+      // If we have a branch code, try to get the branch ID for socket connection
+      if (branch && !branchId) {
+        try {
+          const branchRes = await axios.get(`${API_URL}/api/public/branch/${branch}`);
+          setBranchId(branchRes.data._id);
+        } catch (e) {
+          console.error('Failed to fetch branch details for socket:', e);
+        }
       }
+    } catch (err) {
+      console.error('Error fetching menu:', err);
+      setError('Failed to load menu. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [branchCode, API_URL, branchId, menuItems.length]);
+
+  useEffect(() => {
+    fetchMenuData();
+  }, [fetchMenuData]);
+
+  // Socket connection for real-time updates
+  useEffect(() => {
+    if (!socket || !branchId) return;
+
+    joinBranchRoom(branchId);
+
+    const handleUpdate = () => {
+      console.log('Menu update received via socket');
+      fetchMenuData();
     };
 
-    fetchMenuData();
-  }, [branchCode, API_URL]);
+    socket.on('menu_item_added', handleUpdate);
+    socket.on('menu_item_updated', handleUpdate);
+    socket.on('menu_item_deleted', handleUpdate);
+    socket.on('menu_item_availability_changed', handleUpdate);
+    socket.on('categories_updated', handleUpdate);
+
+    return () => {
+      socket.off('menu_item_added', handleUpdate);
+      socket.off('menu_item_updated', handleUpdate);
+      socket.off('menu_item_deleted', handleUpdate);
+      socket.off('menu_item_availability_changed', handleUpdate);
+      socket.off('categories_updated', handleUpdate);
+    };
+  }, [socket, branchId, joinBranchRoom, fetchMenuData]);
 
   // Handle URL params and session management
   useEffect(() => {

@@ -257,8 +257,9 @@ export default function Inventory({ menu, setMenu }) {
 
   const fetchCategories = async () => {
     try {
+      // Always fetch all categories including empty ones for the manager view
       const endpoint = useDynamicCategories 
-        ? `${API_URL}/api/branch/categories/dynamic?includeEmpty=false`
+        ? `${API_URL}/api/branch/categories/dynamic?includeEmpty=true`
         : `${API_URL}/api/branch/categories`;
       const res = await axios.get(endpoint);
       setCategories(res.data);

@@ -978,7 +978,16 @@ const getDynamicCategories = async (req, res) => {
     const branch = await getManagerBranch(req.user._id);
     const { includeEmpty = 'false' } = req.query;
     
-    // Aggregate categories from menu items
+    // 1. Get ALL active categories metadata first
+    const categoryMetadata = await Category.find({
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ],
+      isActive: true
+    });
+
+    // 2. Aggregate stats from menu items
     const categoriesWithStats = await MenuItem.aggregate([
       {
         $match: {
@@ -1000,44 +1009,41 @@ const getDynamicCategories = async (req, res) => {
           minPrice: { $min: '$price' },
           maxPrice: { $max: '$price' }
         }
-      },
-      {
-        $sort: { _id: 1 }
       }
     ]);
 
-    // Get category metadata from Category collection
-    const categoryMetadata = await Category.find({
-      $or: [
-        { branch: branch._id },
-        { branch: null }
-      ],
-      isActive: true
-    });
-
-    // Merge stats with metadata
-    const categories = categoriesWithStats.map(cat => {
-      const meta = categoryMetadata.find(m => m.slug === cat._id);
+    // 3. Merge metadata with stats
+    // We map over metadata to ensure we include categories even if they have no items
+    const categories = categoryMetadata.map(meta => {
+      const stats = categoriesWithStats.find(s => s._id === meta.slug);
       return {
-        slug: cat._id,
-        name: meta?.name || cat._id.charAt(0).toUpperCase() + cat._id.slice(1),
-        color: meta?.color || '#6B7280',
-        icon: meta?.icon || 'tag',
-        sortOrder: meta?.sortOrder || 0,
-        totalItems: cat.totalItems,
-        availableItems: cat.availableItems,
-        avgPrice: cat.avgPrice,
-        minPrice: cat.minPrice,
-        maxPrice: cat.maxPrice,
-        hasMetadata: !!meta,
-        _id: meta?._id
+        slug: meta.slug,
+        name: meta.name,
+        color: meta.color || '#6B7280',
+        icon: meta.icon || 'tag',
+        sortOrder: meta.sortOrder || 0,
+        totalItems: stats?.totalItems || 0,
+        availableItems: stats?.availableItems || 0,
+        avgPrice: stats?.avgPrice || 0,
+        minPrice: stats?.minPrice || 0,
+        maxPrice: stats?.maxPrice || 0,
+        hasMetadata: true,
+        _id: meta._id
       };
     });
 
-    // Filter out empty categories if requested
+    // 4. Filter out empty categories if requested
+    // If includeEmpty is 'true', we return everything.
+    // If 'false', we only return categories that have at least one item (totalItems > 0)
+    // The user requirement says "Customer menu: hide empty categories (no active items)"
+    // So for customer facing, we might want availableItems > 0.
+    // But this endpoint is for Manager. Manager might want to see categories with items even if they are unavailable.
+    // Let's stick to totalItems > 0 for "non-empty" in manager context, or availableItems > 0?
+    // Usually "empty" means no items.
+    
     const filteredCategories = includeEmpty === 'true' 
       ? categories 
-      : categories.filter(c => c.availableItems > 0);
+      : categories.filter(c => c.totalItems > 0);
 
     // Sort by sortOrder, then by name
     filteredCategories.sort((a, b) => {
