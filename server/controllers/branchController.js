@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
 const Category = require('../models/Category');
+const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
 const { 
   getBranchStats,
   getRevenueByPaymentMethod,
@@ -400,6 +401,21 @@ const addMenuItem = async (req, res) => {
     });
 
     const savedItem = await menuItem.save();
+    
+    // Emit socket event for real-time category update
+    emitToBranch(branch._id, 'menu_item_added', {
+      item: savedItem,
+      category: savedItem.category,
+      timestamp: new Date()
+    });
+    
+    // Trigger category refresh
+    emitToBranch(branch._id, 'categories_updated', {
+      action: 'item_added',
+      category: savedItem.category,
+      timestamp: new Date()
+    });
+    
     res.status(201).json(savedItem);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -426,11 +442,31 @@ const updateMenuItem = async (req, res) => {
       return res.status(404).json({ message: 'Item not found or unauthorized' });
     }
 
+    const oldCategory = menuItem.category;
     Object.keys(updates).forEach(key => {
       menuItem[key] = updates[key];
     });
 
     const updatedItem = await menuItem.save();
+    
+    // Emit socket event for real-time updates
+    emitToBranch(branch._id, 'menu_item_updated', {
+      item: updatedItem,
+      oldCategory,
+      newCategory: updatedItem.category,
+      timestamp: new Date()
+    });
+    
+    // If category changed, trigger category refresh
+    if (oldCategory !== updatedItem.category) {
+      emitToBranch(branch._id, 'categories_updated', {
+        action: 'item_moved',
+        oldCategory,
+        newCategory: updatedItem.category,
+        timestamp: new Date()
+      });
+    }
+    
     res.json(updatedItem);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -460,9 +496,24 @@ const deleteMenuItem = async (req, res) => {
       return res.status(404).json({ message: 'Item not found or unauthorized' });
     }
 
+    const deletedCategory = menuItem.category;
     menuItem.isDeleted = true;
     await menuItem.save();
     console.log(`[DELETE] Item ${id} marked as deleted successfully`);
+    
+    // Emit socket event for real-time category update
+    emitToBranch(branch._id, 'menu_item_deleted', {
+      itemId: id,
+      category: deletedCategory,
+      timestamp: new Date()
+    });
+    
+    // Trigger category refresh
+    emitToBranch(branch._id, 'categories_updated', {
+      action: 'item_deleted',
+      category: deletedCategory,
+      timestamp: new Date()
+    });
 
     res.json({ message: 'Item deleted successfully' });
   } catch (error) {
@@ -920,6 +971,88 @@ const getAICacheStats = async (req, res) => {
 
 // ==================== CATEGORY MANAGEMENT ====================
 
+// @desc    Get dynamic categories derived from menu items
+// @route   GET /api/branch/categories/dynamic
+// @access  Manager
+const getDynamicCategories = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const { includeEmpty = 'false' } = req.query;
+    
+    // Aggregate categories from menu items
+    const categoriesWithStats = await MenuItem.aggregate([
+      {
+        $match: {
+          $or: [
+            { branch: branch._id },
+            { branch: null }
+          ],
+          isDeleted: { $ne: true }
+        }
+      },
+      {
+        $group: {
+          _id: '$category',
+          totalItems: { $sum: 1 },
+          availableItems: {
+            $sum: { $cond: ['$isAvailable', 1, 0] }
+          },
+          avgPrice: { $avg: '$price' },
+          minPrice: { $min: '$price' },
+          maxPrice: { $max: '$price' }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
+    // Get category metadata from Category collection
+    const categoryMetadata = await Category.find({
+      $or: [
+        { branch: branch._id },
+        { branch: null }
+      ],
+      isActive: true
+    });
+
+    // Merge stats with metadata
+    const categories = categoriesWithStats.map(cat => {
+      const meta = categoryMetadata.find(m => m.slug === cat._id);
+      return {
+        slug: cat._id,
+        name: meta?.name || cat._id.charAt(0).toUpperCase() + cat._id.slice(1),
+        color: meta?.color || '#6B7280',
+        icon: meta?.icon || 'tag',
+        sortOrder: meta?.sortOrder || 0,
+        totalItems: cat.totalItems,
+        availableItems: cat.availableItems,
+        avgPrice: cat.avgPrice,
+        minPrice: cat.minPrice,
+        maxPrice: cat.maxPrice,
+        hasMetadata: !!meta,
+        _id: meta?._id
+      };
+    });
+
+    // Filter out empty categories if requested
+    const filteredCategories = includeEmpty === 'true' 
+      ? categories 
+      : categories.filter(c => c.availableItems > 0);
+
+    // Sort by sortOrder, then by name
+    filteredCategories.sort((a, b) => {
+      if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
+      return a.name.localeCompare(b.name);
+    });
+
+    res.json(filteredCategories);
+  } catch (error) {
+    console.error('Error fetching dynamic categories:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Get all categories for branch
 // @route   GET /api/branch/categories
 // @access  Manager
@@ -1171,6 +1304,7 @@ module.exports = {
   clearAICache,
   getAICacheStats,
   getCategories,
+  getDynamicCategories,
   addCategory,
   updateCategory,
   deleteCategory,
