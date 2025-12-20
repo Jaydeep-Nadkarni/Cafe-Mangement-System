@@ -10,7 +10,8 @@ const {
   sendWhatsappBill,
   removeItemFromOrder,
   cancelOrder,
-  mergeOrders
+  mergeOrders,
+  getMergePreview
 } = require('../controllers/orderController');
 
 // All routes are protected and require branch manager role
@@ -18,6 +19,7 @@ router.use(protect);
 router.use(requireBranch);
 
 router.post('/', createOrder);
+router.post('/merge/preview', getMergePreview);
 router.post('/merge', mergeOrders);
 router.get('/:id', getOrder);
 router.put('/:id/items', addItemsToOrder);

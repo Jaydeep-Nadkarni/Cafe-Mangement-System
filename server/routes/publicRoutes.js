@@ -87,110 +87,9 @@ const createQROrder = async (req, res) => {
     }
     console.log('Table found:', table._id);
 
-    if (table.currentOrder) {
-      console.log('Table already has an active order, adding items to existing order:', table.currentOrder);
-      
-      // Add items to existing order instead of creating a new one
-      const existingOrder = await Order.findById(table.currentOrder);
-      
-      if (!existingOrder) {
-        return res.status(404).json({ message: 'Active order not found for this table' });
-      }
-      
-      // Process new items
-      let additionalSubtotal = 0;
-      
-      for (const item of items) {
-        // Find the menu item by name or try to use the ID as a fallback
-        let menuItem;
-        
-        if (item.menuItem && typeof item.menuItem === 'string' && item.menuItem.match(/^[0-9a-fA-F]{24}$/)) {
-          // It's a MongoDB ObjectId
-          menuItem = await MenuItem.findById(item.menuItem);
-        } else if (item.name) {
-          // Search by name
-          menuItem = await MenuItem.findOne({ name: item.name });
-        } else {
-          console.error('Invalid menu item:', item);
-          return res.status(400).json({ message: `Invalid menu item: missing name or valid ObjectId` });
-        }
-
-        if (!menuItem) {
-          console.error('Menu item not found:', item.name || item.menuItem);
-          return res.status(404).json({ message: `Menu item not found: ${item.name || item.menuItem}` });
-        }
-
-        if (!menuItem.isAvailable) {
-          console.error('Menu item unavailable:', menuItem.name);
-          return res.status(400).json({ message: `Menu item is not available: ${menuItem.name}` });
-        }
-
-        const itemTotal = menuItem.price * item.quantity;
-        additionalSubtotal += itemTotal;
-
-        // Check if item already exists in order
-        const existingItemIndex = existingOrder.items.findIndex(
-          orderItem => orderItem.menuItem.toString() === menuItem._id.toString()
-        );
-
-        if (existingItemIndex !== -1) {
-          // Item already exists, increment quantity
-          existingOrder.items[existingItemIndex].quantity += item.quantity;
-          console.log('  Updated item quantity:', menuItem.name, '- New quantity:', existingOrder.items[existingItemIndex].quantity);
-        } else {
-          // Add new item to order
-          existingOrder.items.push({
-            menuItem: menuItem._id,
-            quantity: item.quantity,
-            price: menuItem.price,
-            specialInstructions: item.specialInstructions || '',
-            status: 'pending'
-          });
-          console.log('  Added new item:', item.quantity, 'x', menuItem.name);
-        }
-      }
-
-      // Recalculate totals
-      const subtotal = existingOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      const taxRate = 0.10;
-      const tax = subtotal * taxRate;
-      const total = subtotal + tax;
-
-      existingOrder.subtotal = subtotal;
-      existingOrder.tax = tax;
-      existingOrder.total = total;
-      
-      // Update customer info if provided
-      if (customerName) existingOrder.customerName = customerName;
-      if (customerPhone) existingOrder.customerPhone = customerPhone;
-      if (chefNotes) existingOrder.chefNotes = (existingOrder.chefNotes || '') + '\n' + chefNotes;
-
-      const updatedOrder = await existingOrder.save();
-      console.log('Order updated:', updatedOrder._id, 'New total:', updatedOrder.total);
-
-      // Populate order details before returning
-      const populatedOrder = await Order.findById(updatedOrder._id)
-        .populate('branch')
-        .populate('table')
-        .populate('items.menuItem');
-
-      // Emit real-time event to branch manager
-      const branchRoom = `branch_${populatedOrder.branch._id}`;
-      req.io.to(branchRoom).emit('order_updated', {
-        orderId: populatedOrder._id,
-        data: populatedOrder,
-        timestamp: new Date()
-      });
-      console.log('Emitted order_updated event to room:', branchRoom);
-
-      // Return with 200 OK and indicate this was an update to existing order
-      return res.status(200).json({
-        ...populatedOrder.toObject(),
-        isExistingOrder: true,
-        message: 'Items added to existing order'
-      });
-    }
-
+    // Multiple orders per table are now supported
+    // For QR orders, we'll create a new separate order each time
+    
     // Process items - convert local IDs to MongoDB ObjectIds and validate
     const processedItems = [];
     let subtotal = 0;
@@ -259,8 +158,11 @@ const createQROrder = async (req, res) => {
     const savedOrder = await order.save();
     console.log('Order created:', savedOrder._id, 'OrderNumber:', savedOrder.orderNumber);
 
-    // Update table status
-    table.currentOrder = savedOrder._id;
+    // Add to table's currentOrders array
+    if (!table.currentOrders) {
+      table.currentOrders = [];
+    }
+    table.currentOrders.push(savedOrder._id);
     table.status = 'occupied';
     await table.save();
     console.log('Table updated to occupied');

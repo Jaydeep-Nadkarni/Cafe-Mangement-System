@@ -38,7 +38,8 @@ const {
   getCategories,
   addCategory,
   updateCategory,
-  deleteCategory
+  deleteCategory,
+  getOrders
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -71,6 +72,9 @@ router.put('/memos/:id', updateMemo);
 router.delete('/memos/:id', deleteMemo);
 
 router.get('/details', getBranchDetails);
+
+// Orders route
+router.get('/orders', getOrders);
 
 // Category routes
 router.get('/categories', getCategories);

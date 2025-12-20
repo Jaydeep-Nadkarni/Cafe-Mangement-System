@@ -105,6 +105,23 @@ export default function Tables({ tables, onRefresh }) {
     }
   };
 
+  // Calculate stats for multiple orders
+  const getTableOrderStats = (table) => {
+    if (!table.currentOrders || table.currentOrders.length === 0) {
+      return { count: 0, unpaidAmount: 0, totalAmount: 0 };
+    }
+
+    const unpaidOrders = table.currentOrders.filter(order => order.paymentStatus === 'unpaid');
+    const unpaidAmount = unpaidOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const totalAmount = table.currentOrders.reduce((sum, order) => sum + (order.total || 0), 0);
+
+    return {
+      count: table.currentOrders.length,
+      unpaidAmount,
+      totalAmount
+    };
+  };
+
   return (
     <div className="h-full">
       <div className="mb-6 flex justify-between items-center">
@@ -122,12 +139,21 @@ export default function Tables({ tables, onRefresh }) {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {tables.map(table => (
+        {tables.map(table => {
+          const orderStats = getTableOrderStats(table);
+          return (
           <div 
             key={table._id} 
             onClick={() => setSelectedTable(table)}
             className={`relative p-5 rounded-2xl border-2 transition-all duration-200 hover:shadow-md cursor-pointer group ${getCardColor(table.status)}`}
           >
+            {/* Order Count Badge */}
+            {orderStats.count > 0 && (
+              <div className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm shadow-lg z-10">
+                {orderStats.count}
+              </div>
+            )}
+
             {/* Header */}
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-2">
@@ -156,6 +182,14 @@ export default function Tables({ tables, onRefresh }) {
               </span>
             </div>
 
+            {/* Unpaid Amount Display */}
+            {orderStats.unpaidAmount > 0 && (
+              <div className="mb-3 p-2 bg-red-100 border border-red-200 rounded-lg">
+                <div className="text-xs text-red-600 font-bold uppercase">Unpaid</div>
+                <div className="text-lg font-bold text-red-700">{formatCurrency(orderStats.unpaidAmount)}</div>
+              </div>
+            )}
+
             {/* Status & Actions */}
             <div className="space-y-2">
               <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-center border ${getStatusColor(table.status)}`}>
@@ -173,7 +207,7 @@ export default function Tables({ tables, onRefresh }) {
               
             </div>
           </div>
-        ))}
+        );})}
       </div>
 
       {/* Table Details Modal */}
@@ -269,32 +303,50 @@ export default function Tables({ tables, onRefresh }) {
                 </div>
               </div>
 
-              {/* Active Order */}
-              {selectedTable.currentOrder ? (
+              {/* Active Orders */}
+              {selectedTable.currentOrders && selectedTable.currentOrders.length > 0 ? (
                 <div className="border border-gray-200 rounded-xl overflow-hidden">
                   <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
                     <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> Active Order
+                      <FileText className="w-4 h-4" /> Active Orders ({selectedTable.currentOrders.length})
                     </h3>
-                    <span className="text-xs font-mono bg-white px-2 py-1 rounded border border-gray-200">
-                      #{selectedTable.currentOrder.orderNumber}
-                    </span>
                   </div>
-                  <div className="p-4">
-                    <div className="space-y-2 mb-4">
-                      {selectedTable.currentOrder.items?.map((item, idx) => (
-                        <div key={idx} className="flex justify-between text-sm">
-                          <span className="text-gray-600">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
-                          <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                  <div className="p-4 space-y-4 max-h-80 overflow-y-auto">
+                    {selectedTable.currentOrders.map((order, orderIdx) => (
+                      <div key={order._id || orderIdx} className="border border-gray-200 rounded-lg overflow-hidden">
+                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+                          <span className="text-xs font-mono font-bold">#{order.orderNumber}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
+                            order.paymentStatus === 'paid' 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-red-100 text-red-700'
+                          }`}>
+                            {order.paymentStatus === 'paid' ? 'PAID' : 'UNPAID'}
+                          </span>
                         </div>
-                      ))}
-                    </div>
-                    <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                      <span className="font-bold text-gray-900">Total</span>
-                      <span className="font-bold text-green-600 text-lg">
-                        {formatCurrency(selectedTable.currentOrder.total)}
-                      </span>
-                    </div>
+                        <div className="p-3">
+                          <div className="space-y-1 mb-2">
+                            {order.items?.slice(0, 3).map((item, idx) => (
+                              <div key={idx} className="flex justify-between text-xs">
+                                <span className="text-gray-600">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
+                                <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
+                              </div>
+                            ))}
+                            {order.items?.length > 3 && (
+                              <div className="text-xs text-gray-400 italic">+ {order.items.length - 3} more...</div>
+                            )}
+                          </div>
+                          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                            <span className="font-bold text-gray-900 text-sm">Total</span>
+                            <span className={`font-bold text-sm ${
+                              order.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {formatCurrency(order.total)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               ) : (

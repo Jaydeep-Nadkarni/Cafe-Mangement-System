@@ -125,6 +125,24 @@ const orderSchema = new mongoose.Schema(
     paidAt: {
       type: Date,
       default: null
+    },
+    // Merge metadata for audit trails
+    isMerged: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    mergedAt: {
+      type: Date,
+      default: null
+    },
+    originalOrderIds: {
+      type: [String],
+      default: []
+    },
+    mergeNote: {
+      type: String,
+      default: ''
     }
   },
   { timestamps: true }

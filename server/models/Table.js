@@ -28,10 +28,12 @@ const tableSchema = new mongoose.Schema(
       enum: ['available', 'occupied', 'reserved', 'maintenance', 'paid'],
       default: 'available'
     },
-    currentOrder: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Order',
-      default: null
+    currentOrders: {
+      type: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Order'
+      }],
+      default: []
     },
     qrCode: {
       type: String,
