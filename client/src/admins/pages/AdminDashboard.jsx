@@ -3,6 +3,7 @@ import { useAuth } from '../../user/context/AuthContext';
 import QRCodeGenerator from '../../user/components/QRCodeGenerator';
 import Sidebar from '../components/admin/Sidebar';
 import SkeletonDashboard from '../../components/skeletons/SkeletonDashboard';
+import ConfirmationModal from '../components/branch/ConfirmationModal';
 import { 
   LogOut, 
   Store, 
@@ -29,8 +30,19 @@ export default function AdminDashboard() {
   });
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState('branches');
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false,
+    isLoading: false,
+    onConfirm: null
+  });
   
   // Form State
   const [formData, setFormData] = useState({
@@ -66,6 +78,7 @@ export default function AdminDashboard() {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
+      setError('Unable to load dashboard. Please try again later.');
       setLoading(false);
     }
   };
@@ -81,7 +94,15 @@ export default function AdminDashboard() {
       setShowCreateForm(false);
       fetchData();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to create branch');
+      console.error('Create branch error:', error);
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to create branch. Please check your input and try again.',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
@@ -102,6 +123,24 @@ export default function AdminDashboard() {
       return (
         <div className="bg-gray-50 p-6 rounded-lg">
           <SkeletonDashboard />
+        </div>
+      );
+    }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <XCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Dashboard Unavailable</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button 
+            onClick={fetchData}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Retry
+          </button>
         </div>
       );
     }
@@ -334,6 +373,18 @@ export default function AdminDashboard() {
         {/* Dynamic Content */}
         {renderContent()}
       </main>
+
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        description={modalState.description}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        isDangerous={modalState.isDangerous}
+        isLoading={modalState.isLoading}
+      />
     </div>
   );
 }

@@ -13,6 +13,53 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Setup Axios Interceptors for Token Refresh
+  useEffect(() => {
+    const interceptor = axios.interceptors.response.use(
+      (response) => {
+        // Check for silent refresh header
+        const newToken = response.headers['x-access-token'];
+        if (newToken) {
+          setToken(newToken);
+          localStorage.setItem('token', newToken);
+          axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        }
+        return response;
+      },
+      async (error) => {
+        const originalRequest = error.config;
+        
+        // If 401 and we haven't retried yet
+        if (error.response?.status === 401 && !originalRequest._retry) {
+          originalRequest._retry = true;
+          
+          try {
+            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            // Try to refresh using cookie
+            const res = await axios.post(`${API_URL}/api/auth/refresh`);
+            const { token: newToken } = res.data;
+            
+            setToken(newToken);
+            localStorage.setItem('token', newToken);
+            axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+            
+            originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+            return axios(originalRequest);
+          } catch (refreshError) {
+            // Refresh failed, logout
+            logout();
+            return Promise.reject(refreshError);
+          }
+        }
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptor);
+    };
+  }, []);
+
   // Configure axios defaults
   useEffect(() => {
     if (token) {
@@ -27,17 +74,35 @@ export const AuthProvider = ({ children }) => {
   // Check for existing session on mount
   useEffect(() => {
     const checkLoggedIn = async () => {
-      if (token) {
-        try {
-          const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-          const res = await axios.get(`${API_URL}/api/auth/me`);
-          setUser(res.data);
-        } catch (err) {
-          console.error('Session verification failed:', err);
-          logout();
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      
+      try {
+        // If no token in storage, try to get one via refresh cookie first
+        if (!token) {
+           try {
+             const refreshRes = await axios.post(`${API_URL}/api/auth/refresh`);
+             const newToken = refreshRes.data.token;
+             setToken(newToken);
+             axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+           } catch (e) {
+             // No refresh token or invalid
+             throw new Error('No session');
+           }
         }
+        
+        // Now fetch user details
+        const res = await axios.get(`${API_URL}/api/auth/me`);
+        setUser(res.data);
+      } catch (err) {
+        console.log('Session verification failed:', err.message);
+        // Don't call logout() here to avoid infinite loops or unnecessary API calls
+        // Just clear state
+        setUser(null);
+        setToken(null);
+        localStorage.removeItem('token');
+      } finally {
+        setLoading(false);
       }
-      setLoading(false);
     };
 
     checkLoggedIn();
@@ -66,10 +131,17 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = async () => {
+    try {
+      const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+      await axios.post(`${API_URL}/api/auth/logout`);
+    } catch (e) {
+      console.error('Logout error', e);
+    }
     setUser(null);
     setToken(null);
     localStorage.removeItem('token');
+    delete axios.defaults.headers.common['Authorization'];
   };
 
   const value = {

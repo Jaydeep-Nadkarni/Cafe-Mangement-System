@@ -71,7 +71,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: `Failed to fetch orders: ${error.response?.data?.message || error.message}`,
+        description: 'Failed to load orders. Please check your connection and try again.',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
@@ -163,10 +163,11 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       onRefresh();
       setShowAddItem(false);
     } catch (error) {
+      console.error('Failed to add item:', error);
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: `Failed to add item: ${error.response?.data?.message || error.message}`,
+        description: 'Failed to add item to order. Please try again.',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
@@ -188,7 +189,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           fetchOrders(true);
           onRefresh();
         } catch (error) {
-          showError('Failed to remove item: ' + (error.response?.data?.message || error.message));
+          console.error('Failed to remove item:', error);
+          showError('Failed to remove item. Please try again.');
         } finally {
           setLoading(false);
         }
@@ -208,7 +210,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           fetchOrders(true);
           onRefresh();
         } catch (error) {
-          showError('Failed to cancel order: ' + (error.response?.data?.message || error.message));
+          console.error('Failed to cancel order:', error);
+          showError('Failed to cancel order. Please try again.');
         } finally {
           setLoading(false);
         }
@@ -251,7 +254,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       setMergePreview(response.data);
       setShowMergePreview(true);
     } catch (error) {
-      showError(error.response?.data?.message || 'Failed to get merge preview');
+      console.error('Failed to get merge preview:', error);
+      showError('Failed to preview merge. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -276,7 +280,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       
       showSuccess(`Successfully merged ${response.data.mergedOrderIds.length + 1} orders`);
     } catch (error) {
-      showError(error.response?.data?.message || 'Failed to merge orders');
+      console.error('Failed to merge orders:', error);
+      showError('Failed to merge orders. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -336,10 +341,11 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           onRefresh();
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
+          console.error('Checkout failed:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: `Checkout failed: ${error.response?.data?.message || error.message}`,
+            description: 'Payment processing failed. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -403,7 +409,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       
       showSuccess(`Order status updated to ${newStatus.toUpperCase()}`);
     } catch (error) {
-      showError(error.response?.data?.message || 'Failed to update order status');
+      console.error('Failed to update order status:', error);
+      showError('Failed to update order status. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -430,7 +437,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           
           showSuccess('Order closed successfully!');
         } catch (error) {
-          showError(error.response?.data?.message || 'Failed to close order');
+          console.error('Failed to close order:', error);
+          showError('Failed to close order. Please try again.');
         } finally {
           setLoading(false);
         }

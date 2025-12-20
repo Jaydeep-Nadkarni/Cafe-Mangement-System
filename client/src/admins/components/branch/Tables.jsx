@@ -69,10 +69,11 @@ export default function Tables({ tables, onRefresh }) {
           onRefresh();
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
+          console.error('Failed to delete table:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: `Failed to delete table: ${error.response?.data?.message || error.message}`,
+            description: 'Failed to delete table. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -107,10 +108,11 @@ export default function Tables({ tables, onRefresh }) {
           onRefresh();
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
+          console.error('Failed to update status:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: 'Failed to update status',
+            description: 'Failed to update status. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -133,10 +135,11 @@ export default function Tables({ tables, onRefresh }) {
       resetForm();
       onRefresh();
     } catch (error) {
+      console.error('Failed to save table:', error);
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: `Failed to save table: ${error.response?.data?.message || error.message}`,
+        description: 'Failed to save table details. Please try again.',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
