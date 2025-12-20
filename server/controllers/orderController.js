@@ -807,6 +807,34 @@ const closeOrder = async (req, res) => {
   }
 };
 
+// @desc    Download bill PDF
+// @route   GET /api/orders/:id/bill
+// @access  Manager
+const downloadBill = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id)
+      .populate('items.menuItem')
+      .populate('table');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const pdfBuffer = await billService.generateThermalBill(order);
+
+    res.set({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `attachment; filename=Bill-${order.orderNumber || order._id}.pdf`,
+      'Content-Length': pdfBuffer.length
+    });
+
+    res.send(pdfBuffer);
+  } catch (error) {
+    console.error('Download Bill Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrder,
@@ -819,5 +847,6 @@ module.exports = {
   getMergePreview,
   applyCoupon,
   checkoutOrder,
-  sendWhatsappBill
+  sendWhatsappBill,
+  downloadBill
 };

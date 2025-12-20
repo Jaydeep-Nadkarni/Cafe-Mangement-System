@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { useSocket } from '../../../user/context/SocketContext';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
   LineChart, Line, AreaChart, Area, ComposedChart
@@ -17,7 +16,8 @@ import {
   Award,
   Target,
   Shield,
-  Zap
+  Zap,
+  RefreshCw
 } from 'lucide-react';
 import {
   ChartContainer,
@@ -32,8 +32,8 @@ import {
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
 export default function Reports({ branch }) {
-  const { socket, joinBranchRoom } = useSocket();
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('30d');
   const [granularity, setGranularity] = useState('daily'); // daily, weekly, monthly
   
@@ -121,11 +121,23 @@ export default function Reports({ branch }) {
       );
       
       setLoading(false);
+      setRefreshing(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
       setLoading(false);
+      setRefreshing(false);
     }
   };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAnalytics();
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    fetchAnalytics();
+  }, [branch, timeRange, granularity]);
 
   // Data processing functions
   const processRevenueGrowth = (pattern) => {
@@ -297,45 +309,7 @@ export default function Reports({ branch }) {
     });
   };
 
-  // Fetch data when dependencies change
-  useEffect(() => {
-    fetchAnalytics();
-  }, [branch, timeRange, granularity]);
 
-  // Socket.IO real-time updates for Reports
-  useEffect(() => {
-    if (!socket || !branch?._id) return;
-
-    // Join branch room to receive updates
-    joinBranchRoom(branch._id);
-
-    // Listen for stats updates - INCREMENTAL
-    const handleStatsUpdate = (data) => {
-      console.log('[Reports] Stats update received:', data);
-      // Update executive summary incrementally
-      if (executiveSummary) {
-        setExecutiveSummary(prev => ({
-          ...prev,
-          totalRevenue: data.totalRevenue || prev?.totalRevenue,
-          totalOrders: data.totalOrders || prev?.totalOrders,
-          avgOrderValue: data.avgOrderValue || prev?.avgOrderValue
-        }));
-      }
-    };
-
-    // Listen for order status changes
-    const handleOrderStatusChange = (data) => {
-      console.log('[Reports] Order status changed:', data);
-      // Refetch revenue growth and patterns
-      axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=${granularity === 'daily' ? 'hourly' : 'daily'}`)
-        .then(res => {
-          const revenuePattern = res.data.pattern || [];
-          processRevenueGrowth(revenuePattern);
-          processSeasonality(revenuePattern);
-          processWeekdayPattern(revenuePattern);
-        })
-        .catch(console.error);
-    };
 
     // Listen for payments - INCREMENT revenue
     const handlePayment = (data) => {
@@ -351,49 +325,7 @@ export default function Reports({ branch }) {
         }
         return updated;
       });
-
-      // Update executive summary
-      setExecutiveSummary(prev => prev ? ({
-        ...prev,
-        totalRevenue: (prev.totalRevenue || 0) + (data.amount || 0),
-        totalOrders: (prev.totalOrders || 0) + 1
-      }) : null);
     };
-
-    // Listen for refunds - DECREMENT revenue
-    const handleRefund = (data) => {
-      console.log('[Reports] Refund processed:', data);
-      setExecutiveSummary(prev => prev ? ({
-        ...prev,
-        totalRevenue: Math.max(0, (prev.totalRevenue || 0) - (data.amount || 0))
-      }) : null);
-    };
-
-    // Listen for menu item availability changes
-    const handleMenuChange = () => {
-      // Refetch menu lifecycle and treemap
-      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
-        .then(res => {
-          const menuItems = res.data.items || [];
-          processMenuLifecycle(menuItems);
-        })
-        .catch(console.error);
-    };
-
-    socket.on('stats_update', handleStatsUpdate);
-    socket.on('order_status_changed', handleOrderStatusChange);
-    socket.on('order_paid', handlePayment);
-    socket.on('order_refunded', handleRefund);
-    socket.on('menu_item_availability_changed', handleMenuChange);
-
-    return () => {
-      socket.off('stats_update', handleStatsUpdate);
-      socket.off('order_status_changed', handleOrderStatusChange);
-      socket.off('order_paid', handlePayment);
-      socket.off('order_refunded', handleRefund);
-      socket.off('menu_item_availability_changed', handleMenuChange);
-    };
-  }, [socket, branch?._id, timeRange, granularity]);
 
   if (!branch) {
     return (
@@ -426,6 +358,14 @@ export default function Reports({ branch }) {
           <p className="text-sm text-gray-500 mt-1">Comprehensive business insights and trends</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-50"
+            title="Refresh Data"
+          >
+            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
           <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
           
           {/* Granularity Toggle */}

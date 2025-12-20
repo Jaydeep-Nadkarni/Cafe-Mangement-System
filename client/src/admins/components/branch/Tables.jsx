@@ -220,6 +220,14 @@ export default function Tables({ tables, onRefresh }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
         {tables.map(table => {
           const orderStats = getTableOrderStats(table);
+          // Calculate last activity
+          const lastActivity = table.currentOrders?.length > 0 
+            ? table.currentOrders.reduce((latest, order) => {
+                const orderDate = new Date(order.updatedAt || order.createdAt);
+                return orderDate > latest ? orderDate : latest;
+              }, new Date(table.updatedAt))
+            : new Date(table.updatedAt);
+
           return (
           <div 
             key={table._id} 
@@ -233,6 +241,31 @@ export default function Tables({ tables, onRefresh }) {
               </div>
             )}
 
+            {/* Hover Actions Overlay */}
+            <div className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-20 backdrop-blur-[2px]">
+               <button 
+                 onClick={(e) => { e.stopPropagation(); /* handlePrint(table) */ }}
+                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors shadow-lg"
+                 title="Print Bill"
+               >
+                 <Printer className="w-5 h-5" />
+               </button>
+               <button 
+                 onClick={(e) => { e.stopPropagation(); /* handleMerge(table) */ }}
+                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-purple-50 hover:text-purple-600 transition-colors shadow-lg"
+                 title="Merge Table"
+               >
+                 <ArrowRightLeft className="w-5 h-5" />
+               </button>
+               <button 
+                 onClick={(e) => handleEdit(e, table)} 
+                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-amber-50 hover:text-amber-600 transition-colors shadow-lg"
+                 title="Edit Table"
+               >
+                 <Edit2 className="w-5 h-5" />
+               </button>
+            </div>
+
             {/* Header */}
             <div className="flex justify-between items-start mb-4">
               <div className="flex items-center gap-2">
@@ -241,13 +274,10 @@ export default function Tables({ tables, onRefresh }) {
                   <AlertCircle className="w-4 h-4 text-amber-500" />
                 )}
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button onClick={(e) => handleEdit(e, table)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                  <Edit2 className="w-4 h-4" />
-                </button>
-                <button onClick={(e) => handleDelete(e, table._id)} className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg">
-                  <Trash2 className="w-4 h-4" />
-                </button>
+              {/* Time Since Activity */}
+              <div className="flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
+                <Clock className="w-3 h-3" />
+                {getTimeSince(lastActivity)}
               </div>
             </div>
             
@@ -261,11 +291,25 @@ export default function Tables({ tables, onRefresh }) {
               </span>
             </div>
 
-            {/* Unpaid Amount Display */}
-            {orderStats.unpaidAmount > 0 && (
-              <div className="mb-3 p-2 bg-red-100 border border-red-200 rounded-lg">
-                <div className="text-xs text-red-600 font-bold uppercase">Unpaid</div>
-                <div className="text-lg font-bold text-red-700">{formatCurrency(orderStats.unpaidAmount)}</div>
+            {/* Bill Amount Display */}
+            {orderStats.totalAmount > 0 && (
+              <div className={`mb-3 p-2 rounded-lg border ${orderStats.unpaidAmount > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
+                <div className="flex justify-between items-end">
+                  <div>
+                    <div className={`text-xs font-bold uppercase ${orderStats.unpaidAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      {orderStats.unpaidAmount > 0 ? 'Unpaid' : 'Total'}
+                    </div>
+                    <div className={`text-lg font-bold ${orderStats.unpaidAmount > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                      {formatCurrency(orderStats.unpaidAmount > 0 ? orderStats.unpaidAmount : orderStats.totalAmount)}
+                    </div>
+                  </div>
+                  {orderStats.unpaidAmount > 0 && orderStats.totalAmount > orderStats.unpaidAmount && (
+                    <div className="text-right">
+                      <div className="text-[10px] text-gray-500 font-medium uppercase">Total Bill</div>
+                      <div className="text-sm font-bold text-gray-600">{formatCurrency(orderStats.totalAmount)}</div>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
 

@@ -9,6 +9,19 @@ import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 
+const getTimeSince = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now - date) / 60000);
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  return `${Math.floor(diffInHours / 24)}d ago`;
+};
+
 export default function Orders({ tables, menu = [], onRefresh }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
@@ -28,6 +41,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   const [customEndDate, setCustomEndDate] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [viewMode, setViewMode] = useState('list'); // 'list' or 'table'
   const [modalState, setModalState] = useState({
     isOpen: false,
     title: '',
@@ -393,6 +407,32 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     }
   };
 
+  const handlePrintBill = async (orderId) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API_URL}/api/orders/${orderId}/bill`, {
+        headers: { Authorization: `Bearer ${token}` },
+        responseType: 'blob'
+      });
+      
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `Bill-${orderId.slice(-6)}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      
+      showSuccess('Bill generated successfully');
+    } catch (error) {
+      console.error('Download failed:', error);
+      showError('Failed to generate bill');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Handle order status transition
   const handleStatusTransition = async (orderId, newStatus) => {
     try {
@@ -538,6 +578,26 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             <p className="text-gray-500">View and manage all orders (paid/unpaid)</p>
           </div>
           <div className="flex gap-3">
+            {/* View Toggle */}
+            <div className="bg-gray-100 p-1 rounded-lg flex h-fit">
+              <button
+                onClick={() => setViewMode('list')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setViewMode('table')}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                  viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                By Table
+              </button>
+            </div>
+
             <button
               onClick={handleSoftRefresh}
               disabled={refreshing}
@@ -586,66 +646,128 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {orders.map(order => {
-          const colors = getOrderColorClass(order.paymentStatus);
-          const statusBadge = getStatusBadge(order.status);
-          const StatusIcon = statusBadge.icon;
-          
-          return (
-            <div 
-              key={order._id} 
-              onClick={() => setSelectedOrder(order)}
-              className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${colors.border} ${colors.bg}`}
-            >
-              <div className={`p-4 border-b flex justify-between items-center ${colors.header}`}>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-bold text-lg text-gray-900">
-                    {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
-                  </span>
-                  <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium ${statusBadge.color}`}>
-                    <StatusIcon className="w-3 h-3" />
-                    {statusBadge.label}
-                  </span>
-                  <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
-                    {order.paymentStatus}
-                  </span>
-                  {order.isMerged && (
-                    <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 font-bold">
-                      <ShieldCheck className="w-3 h-3" />
-                      MERGED
+        {viewMode === 'list' ? (
+          orders.map(order => {
+            const colors = getOrderColorClass(order.paymentStatus);
+            const statusBadge = getStatusBadge(order.status);
+            const StatusIcon = statusBadge.icon;
+            
+            return (
+              <div 
+                key={order._id} 
+                onClick={() => setSelectedOrder(order)}
+                className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${colors.border} ${colors.bg}`}
+              >
+                <div className={`p-4 border-b flex justify-between items-center ${colors.header}`}>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-lg text-gray-900">
+                      {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
                     </span>
-                  )}
-                </div>
-                <span className="text-sm text-gray-500 font-mono">#{order.orderNumber?.slice(-6)}</span>
-              </div>
-              
-              <div className="p-4">
-                <div className="space-y-2 mb-4 min-h-20">
-                  {order.items.slice(0, 3).map((item, idx) => (
-                    <div key={idx} className="flex justify-between text-sm">
-                      <span className="text-gray-600 flex items-center gap-2">
-                        <span className="font-bold text-gray-900">{item.quantity}x</span> 
-                        {item.menuItem?.name || 'Unknown Item'}
+                    <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium ${statusBadge.color}`}>
+                      <StatusIcon className="w-3 h-3" />
+                      {statusBadge.label}
+                    </span>
+                    <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
+                      {order.paymentStatus}
+                    </span>
+                    {order.isMerged && (
+                      <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 font-bold">
+                        <ShieldCheck className="w-3 h-3" />
+                        MERGED
                       </span>
-                    </div>
-                  ))}
-                  {order.items.length > 3 && (
-                    <div className="text-xs text-gray-400 italic pl-6">
-                      + {order.items.length - 3} more items...
-                    </div>
-                  )}
+                    )}
+                  </div>
+                  <span className="text-sm text-gray-500 font-mono">#{order.orderNumber?.slice(-6)}</span>
                 </div>
                 
-                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                  <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
-                  <span className="text-xs text-gray-400">
-                    {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                  </span>
+                <div className="p-4">
+                  <div className="space-y-2 mb-4 min-h-20">
+                    {order.items.slice(0, 3).map((item, idx) => (
+                      <div key={idx} className="flex justify-between text-sm">
+                        <span className="text-gray-600 flex items-center gap-2">
+                          <span className="font-bold text-gray-900">{item.quantity}x</span> 
+                          {item.menuItem?.name || 'Unknown Item'}
+                        </span>
+                      </div>
+                    ))}
+                    {order.items.length > 3 && (
+                      <div className="text-xs text-gray-400 italic pl-6">
+                        + {order.items.length - 3} more items...
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                    <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
+                    <span className="text-xs text-gray-400">
+                      {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        ) : (
+          Object.values(orders.reduce((acc, order) => {
+            const tableId = order.table?._id || 'unknown';
+            if (!acc[tableId]) {
+              acc[tableId] = {
+                table: order.table,
+                orders: [],
+                totalAmount: 0,
+                lastActivity: new Date(0)
+              };
+            }
+            acc[tableId].orders.push(order);
+            acc[tableId].totalAmount += order.total;
+            const orderDate = new Date(order.updatedAt || order.createdAt);
+            if (orderDate > acc[tableId].lastActivity) {
+              acc[tableId].lastActivity = orderDate;
+            }
+            return acc;
+          }, {})).map(group => (
+            <div key={group.table?._id || 'unknown'} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all">
+              <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
+                <div className="flex items-center gap-2">
+                  <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
+                    <Coffee className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900">Table {group.table?.tableNumber || 'Unknown'}</h3>
+                    <span className="text-xs text-gray-500">{group.orders.length} Orders • {getTimeSince(group.lastActivity)}</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
+                {group.orders.map(o => (
+                  <div 
+                    key={o._id} 
+                    onClick={() => setSelectedOrder(o)} 
+                    className={`flex justify-between items-center p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      o.paymentStatus === 'paid' ? 'bg-green-50 border-green-100 hover:bg-green-100' : 'bg-white border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex flex-col">
+                      <span className="text-xs font-bold text-gray-700">#{o.orderNumber}</span>
+                      <span className="text-[10px] text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                    </div>
+                    <span className={`font-bold text-sm ${o.paymentStatus === 'paid' ? 'text-green-700' : 'text-gray-900'}`}>
+                      {formatCurrency(o.total)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="pt-3 border-t border-dashed border-gray-200">
+                <div className="flex justify-between items-end">
+                  <span className="text-sm font-medium text-gray-500">Total Bill</span>
+                  <span className="text-xl font-bold text-gray-900">{formatCurrency(group.totalAmount)}</span>
                 </div>
               </div>
             </div>
-          );
-        })}
+          ))
+        )}
         
         {orders.length === 0 && !loading && (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
@@ -754,11 +876,17 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     
                     return (
                       <>
-                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${statusBadge.color}`}>
-                          <StatusIcon className="w-4 h-4" />
-                          {statusBadge.label}
-                        </div>
-                        
+                        {/* Print Bill Button */}
+                        <button
+                          onClick={() => handlePrintBill(selectedOrder._id)}
+                          disabled={loading}
+                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
+                          title="Print Bill"
+                        >
+                          <Printer className="w-4 h-4" />
+                          Print
+                        </button>
+
                         {nextStatus && !['cancelled', 'closed'].includes(selectedOrder.status) && (
                           <>
                             <ArrowRightLeft className="w-4 h-4 text-gray-400" />

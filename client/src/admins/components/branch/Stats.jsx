@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { useSocket } from '../../../user/context/SocketContext';
 import { 
   TrendingUp, 
   Users, 
@@ -9,7 +8,8 @@ import {
   DollarSign,
   ShoppingBag,
   AlertCircle,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
@@ -32,11 +32,11 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 const CHART_COLORS = ['#424242', '#616161', '#757575', '#9e9e9e', '#bdbdbd'];
 
 export default function Stats({ branch }) {
-  const { socket, joinBranchRoom } = useSocket();
   const [timeRange, setTimeRange] = useState('today');
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   
-  // Real-time stats (updated every 7s)
+  // Real-time stats
   const [realtimeStats, setRealtimeStats] = useState(null);
   
   // Analytics data
@@ -116,9 +116,11 @@ export default function Stats({ branch }) {
       }
 
       setLoading(false);
+      setRefreshing(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -127,28 +129,10 @@ export default function Stats({ branch }) {
     fetchAnalytics();
   }, [timeRange]);
 
-  // Socket.IO real-time updates
-  useEffect(() => {
-    if (!socket || !branch?._id) return;
-
-    // Join branch room
-    joinBranchRoom(branch._id);
-
-    // Listen for stats updates (throttled, every 7s) - INCREMENTAL UPDATE
-    socket.on('stats_update', (data) => {
-      console.log('[Stats] Stats update received:', data);
-      setRealtimeStats(prev => {
-        if (!prev) return data;
-        // Merge with animation-friendly transitions
-        return { ...prev, ...data };
-      });
-    });
-
-    // Listen for critical metrics (instant) - INCREMENTAL UPDATE
-    socket.on('critical_metric_update', (data) => {
-      console.log('[Stats] Critical metric update:', data);
-      setRealtimeStats(prev => ({ ...prev, ...data }));
-    });
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchAnalytics();
+  };
 
     // Listen for order created - INCREMENT counters
     socket.on('order_created', (data) => {
@@ -163,110 +147,9 @@ export default function Stats({ branch }) {
     // Listen for order status changes - UPDATE stats incrementally
     socket.on('order_status_changed', (data) => {
       console.log('[Stats] Order status changed:', data);
-      // Refetch peak hours and revenue pattern on status change
-      if (['ready', 'paid', 'closed'].includes(data.newStatus)) {
-        axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
-          .then(res => setRevenuePattern(res.data.pattern || []))
-          .catch(console.error);
-      }
+      // Handle status change updates
     });
-
-    // Listen for payment - INCREMENT revenue
-    socket.on('order_paid', (data) => {
-      console.log('[Stats] Payment received:', data);
-      setRealtimeStats(prev => ({
-        ...prev,
-        totalRevenue: (prev?.totalRevenue || 0) + (data.amount || 0),
-        activeOrders: Math.max(0, (prev?.activeOrders || 0) - 1)
-      }));
-      
-      // Update payment breakdown incrementally
-      setPaymentBreakdown(prev => {
-        const updated = [...prev];
-        const methodIndex = updated.findIndex(p => p.method === data.paymentMethod);
-        if (methodIndex >= 0) {
-          updated[methodIndex] = {
-            ...updated[methodIndex],
-            revenue: updated[methodIndex].revenue + data.amount,
-            count: updated[methodIndex].count + 1
-          };
-        } else {
-          updated.push({
-            method: data.paymentMethod,
-            revenue: data.amount,
-            count: 1
-          });
-        }
-        return updated;
-      });
-
-      // Refresh revenue pattern
-      axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
-        .then(res => setRevenuePattern(res.data.pattern || []))
-        .catch(console.error);
-    });
-
-    // Listen for refunds - DECREMENT revenue
-    socket.on('order_refunded', (data) => {
-      console.log('[Stats] Refund processed:', data);
-      setRealtimeStats(prev => ({
-        ...prev,
-        totalRevenue: Math.max(0, (prev?.totalRevenue || 0) - (data.amount || 0))
-      }));
-    });
-
-    // Listen for order closed
-    socket.on('order_closed', () => {
-      // Table might be freed, update table heatmap
-      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
-        .then(res => setTableHeatmap(res.data.heatmap || []))
-        .catch(console.error);
-    });
-
-    // Listen for table changes
-    socket.on('order_table_changed', () => {
-      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
-        .then(res => setTableHeatmap(res.data.heatmap || []))
-        .catch(console.error);
-    });
-
-    // Listen for item updates - refetch menu velocity
-    socket.on('order_items_updated', () => {
-      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
-        .then(res => setMenuVelocity(res.data.items || []))
-        .catch(console.error);
-    });
-
-    // Listen for menu item availability changes
-    socket.on('menu_item_availability_changed', (data) => {
-      console.log('[Stats] Menu item availability changed:', data);
-      // Update menu velocity to reflect availability
-      axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`)
-        .then(res => setMenuVelocity(res.data.items || []))
-        .catch(console.error);
-    });
-
-    // Listen for table occupancy changes
-    socket.on('table_occupancy_change', () => {
-      axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`)
-        .then(res => setTableHeatmap(res.data.heatmap || []))
-        .catch(console.error);
-    });
-
-    return () => {
-      socket.off('stats_update');
-      socket.off('critical_metric_update');
-      socket.off('order_created');
-      socket.off('order_status_changed');
-      socket.off('order_paid');
-      socket.off('order_refunded');
-      socket.off('order_closed');
-      socket.off('order_table_changed');
-      socket.off('order_items_updated');
-      socket.off('menu_item_availability_changed');
-      socket.off('table_occupancy_change');
-    };
-  }, [socket, branch, timeRange]);
+  } [timeRange];
 
   if (!branch) {
     return (
@@ -298,7 +181,17 @@ export default function Stats({ branch }) {
           <h1 className="text-2xl font-bold text-gray-900">Statistics & Analytics</h1>
           <p className="text-sm text-gray-500 mt-1">Real-time insights and performance metrics</p>
         </div>
-        <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            className="p-2 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors disabled:opacity-50"
+            title="Refresh Data"
+          >
+            <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
+          </button>
+          <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
+        </div>
       </div>
 
       {/* Section 1: Revenue & Sales */}
@@ -741,7 +634,6 @@ export default function Stats({ branch }) {
       </div>
     </div>
   );
-}
 
 // Section Component
 function Section({ title, icon, children }) {
@@ -780,16 +672,6 @@ function KPICard({ label, value, trend, icon, realtime, valueClassName = '' }) {
         </div>
         <div className="ml-2">{icon}</div>
       </div>
-    </div>
-  );
-}
-
-// Chart Card Component
-function ChartCard({ title, children, className = '' }) {
-  return (
-    <div className={`rounded-lg p-4 border border-gray-300 ${className}`}>
-      {title && <h3 className="text-sm font-semibold text-gray-700 mb-3">{title}</h3>}
-      {children}
     </div>
   );
 }
