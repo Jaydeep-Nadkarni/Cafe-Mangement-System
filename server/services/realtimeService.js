@@ -87,6 +87,43 @@ const initRealtime = (io) => {
     console.error('Failed to initialize Order Change Stream:', error.message);
   }
 
+  // MongoDB Change Stream for Menu Items (availability changes)
+  try {
+    const MenuItem = require('../models/MenuItem');
+    const menuChangeStream = MenuItem.watch([], { fullDocument: 'updateLookup' });
+
+    menuChangeStream.on('change', (change) => {
+      if (change.operationType === 'update') {
+        const updatedFields = change.updateDescription?.updatedFields;
+        if (updatedFields && ('isAvailable' in updatedFields)) {
+          const menuItem = change.fullDocument;
+          if (menuItem && menuItem.branch) {
+            const branchId = menuItem.branch.toString();
+            const room = `branch_${branchId}`;
+            
+            io.to(room).emit('menu_item_availability_changed', {
+              itemId: menuItem._id,
+              name: menuItem.name,
+              isAvailable: updatedFields.isAvailable,
+              timestamp: new Date()
+            });
+            
+            // Trigger stats update
+            triggerStatsUpdate(branchId);
+          }
+        }
+      }
+    });
+
+    menuChangeStream.on('error', (error) => {
+      console.error('MenuItem Change Stream Error:', error);
+    });
+
+    console.log('Listening for MenuItem collection changes...');
+  } catch (error) {
+    console.error('Failed to initialize MenuItem Change Stream:', error.message);
+  }
+
   // MongoDB Change Stream for Tables
   try {
     const tableChangeStream = Table.watch([], { fullDocument: 'updateLookup' });
@@ -248,18 +285,37 @@ const processOrderChange = async (change, io) => {
           };
         }
       } else if (updatedFields.paymentMethod || updatedFields.paymentStatus === 'paid') {
-        eventType = 'payment_confirmation';
-        isCritical = true; // Critical: Payment received
+        eventType = 'order_paid';
+        isCritical = true;
+        payload.paymentMethod = updatedFields.paymentMethod || order.paymentMethod;
+        payload.amount = order.total;
+        
         alertData = {
-          type: 'payment',
+          type: 'success',
           title: 'Payment Received',
-          message: `Payment confirmed for Order #${order.orderNumber || order._id.toString().slice(-4)}`,
+          message: `Payment of ₹${order.total} received for order #${order.orderNumber || order._id.toString().slice(-4)}`,
           relatedId: order._id
         };
+      } else if (updatedFields.paymentStatus === 'refunded') {
+        eventType = 'order_refunded';
+        isCritical = true;
+        payload.amount = order.total;
+        
+        alertData = {
+          type: 'warning',
+          title: 'Refund Processed',
+          message: `Refund of ₹${order.total} for order #${order.orderNumber || order._id.toString().slice(-4)}`,
+          relatedId: order._id
+        };
+      } else if (updatedFields.items) {
+        eventType = 'order_items_updated';
+        payload.items = order.items;
       } else if (updatedFields.table) {
-        eventType = 'table_merge';
+        eventType = 'order_table_changed';
+        payload.tableId = updatedFields.table;
+        isCritical = true;
       } else {
-        eventType = 'order_update'; // Generic update (e.g. items added)
+        eventType = 'order_updated';
       }
       break;
       

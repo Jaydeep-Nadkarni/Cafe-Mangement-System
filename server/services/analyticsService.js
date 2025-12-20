@@ -622,8 +622,8 @@ const getPeakDetection = async (branchId, timeRange = '7d') => {
     },
     {
       $project: {
-        hour: { $hour: '$createdAt' },
-        dayOfWeek: { $dayOfWeek: '$createdAt' },
+        hour: { $hour: '$paidAt' },
+        dayOfWeek: { $dayOfWeek: '$paidAt' },
         total: 1
       }
     },
@@ -648,33 +648,40 @@ const getPeakDetection = async (branchId, timeRange = '7d') => {
     },
     {
       $project: {
-        hour: { $hour: '$createdAt' },
+        hour: { $hour: '$paidAt' },
         total: 1
       }
     },
     {
       $group: {
         _id: '$hour',
-        avgOrders: { $avg: 1 },
         avgRevenue: { $avg: '$total' },
-        totalOrders: { $sum: 1 }
+        totalOrders: { $sum: 1 },
+        totalRevenue: { $sum: '$total' }
       }
     },
-    { $sort: { totalOrders: -1 } }
+    { $sort: { _id: 1 } }  // Sort by hour ascending for chart display
   ]);
 
-  const peakHours = hourlyAvg.slice(0, 5).map(h => ({
-    hour: h._id,
-    orders: h.totalOrders,
-    avgRevenue: h.avgRevenue
-  }));
+  const peakHours = [...hourlyAvg]
+    .sort((a, b) => b.totalOrders - a.totalOrders)
+    .slice(0, 5)
+    .map(h => ({
+      hour: h._id,
+      orders: h.totalOrders,
+      avgRevenue: h.avgRevenue
+    }));
 
-  // Transform hourlyPattern to have 'hour' property for chart display
-  const hourlyPattern = hourlyAvg.map(h => ({
-    hour: `${h._id}:00`,
-    orders: h.totalOrders,
-    revenue: h.avgRevenue * h.totalOrders
-  }));
+  // Fill in all 24 hours for complete chart display
+  const hourlyPattern = [];
+  for (let h = 0; h < 24; h++) {
+    const existing = hourlyAvg.find(d => d._id === h);
+    hourlyPattern.push({
+      hour: `${h}:00`,
+      orders: existing?.totalOrders || 0,
+      revenue: existing?.totalRevenue || 0
+    });
+  }
 
   return {
     hourlyPattern,
@@ -791,6 +798,8 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
   // Ensure branchId is an ObjectId
   const branchObjectId = toObjectId(branchId);
 
+  console.log(`[Analytics] getHourlyRevenuePattern - Branch: ${branchObjectId}, Range: ${timeRange}, Start: ${start}, End: ${end}`);
+
   const data = await Order.aggregate([
     {
       $match: {
@@ -809,12 +818,15 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
     { $sort: { _id: 1 } }
   ]);
 
+  console.log(`[Analytics] getHourlyRevenuePattern raw data:`, JSON.stringify(data));
+
   // Fill in missing hours with 0
   const result = [];
   for (let hour = 0; hour < 24; hour++) {
     const existing = data.find(d => d._id === hour);
     result.push({
       hour,
+      label: `${hour}:00`,
       revenue: existing?.revenue || 0,
       orders: existing?.orders || 0
     });
@@ -1316,6 +1328,87 @@ const getAIInsights = async (branchId, timeRange = '7d') => {
   };
 };
 
+/**
+ * Get or create stats cache for incremental updates
+ */
+const getStatsCache = async (branchId, timeRange = 'today') => {
+  const { StatsCache } = require('../models/AICache');
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  let cache = await StatsCache.findOne({
+    branch: branchId,
+    timeRange,
+    date: today
+  });
+  
+  if (!cache) {
+    // Create new cache with fresh aggregates
+    const stats = await getRealTimeStats(branchId, timeRange);
+    
+    cache = new StatsCache({
+      branch: branchId,
+      date: today,
+      timeRange,
+      aggregates: {
+        totalRevenue: stats.totalRevenue || 0,
+        totalOrders: stats.totalOrders || 0,
+        avgOrderValue: stats.avgOrderValue || 0,
+        totalItemsSold: stats.totalItemsSold || 0,
+        paymentBreakdown: {},
+        categoryBreakdown: {},
+        hourlyPattern: [],
+        topItems: []
+      },
+      delta: { revenue: 0, orders: 0, items: 0 },
+      expiresAt: new Date(today.getTime() + 24 * 60 * 60 * 1000) // 24 hours
+    });
+    
+    await cache.save();
+  }
+  
+  return cache;
+};
+
+/**
+ * Apply incremental delta to cached stats
+ * Called when order is created, paid, or refunded
+ */
+const applyStatsDelta = async (branchId, deltaData) => {
+  const { StatsCache } = require('../models/AICache');
+  
+  try {
+    const cache = await getStatsCache(branchId, 'today');
+    
+    if (cache) {
+      cache.applyDelta(deltaData);
+      await cache.save();
+      
+      console.log(`[Analytics] Applied delta to cache: ${JSON.stringify(deltaData)}`);
+      return cache.aggregates;
+    }
+  } catch (error) {
+    console.error('[Analytics] Error applying stats delta:', error);
+  }
+  
+  return null;
+};
+
+/**
+ * Get stats with cached aggregates + real-time delta
+ */
+const getStatsWithCache = async (branchId, timeRange = 'today') => {
+  const cache = await getStatsCache(branchId, timeRange);
+  
+  // Return cached aggregates with delta applied
+  return {
+    ...cache.aggregates,
+    _cached: true,
+    _lastUpdated: cache.lastUpdated,
+    _delta: cache.delta
+  };
+};
+
 module.exports = {
   getGlobalStats,
   getBranchPerformance,
@@ -1329,5 +1422,8 @@ module.exports = {
   getRealTimeStats,
   getHourlyRevenuePattern,
   getDailyRevenuePattern,
-  getAIInsights
+  getAIInsights,
+  getStatsCache,
+  applyStatsDelta,
+  getStatsWithCache
 };

@@ -75,8 +75,8 @@ const orderSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'in_progress', 'completed', 'cancelled', 'merged'],
-      default: 'pending',
+      enum: ['created', 'confirmed', 'preparing', 'ready', 'paid', 'closed', 'cancelled'],
+      default: 'created',
       index: true
     },
     paymentStatus: {
@@ -125,6 +125,24 @@ const orderSchema = new mongoose.Schema(
     paidAt: {
       type: Date,
       default: null
+    },
+    // Merge metadata for audit trails
+    isMerged: {
+      type: Boolean,
+      default: false,
+      index: true
+    },
+    mergedAt: {
+      type: Date,
+      default: null
+    },
+    originalOrderIds: {
+      type: [String],
+      default: []
+    },
+    mergeNote: {
+      type: String,
+      default: ''
     }
   },
   { timestamps: true }

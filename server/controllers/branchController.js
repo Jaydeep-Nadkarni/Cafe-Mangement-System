@@ -78,7 +78,7 @@ const getTables = async (req, res) => {
     
     const tables = await Table.find(query)
       .populate({
-        path: 'currentOrder',
+        path: 'currentOrders',
         select: 'orderNumber status total subtotal tax discount items customerName customerPhone chefNotes paymentStatus paymentMethod coupon createdAt',
         populate: {
           path: 'items.menuItem',
@@ -155,29 +155,31 @@ const mergeTables = async (req, res) => {
       return res.status(404).json({ message: 'One or both tables not found' });
     }
 
-    if (!fromTable.currentOrder) {
-      return res.status(400).json({ message: 'Source table has no active order' });
+    if (!fromTable.currentOrders || fromTable.currentOrders.length === 0) {
+      return res.status(400).json({ message: 'Source table has no active orders' });
     }
 
-    if (toTable.currentOrder) {
-      return res.status(400).json({ message: 'Target table is already occupied' });
+    // Move all orders from source to target table
+    const orders = await Order.find({ _id: { $in: fromTable.currentOrders } });
+    
+    for (const order of orders) {
+      order.table = toTable._id;
+      await order.save();
     }
-
-    // Move order
-    const order = await Order.findById(fromTable.currentOrder);
-    order.table = toTable._id;
-    await order.save();
 
     // Update tables
-    toTable.currentOrder = order._id;
+    if (!toTable.currentOrders) {
+      toTable.currentOrders = [];
+    }
+    toTable.currentOrders.push(...fromTable.currentOrders);
     toTable.status = 'occupied';
     await toTable.save();
 
-    fromTable.currentOrder = null;
+    fromTable.currentOrders = [];
     fromTable.status = 'available';
     await fromTable.save();
 
-    res.json({ message: 'Tables merged successfully', order });
+    res.json({ message: 'Tables merged successfully', movedOrderCount: orders.length });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -300,8 +302,8 @@ const deleteTable = async (req, res) => {
       return res.status(404).json({ message: 'Table not found' });
     }
 
-    if (table.currentOrder) {
-      return res.status(400).json({ message: 'Cannot delete table with active order' });
+    if (table.currentOrders && table.currentOrders.length > 0) {
+      return res.status(400).json({ message: 'Cannot delete table with active orders' });
     }
 
     await Table.deleteOne({ _id: id });
@@ -335,9 +337,9 @@ const updateTableStatus = async (req, res) => {
 
     const previousStatus = table.status;
 
-    // If manually setting to available, clear any active order reference
-    if (status === 'available' && table.currentOrder) {
-      table.currentOrder = null;
+    // If manually setting to available, clear any active order references
+    if (status === 'available' && table.currentOrders && table.currentOrders.length > 0) {
+      table.currentOrders = [];
     }
 
     table.status = status;
@@ -345,7 +347,7 @@ const updateTableStatus = async (req, res) => {
 
     // Populate order details for response
     await updatedTable.populate({
-      path: 'currentOrder',
+      path: 'currentOrders',
       select: 'orderNumber status total items',
       populate: {
         path: 'items.menuItem',
@@ -797,20 +799,22 @@ const getRevenuePattern = async (req, res) => {
     const timeRange = req.query.range || 'today';
     const type = req.query.type || 'hourly';
     
+    console.log(`[Controller] getRevenuePattern - Branch: ${branch._id}, Range: ${timeRange}, Type: ${type}`);
+    
     const data = type === 'hourly' 
       ? await getHourlyRevenuePattern(branch._id, timeRange)
       : await getDailyRevenuePattern(branch._id, timeRange);
     
-    // Transform data to have 'label' property for chart x-axis
-    const pattern = data.map(item => ({
-      ...item,
-      label: type === 'hourly' 
-        ? `${item.hour}:00`
-        : item.date
-    }));
+    // For daily data, add label property
+    const pattern = type === 'daily' 
+      ? data.map(item => ({ ...item, label: item.date }))
+      : data;  // Hourly already has label from service
+    
+    console.log(`[Controller] getRevenuePattern response pattern length: ${pattern.length}`);
     
     res.json({ pattern, type, timeRange });
   } catch (error) {
+    console.error('[Controller] getRevenuePattern error:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -1039,6 +1043,99 @@ const deleteCategory = async (req, res) => {
   }
 };
 
+// @desc    Get all orders for the branch with filters
+// @route   GET /api/branch/orders?timeFilter=1h&startDate=&endDate=
+// @access  Manager
+const getOrders = async (req, res) => {
+  try {
+    const { timeFilter, startDate, endDate } = req.query;
+    const branch = await getManagerBranch(req.user._id);
+
+    // Build time-based query
+    let dateQuery = {};
+    const now = new Date();
+
+    if (timeFilter) {
+      let startTime;
+      switch (timeFilter) {
+        case '1h':
+          startTime = new Date(now.getTime() - 60 * 60 * 1000);
+          break;
+        case '3h':
+          startTime = new Date(now.getTime() - 3 * 60 * 60 * 1000);
+          break;
+        case '6h':
+          startTime = new Date(now.getTime() - 6 * 60 * 60 * 1000);
+          break;
+        case 'today':
+          startTime = new Date(now.setHours(0, 0, 0, 0));
+          break;
+        case 'custom':
+          if (startDate) {
+            startTime = new Date(startDate);
+          }
+          if (endDate) {
+            dateQuery.createdAt = {
+              $gte: startTime || new Date(0),
+              $lte: new Date(endDate)
+            };
+          } else if (startTime) {
+            dateQuery.createdAt = { $gte: startTime };
+          }
+          break;
+        default:
+          // No time filter, show all
+          break;
+      }
+
+      if (timeFilter !== 'custom' && startTime) {
+        dateQuery.createdAt = { $gte: startTime };
+      }
+    }
+
+    // Fetch all orders (paid, unpaid, partial) - exclude only merged/cancelled
+    const orders = await Order.find({
+      branch: branch._id,
+      status: { $nin: ['merged', 'cancelled'] },
+      ...dateQuery
+    })
+      .populate({
+        path: 'table',
+        select: 'tableNumber'
+      })
+      .populate({
+        path: 'items.menuItem',
+        select: 'name price'
+      })
+      .lean();
+
+    // Custom sorting: unpaid first (oldest first), then paid (newest first)
+    const sortedOrders = orders.sort((a, b) => {
+      // Unpaid orders first
+      if (a.paymentStatus === 'unpaid' && b.paymentStatus !== 'unpaid') return -1;
+      if (a.paymentStatus !== 'unpaid' && b.paymentStatus === 'unpaid') return 1;
+
+      // Within unpaid: oldest first
+      if (a.paymentStatus === 'unpaid' && b.paymentStatus === 'unpaid') {
+        return new Date(a.createdAt) - new Date(b.createdAt);
+      }
+
+      // Within paid: newest first
+      if (a.paymentStatus === 'paid' && b.paymentStatus === 'paid') {
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      }
+
+      // Default: by creation time
+      return new Date(b.createdAt) - new Date(a.createdAt);
+    });
+
+    res.json(sortedOrders);
+  } catch (error) {
+    console.error('Error fetching orders:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -1076,5 +1173,6 @@ module.exports = {
   getCategories,
   addCategory,
   updateCategory,
-  deleteCategory
+  deleteCategory,
+  getOrders
 };

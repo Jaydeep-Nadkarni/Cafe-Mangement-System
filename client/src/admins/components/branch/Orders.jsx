@@ -1,8 +1,9 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { 
   Coffee, XCircle, MessageCircle, Printer, CheckCircle, 
   Plus, Trash2, CreditCard, Banknote, Smartphone, 
-  ArrowRightLeft, AlertCircle, Search, X
+  ArrowRightLeft, AlertCircle, Search, X, RefreshCw, Calendar, Clock, ShieldCheck,
+  ChefHat, Truck, Package, DollarSign, Archive
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
@@ -12,12 +13,103 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
   const [cashReceived, setCashReceived] = useState('');
   const [showMergeModal, setShowMergeModal] = useState(false);
-  const [mergeTargetId, setMergeTargetId] = useState('');
+  const [selectedOrdersForMerge, setSelectedOrdersForMerge] = useState([]);
+  const [mergePreview, setMergePreview] = useState(null);
+  const [showMergePreview, setShowMergePreview] = useState(false);
   const [showAddItem, setShowAddItem] = useState(false);
   const [itemSearch, setItemSearch] = useState('');
   const [loading, setLoading] = useState(false);
+  const [orders, setOrders] = useState([]);
+  const [timeFilter, setTimeFilter] = useState('today');
+  const [refreshing, setRefreshing] = useState(false);
+  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmAction, setConfirmAction] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Fetch all orders with time filter
+  const fetchOrders = useCallback(async (isRefresh = false) => {
+    try {
+      if (isRefresh) {
+        setRefreshing(true);
+      } else {
+        setLoading(true);
+      }
+
+      const token = localStorage.getItem('token');
+      let params = { timeFilter };
+
+      if (timeFilter === 'custom' && customStartDate) {
+        params.startDate = customStartDate;
+        if (customEndDate) {
+          params.endDate = customEndDate;
+        }
+      }
+
+      const response = await axios.get(`${API_URL}/api/branch/orders`, {
+        headers: { Authorization: `Bearer ${token}` },
+        params
+      });
+
+      setOrders(response.data);
+    } catch (error) {
+      console.error('Failed to fetch orders:', error);
+      alert('Failed to fetch orders: ' + (error.response?.data?.message || error.message));
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [API_URL, timeFilter, customStartDate, customEndDate]);
+
+  // Initial load and when time filter changes
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  // Real-time updates via webhook/polling simulation
+  useEffect(() => {
+    // Listen for payment confirmations or order updates
+    const handlePaymentUpdate = (event) => {
+      if (event.detail?.orderId) {
+        fetchOrders(true); // Soft refresh
+      }
+    };
+
+    window.addEventListener('payment_confirmed', handlePaymentUpdate);
+    window.addEventListener('order_updated', handlePaymentUpdate);
+
+    return () => {
+      window.removeEventListener('payment_confirmed', handlePaymentUpdate);
+      window.removeEventListener('order_updated', handlePaymentUpdate);
+    };
+  }, [fetchOrders]);
+
+  // Soft refresh handler
+  const handleSoftRefresh = () => {
+    fetchOrders(true);
+  };
+
+  // Time filter options
+  const timeFilters = [
+    { value: '1h', label: '1 Hour' },
+    { value: '3h', label: '3 Hours' },
+    { value: '6h', label: '6 Hours' },
+    { value: 'today', label: 'Today' },
+    { value: 'custom', label: 'Custom' }
+  ];
+
+  // Apply custom date filter
+  const applyCustomFilter = () => {
+    if (!customStartDate) {
+      alert('Please select a start date');
+      return;
+    }
+    setShowCustomDateModal(false);
+    fetchOrders();
+  };
 
   // Derived state
   const activeTables = useMemo(() => 
@@ -42,6 +134,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         items: [{ menuItemId: menuItem._id, quantity: 1 }]
       });
       setSelectedOrder(res.data);
+      fetchOrders(true);
       onRefresh();
       setShowAddItem(false);
     } catch (error) {
@@ -52,58 +145,125 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   };
 
   const handleRemoveItem = async (itemId) => {
-    if (!window.confirm('Remove this item from order?')) return;
-    try {
-      setLoading(true);
-      const res = await axios.delete(`${API_URL}/api/orders/${selectedOrder._id}/items/${itemId}`);
-      setSelectedOrder(res.data);
-      onRefresh();
-    } catch (error) {
-      alert('Failed to remove item: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
-    }
+    showConfirmation(
+      'Remove Item',
+      'Remove this item from order?',
+      async () => {
+        try {
+          setLoading(true);
+          const res = await axios.delete(`${API_URL}/api/orders/${selectedOrder._id}/items/${itemId}`);
+          setSelectedOrder(res.data);
+          fetchOrders(true);
+          onRefresh();
+        } catch (error) {
+          showError('Failed to remove item: ' + (error.response?.data?.message || error.message));
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
   };
 
   const handleCancelOrder = async () => {
-    if (!window.confirm('Are you sure you want to CANCEL this entire order? This cannot be undone.')) return;
+    showConfirmation(
+      'Cancel Order',
+      'Are you sure you want to CANCEL this entire order? This cannot be undone.',
+      async () => {
+        try {
+          setLoading(true);
+          await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/cancel`);
+          setSelectedOrder(null);
+          fetchOrders(true);
+          onRefresh();
+        } catch (error) {
+          showError('Failed to cancel order: ' + (error.response?.data?.message || error.message));
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
+  };
+
+  // New merge functions with preview
+  const handleStartMerge = () => {
+    setSelectedOrdersForMerge([]);
+    setMergePreview(null);
+    setShowMergeModal(true);
+  };
+
+  const toggleOrderSelection = (orderId) => {
+    setSelectedOrdersForMerge(prev => {
+      if (prev.includes(orderId)) {
+        return prev.filter(id => id !== orderId);
+      } else {
+        return [...prev, orderId];
+      }
+    });
+  };
+
+  const handleGetMergePreview = async () => {
+    if (selectedOrdersForMerge.length < 2) {
+      showError('Please select at least 2 orders to merge');
+      return;
+    }
+
     try {
       setLoading(true);
-      await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/cancel`);
-      setSelectedOrder(null);
-      onRefresh();
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/api/orders/merge/preview`,
+        { orderIds: selectedOrdersForMerge },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      setMergePreview(response.data);
+      setShowMergePreview(true);
     } catch (error) {
-      alert('Failed to cancel order: ' + (error.response?.data?.message || error.message));
+      showError(error.response?.data?.message || 'Failed to get merge preview');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleMergeOrder = async () => {
-    if (!mergeTargetId) return alert('Please select a table to merge with');
-    if (!window.confirm('Merge this order into the selected table? The current table will become available.')) return;
-    
+  const handleConfirmMerge = async () => {
     try {
       setLoading(true);
-      // Target is the one we are merging INTO (keeping). Source is selectedOrder.
-      // Wait, usually you merge INTO the selected order or merge selected order INTO another?
-      // Let's say we merge selectedOrder (Source) INTO mergeTargetId (Target).
-      const targetOrder = tables.find(t => t._id === mergeTargetId)?.currentOrder;
-      if (!targetOrder) return alert('Target order not found');
-
-      await axios.post(`${API_URL}/api/orders/merge`, {
-        sourceOrderId: selectedOrder._id,
-        targetOrderId: targetOrder._id
-      });
+      const token = localStorage.getItem('token');
+      const response = await axios.post(
+        `${API_URL}/api/orders/merge`,
+        { orderIds: selectedOrdersForMerge },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
       
-      setSelectedOrder(null);
+      setShowMergePreview(false);
       setShowMergeModal(false);
+      setSelectedOrdersForMerge([]);
+      setMergePreview(null);
+      fetchOrders(true);
       onRefresh();
+      
+      showSuccess(`Successfully merged ${response.data.mergedOrderIds.length + 1} orders`);
     } catch (error) {
-      alert('Failed to merge orders: ' + (error.response?.data?.message || error.message));
+      showError(error.response?.data?.message || 'Failed to merge orders');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Custom confirmation modal helper
+  const showConfirmation = (title, message, onConfirm) => {
+    setConfirmAction({ title, message, onConfirm });
+    setShowConfirmModal(true);
+  };
+
+  const showError = (message) => {
+    setConfirmAction({ title: 'Error', message, isError: true });
+    setShowConfirmModal(true);
+  };
+
+  const showSuccess = (message) => {
+    setConfirmAction({ title: 'Success', message, isSuccess: true });
+    setShowConfirmModal(true);
   };
 
   const handleCheckout = async () => {
@@ -120,6 +280,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
       });
       setSelectedOrder(null);
+      
+      // Trigger payment confirmation event for real-time update
+      window.dispatchEvent(new CustomEvent('payment_confirmed', { 
+        detail: { orderId: selectedOrder._id } 
+      }));
+      
+      fetchOrders(true); // Soft refresh
       onRefresh();
     } catch (error) {
       alert('Checkout failed: ' + (error.response?.data?.message || error.message));
@@ -140,87 +307,318 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     }
   };
 
+  // Handle order status transition
+  const handleStatusTransition = async (orderId, newStatus) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      await axios.put(
+        `${API_URL}/api/orders/${orderId}/status`,
+        { status: newStatus },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      
+      // Refresh orders
+      await fetchOrders(true);
+      
+      showSuccess(`Order status updated to ${newStatus.toUpperCase()}`);
+    } catch (error) {
+      showError(error.response?.data?.message || 'Failed to update order status');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Handle close order (PAID → CLOSED)
+  const handleCloseOrder = async (orderId) => {
+    showConfirmation(
+      'Close Order',
+      'Are you sure you want to close this order? The table will be marked as available.',
+      async () => {
+        try {
+          setLoading(true);
+          const token = localStorage.getItem('token');
+          await axios.post(
+            `${API_URL}/api/orders/${orderId}/close`,
+            {},
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          
+          // Close modal and refresh
+          setSelectedOrder(null);
+          await fetchOrders(true);
+          
+          showSuccess('Order closed successfully!');
+        } catch (error) {
+          showError(error.response?.data?.message || 'Failed to close order');
+        } finally {
+          setLoading(false);
+        }
+      }
+    );
+  };
+
+  // Get status badge configuration
+  const getStatusBadge = (status) => {
+    const statusConfig = {
+      created: {
+        label: 'Created',
+        icon: Package,
+        color: 'bg-gray-100 text-gray-700 border-gray-300'
+      },
+      confirmed: {
+        label: 'Confirmed',
+        icon: CheckCircle,
+        color: 'bg-blue-100 text-blue-700 border-blue-300'
+      },
+      preparing: {
+        label: 'Preparing',
+        icon: ChefHat,
+        color: 'bg-orange-100 text-orange-700 border-orange-300'
+      },
+      ready: {
+        label: 'Ready',
+        icon: Truck,
+        color: 'bg-purple-100 text-purple-700 border-purple-300'
+      },
+      paid: {
+        label: 'Paid',
+        icon: DollarSign,
+        color: 'bg-green-100 text-green-700 border-green-300'
+      },
+      closed: {
+        label: 'Closed',
+        icon: Archive,
+        color: 'bg-gray-100 text-gray-600 border-gray-300'
+      },
+      cancelled: {
+        label: 'Cancelled',
+        icon: XCircle,
+        color: 'bg-red-100 text-red-700 border-red-300'
+      }
+    };
+    return statusConfig[status] || statusConfig.created;
+  };
+
+  // Get next valid status for transition
+  const getNextStatus = (currentStatus) => {
+    const flow = {
+      created: 'confirmed',
+      confirmed: 'preparing',
+      preparing: 'ready',
+      ready: 'paid',
+      paid: 'closed',
+      closed: null
+    };
+    return flow[currentStatus];
+  };
+
+  // Color coding helper
+  const getOrderColorClass = (paymentStatus) => {
+    switch (paymentStatus) {
+      case 'paid':
+        return {
+          border: 'border-green-200',
+          bg: 'bg-green-50',
+          header: 'bg-green-100 border-green-200',
+          badge: 'bg-green-200 text-green-800'
+        };
+      case 'unpaid':
+        return {
+          border: 'border-red-200',
+          bg: 'bg-red-50',
+          header: 'bg-red-100 border-red-200',
+          badge: 'bg-red-200 text-red-800'
+        };
+      default: // partial or refunded
+        return {
+          border: 'border-amber-200',
+          bg: 'bg-amber-50',
+          header: 'bg-amber-100 border-amber-200',
+          badge: 'bg-amber-200 text-amber-800'
+        };
+    }
+  };
+
   return (
     <div className="h-full">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Live Orders</h2>
-          <p className="text-gray-500">Manage active table orders</p>
+      {/* Header with filters */}
+      <div className="mb-6">
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">All Orders</h2>
+            <p className="text-gray-500">View and manage all orders (paid/unpaid)</p>
+          </div>
+          <div className="flex gap-3">
+            <button
+              onClick={handleSoftRefresh}
+              disabled={refreshing}
+              className="flex items-center gap-2 px-4 py-2 transition-colors disabled:opacity-50"
+              title="Refresh orders"
+            >
+              <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </button>
+            <div className="flex items-center gap-2 px-3 py-1  text-sm">
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+              <span>Paid</span>
+            </div>
+            <div className="flex items-center gap-2 px-3 py-1  text-sm">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <span>Unpaid</span>
+            </div>
+          </div>
         </div>
-        <div className="flex gap-2">
-          <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
-            <div className="w-3 h-3 rounded-full bg-blue-500"></div>
-            <span>Paid</span>
-          </div>
-          <div className="flex items-center gap-2 px-3 py-1 bg-white rounded-lg border border-gray-200 text-sm">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <span>Unpaid</span>
-          </div>
+
+        {/* Time filter buttons */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <Clock className="w-4 h-4 text-gray-400" />
+          {timeFilters.map(filter => (
+            <button
+              key={filter.value}
+              onClick={() => {
+                setTimeFilter(filter.value);
+                if (filter.value === 'custom') {
+                  setShowCustomDateModal(true);
+                }
+              }}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                timeFilter === filter.value
+                  ? 'bg-blue-600 text-white shadow-md'
+                  : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'
+              }`}
+            >
+              {filter.label}
+            </button>
+          ))}
+          {loading && (
+            <div className="ml-2 w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+          )}
         </div>
       </div>
 
+      {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {tables.filter(t => t.currentOrder).map(table => (
-          <div 
-            key={table._id} 
-            onClick={() => setSelectedOrder(table.currentOrder)}
-            className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${
-              table.currentOrder.paymentStatus === 'paid' ? 'border-blue-200 bg-blue-50' : 'border-red-200 bg-red-50'
-            }`}
-          >
-            <div className={`p-4 border-b flex justify-between items-center ${
-              table.currentOrder.paymentStatus === 'paid' ? 'bg-blue-100 border-blue-200' : 'bg-red-100 border-red-200'
-            }`}>
-              <div className="flex items-center">
-                <span className="font-bold text-lg text-gray-900">Table {table.tableNumber}</span>
-                <span className={`ml-2 px-2 py-0.5 text-xs rounded-full capitalize ${
-                  table.currentOrder.paymentStatus === 'paid' 
-                    ? 'bg-blue-200 text-blue-800' 
-                    : 'bg-red-200 text-red-800'
-                }`}>
-                  {table.currentOrder.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}
-                </span>
-              </div>
-              <span className="text-sm text-gray-500 font-mono">#{table.currentOrder.orderNumber?.slice(-6)}</span>
-            </div>
-            
-            <div className="p-4">
-              <div className="space-y-2 mb-4 min-h-[80px]">
-                {table.currentOrder.items.slice(0, 3).map((item, idx) => (
-                  <div key={idx} className="flex justify-between text-sm">
-                    <span className="text-gray-600 flex items-center gap-2">
-                      <span className="font-bold text-gray-900">{item.quantity}x</span> 
-                      {item.menuItem?.name}
+        {orders.map(order => {
+          const colors = getOrderColorClass(order.paymentStatus);
+          const statusBadge = getStatusBadge(order.status);
+          const StatusIcon = statusBadge.icon;
+          
+          return (
+            <div 
+              key={order._id} 
+              onClick={() => setSelectedOrder(order)}
+              className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${colors.border} ${colors.bg}`}
+            >
+              <div className={`p-4 border-b flex justify-between items-center ${colors.header}`}>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-lg text-gray-900">
+                    {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
+                  </span>
+                  <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium ${statusBadge.color}`}>
+                    <StatusIcon className="w-3 h-3" />
+                    {statusBadge.label}
+                  </span>
+                  <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
+                    {order.paymentStatus}
+                  </span>
+                  {order.isMerged && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-purple-100 text-purple-700 font-bold">
+                      <ShieldCheck className="w-3 h-3" />
+                      MERGED
                     </span>
-                  </div>
-                ))}
-                {table.currentOrder.items.length > 3 && (
-                  <div className="text-xs text-gray-400 italic pl-6">
-                    + {table.currentOrder.items.length - 3} more items...
-                  </div>
-                )}
+                  )}
+                </div>
+                <span className="text-sm text-gray-500 font-mono">#{order.orderNumber?.slice(-6)}</span>
               </div>
               
-              <div className="flex justify-between items-center pt-3 border-t border-gray-100">
-                <span className="font-bold text-lg text-gray-900">{formatCurrency(table.currentOrder.total)}</span>
-                <span className="text-xs text-gray-400">
-                  {new Date(table.currentOrder.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </span>
+              <div className="p-4">
+                <div className="space-y-2 mb-4 min-h-20">
+                  {order.items.slice(0, 3).map((item, idx) => (
+                    <div key={idx} className="flex justify-between text-sm">
+                      <span className="text-gray-600 flex items-center gap-2">
+                        <span className="font-bold text-gray-900">{item.quantity}x</span> 
+                        {item.menuItem?.name || 'Unknown Item'}
+                      </span>
+                    </div>
+                  ))}
+                  {order.items.length > 3 && (
+                    <div className="text-xs text-gray-400 italic pl-6">
+                      + {order.items.length - 3} more items...
+                    </div>
+                  )}
+                </div>
+                
+                <div className="flex justify-between items-center pt-3 border-t border-gray-100">
+                  <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
+                  <span className="text-xs text-gray-400">
+                    {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                  </span>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         
-        {tables.filter(t => t.currentOrder).length === 0 && (
+        {orders.length === 0 && !loading && (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
             <div className="bg-gray-50 p-4 rounded-full mb-4">
               <Coffee className="h-8 w-8 text-gray-400" />
             </div>
-            <p className="text-lg font-medium text-gray-900">No active orders</p>
-            <p className="text-sm">New orders will appear here automatically</p>
+            <p className="text-lg font-medium text-gray-900">No orders found</p>
+            <p className="text-sm">Orders for the selected time period will appear here</p>
           </div>
         )}
       </div>
+
+      {/* Custom Date Modal */}
+      {showCustomDateModal && (
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-lg font-bold">Custom Date Range</h3>
+              <button onClick={() => setShowCustomDateModal(false)}>
+                <X className="w-6 h-6 text-gray-400" />
+              </button>
+            </div>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
+                <input
+                  type="datetime-local"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Optional)</label>
+                <input
+                  type="datetime-local"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setShowCustomDateModal(false)}
+                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={applyCustomFilter}
+                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+              >
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Order Details Modal */}
       {selectedOrder && (
@@ -230,30 +628,87 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             {/* LEFT COLUMN: Items & Actions */}
             <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0">
               {/* Header */}
-              <div className="p-4 border-b border-gray-200 bg-white flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-gray-900">Order #{selectedOrder.orderNumber}</h2>
-                  <div className="flex items-center gap-2 text-sm text-gray-500">
-                    <span>Table {selectedOrder.table?.tableNumber || '?'}</span>
-                    <span>•</span>
-                    <span>{selectedOrder.items.length} Items</span>
+              <div className="p-4 border-b border-gray-200 bg-white">
+                <div className="flex justify-between items-start mb-3">
+                  <div>
+                    <h2 className="text-xl font-bold text-gray-900">Order #{selectedOrder.orderNumber}</h2>
+                    <div className="flex items-center gap-2 text-sm text-gray-500">
+                      <span>Table {selectedOrder.table?.tableNumber || '?'}</span>
+                      <span>•</span>
+                      <span>{selectedOrder.items.length} Items</span>
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <button 
+                      onClick={() => setShowMergeModal(true)}
+                      className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                      title="Merge Order"
+                    >
+                      <ArrowRightLeft className="w-5 h-5" />
+                    </button>
+                    <button 
+                      onClick={handleCancelOrder}
+                      disabled={['paid', 'closed', 'cancelled'].includes(selectedOrder.status)}
+                      className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      title="Cancel Order"
+                    >
+                      <Trash2 className="w-5 h-5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex gap-2">
-                  <button 
-                    onClick={() => setShowMergeModal(true)}
-                    className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                    title="Merge Order"
-                  >
-                    <ArrowRightLeft className="w-5 h-5" />
-                  </button>
-                  <button 
-                    onClick={handleCancelOrder}
-                    className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                    title="Cancel Order"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+
+                {/* Status Badge and Transition */}
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const statusBadge = getStatusBadge(selectedOrder.status);
+                    const StatusIcon = statusBadge.icon;
+                    const nextStatus = getNextStatus(selectedOrder.status);
+                    
+                    return (
+                      <>
+                        <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border font-medium text-sm ${statusBadge.color}`}>
+                          <StatusIcon className="w-4 h-4" />
+                          {statusBadge.label}
+                        </div>
+                        
+                        {nextStatus && !['cancelled', 'closed'].includes(selectedOrder.status) && (
+                          <>
+                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
+                            <button
+                              onClick={() => handleStatusTransition(selectedOrder._id, nextStatus)}
+                              disabled={loading || (nextStatus === 'paid' && selectedOrder.status !== 'ready')}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {(() => {
+                                const nextBadge = getStatusBadge(nextStatus);
+                                const NextIcon = nextBadge.icon;
+                                return (
+                                  <>
+                                    <NextIcon className="w-4 h-4" />
+                                    {nextBadge.label}
+                                  </>
+                                );
+                              })()}
+                            </button>
+                          </>
+                        )}
+
+                        {selectedOrder.status === 'paid' && (
+                          <>
+                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
+                            <button
+                              onClick={() => handleCloseOrder(selectedOrder._id)}
+                              disabled={loading}
+                              className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
+                            >
+                              <Archive className="w-4 h-4" />
+                              Close
+                            </button>
+                          </>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 
@@ -428,20 +883,39 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
               {/* Footer Actions */}
               <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
-                <button 
-                  onClick={handleCheckout}
-                  disabled={loading}
-                  className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
-                >
-                  {loading ? (
-                    <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                  ) : (
-                    <>
-                      <CheckCircle className="w-6 h-6" />
-                      Complete Payment
-                    </>
-                  )}
-                </button>
+                {selectedOrder.status === 'ready' && selectedOrder.paymentStatus === 'unpaid' ? (
+                  <button 
+                    onClick={handleCheckout}
+                    disabled={loading}
+                    className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <div className="w-6 h-6 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                    ) : (
+                      <>
+                        <CheckCircle className="w-6 h-6" />
+                        Complete Payment
+                      </>
+                    )}
+                  </button>
+                ) : selectedOrder.status === 'paid' ? (
+                  <button 
+                    onClick={() => handleCloseOrder(selectedOrder._id)}
+                    disabled={loading}
+                    className="w-full py-4 bg-gray-600 text-white rounded-xl font-bold text-lg hover:bg-gray-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <Archive className="w-6 h-6" />
+                    Close Order
+                  </button>
+                ) : ['closed', 'cancelled'].includes(selectedOrder.status) ? (
+                  <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold text-lg text-center">
+                    Order {selectedOrder.status === 'closed' ? 'Closed' : 'Cancelled'}
+                  </div>
+                ) : (
+                  <div className="w-full py-4 bg-blue-50 text-blue-700 rounded-xl font-medium text-sm text-center border border-blue-200">
+                    Order must be in READY status before payment
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -537,6 +1011,247 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                   </button>
                 ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal */}
+      {showConfirmModal && confirmAction && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center gap-3 mb-4">
+              {confirmAction.isError && <AlertCircle className="w-6 h-6 text-red-600" />}
+              {confirmAction.isSuccess && <CheckCircle className="w-6 h-6 text-green-600" />}
+              {!confirmAction.isError && !confirmAction.isSuccess && (
+                <AlertCircle className="w-6 h-6 text-blue-600" />
+              )}
+              <h3 className="text-lg font-bold text-gray-900">{confirmAction.title}</h3>
+            </div>
+            <p className="text-gray-600 mb-6">{confirmAction.message}</p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  setConfirmAction(null);
+                }}
+                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                {confirmAction.isError || confirmAction.isSuccess ? 'Close' : 'Cancel'}
+              </button>
+              {confirmAction.onConfirm && (
+                <button
+                  onClick={() => {
+                    confirmAction.onConfirm();
+                    setShowConfirmModal(false);
+                    setConfirmAction(null);
+                  }}
+                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
+                >
+                  Confirm
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Selection Modal */}
+      {showMergeModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900">Merge Orders</h2>
+                  <p className="text-gray-500 text-sm">Select 2 or more unpaid orders from the same table</p>
+                </div>
+                <button onClick={() => setShowMergeModal(false)}>
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {orders.filter(o => o.paymentStatus === 'unpaid' && !o.isMerged).map(order => {
+                  const isSelected = selectedOrdersForMerge.includes(order._id);
+                  return (
+                    <div
+                      key={order._id}
+                      onClick={() => toggleOrderSelection(order._id)}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                        isSelected
+                          ? 'border-purple-600 bg-purple-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => toggleOrderSelection(order._id)}
+                            className="w-5 h-5 text-purple-600 rounded"
+                          />
+                          <span className="font-bold text-gray-900">
+                            Table {order.table?.tableNumber || '?'}
+                          </span>
+                        </div>
+                        <span className="text-xs font-mono text-gray-500">
+                          #{order.orderNumber?.slice(-6)}
+                        </span>
+                      </div>
+                      <div className="space-y-1 mb-3">
+                        {order.items.slice(0, 2).map((item, idx) => (
+                          <div key={idx} className="text-xs text-gray-600">
+                            {item.quantity}x {item.menuItem?.name}
+                          </div>
+                        ))}
+                        {order.items.length > 2 && (
+                          <div className="text-xs text-gray-400">+{order.items.length - 2} more</div>
+                        )}
+                      </div>
+                      <div className="font-bold text-purple-700">{formatCurrency(order.total)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex items-center justify-between">
+                <div className="text-sm text-gray-600">
+                  <span className="font-bold">{selectedOrdersForMerge.length}</span> orders selected
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => setShowMergeModal(false)}
+                    className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleGetMergePreview}
+                    disabled={selectedOrdersForMerge.length < 2}
+                    className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                  >
+                    Preview Merge
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Merge Preview Modal */}
+      {showMergePreview && mergePreview && (
+        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="p-6 border-b border-gray-200 bg-purple-50">
+              <div className="flex justify-between items-start">
+                <div>
+                  <h2 className="text-xl font-bold text-gray-900 mb-2">Merge Preview</h2>
+                  <p className="text-sm text-gray-600">
+                    Merging {mergePreview.orderCount} orders into one
+                  </p>
+                </div>
+                <button onClick={() => setShowMergePreview(false)}>
+                  <X className="w-6 h-6 text-gray-400" />
+                </button>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Source Orders */}
+              <div className="mb-6">
+                <h3 className="text-sm font-bold text-gray-700 uppercase mb-3">Source Orders</h3>
+                <div className="grid grid-cols-2 gap-3">
+                  {mergePreview.orders.map((order, idx) => (
+                    <div key={order._id} className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-xs font-mono text-gray-500">#{order.orderNumber}</span>
+                        <span className="text-sm font-bold text-gray-700">{formatCurrency(order.total)}</span>
+                      </div>
+                      <div className="text-xs text-gray-600">{order.itemCount} items</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-center my-4">
+                <ArrowRightLeft className="w-6 h-6 text-purple-600" />
+              </div>
+
+              {/* Combined Order Preview */}
+              <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-6">
+                <h3 className="text-sm font-bold text-purple-900 uppercase mb-4">Combined Order</h3>
+                
+                <div className="space-y-2 mb-4">
+                  {mergePreview.combined.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-sm">
+                      <span className="text-gray-700">
+                        <span className="font-bold">{item.quantity}x</span> {item.menuItem?.name}
+                      </span>
+                      <span className="font-medium text-gray-900">
+                        {formatCurrency(item.price * item.quantity)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="border-t-2 border-purple-200 pt-4 space-y-2">
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Subtotal</span>
+                    <span>{formatCurrency(mergePreview.combined.subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between text-sm text-gray-600">
+                    <span>Tax (10%)</span>
+                    <span>{formatCurrency(mergePreview.combined.tax)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pt-2 border-t border-purple-200">
+                    <span className="font-bold text-lg text-gray-900">Total</span>
+                    <span className="font-bold text-2xl text-purple-700">
+                      {formatCurrency(mergePreview.combined.total)}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="mt-4 p-3 bg-purple-100 rounded-lg">
+                  <div className="flex items-center gap-2 text-xs text-purple-800">
+                    <ShieldCheck className="w-4 h-4" />
+                    <span className="font-bold">
+                      {mergePreview.combined.totalQuantity} items from {mergePreview.orderCount} orders
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-gray-200 bg-gray-50">
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowMergePreview(false)}
+                  className="flex-1 px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleConfirmMerge}
+                  disabled={loading}
+                  className="flex-1 px-6 py-3 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-bold flex items-center justify-center gap-2"
+                >
+                  {loading ? (
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <CheckCircle className="w-5 h-5" />
+                      Confirm Merge
+                    </>
+                  )}
+                </button>
               </div>
             </div>
           </div>
