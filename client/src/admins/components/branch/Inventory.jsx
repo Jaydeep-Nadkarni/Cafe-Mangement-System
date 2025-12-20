@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
+import { useSocket } from '../../../user/context/SocketContext';
 
 const Drawer = ({ isOpen, onClose, title, children }) => {
   return (
@@ -156,6 +157,7 @@ const CategoryModal = ({ isOpen, onClose, onSave, editingCategory }) => {
 };
 
 export default function Inventory({ menu, setMenu }) {
+  const { socket, joinBranchRoom } = useSocket();
   const [showDrawer, setShowDrawer] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [loading, setLoading] = useState(false);
@@ -166,6 +168,8 @@ export default function Inventory({ menu, setMenu }) {
   const [showCategoryModal, setShowCategoryModal] = useState(false);
   const [editingCategory, setEditingCategory] = useState(null);
   const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [useDynamicCategories, setUseDynamicCategories] = useState(true);
+  const [branch, setBranch] = useState(null);
   
   const [formData, setFormData] = useState({
     name: '',
@@ -181,13 +185,71 @@ export default function Inventory({ menu, setMenu }) {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+  // Fetch branch details
+  useEffect(() => {
+    const fetchBranch = async () => {
+      try {
+        const res = await axios.get(`${API_URL}/api/branch/details`);
+        setBranch(res.data);
+      } catch (error) {
+        console.error('Error fetching branch:', error);
+      }
+    };
+    fetchBranch();
+  }, []);
+
   useEffect(() => {
     fetchCategories();
-  }, []);
+  }, [useDynamicCategories]);
+  
+  // Socket.IO real-time listeners
+  useEffect(() => {
+    if (!socket || !branch?._id) return;
+    
+    joinBranchRoom(branch._id);
+    
+    // Listen for category updates
+    socket.on('categories_updated', (data) => {
+      console.log('[Inventory] Categories updated:', data);
+      fetchCategories();
+    });
+    
+    // Listen for menu item changes
+    socket.on('menu_item_added', (data) => {
+      console.log('[Inventory] Item added:', data);
+      fetchCategories();
+    });
+    
+    socket.on('menu_item_updated', (data) => {
+      console.log('[Inventory] Item updated:', data);
+      fetchCategories();
+    });
+    
+    socket.on('menu_item_deleted', (data) => {
+      console.log('[Inventory] Item deleted:', data);
+      fetchCategories();
+    });
+    
+    socket.on('menu_item_availability_changed', (data) => {
+      console.log('[Inventory] Item availability changed:', data);
+      fetchCategories();
+    });
+    
+    return () => {
+      socket.off('categories_updated');
+      socket.off('menu_item_added');
+      socket.off('menu_item_updated');
+      socket.off('menu_item_deleted');
+      socket.off('menu_item_availability_changed');
+    };
+  }, [socket, branch]);
 
   const fetchCategories = async () => {
     try {
-      const res = await axios.get(`${API_URL}/api/branch/categories`);
+      const endpoint = useDynamicCategories 
+        ? `${API_URL}/api/branch/categories/dynamic?includeEmpty=false`
+        : `${API_URL}/api/branch/categories`;
+      const res = await axios.get(endpoint);
       setCategories(res.data);
       if (res.data.length > 0 && !formData.category) {
         setFormData(prev => ({ ...prev, category: res.data[0].slug }));
