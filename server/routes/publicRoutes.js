@@ -391,14 +391,14 @@ const getPublicMenu = async (req, res) => {
   }
 };
 
-// @desc    Get public categories (only categories with available items)
+// @desc    Get public categories (all active categories)
 // @route   GET /api/public/categories
 // @access  Public
 const getPublicCategories = async (req, res) => {
   try {
     const { branchCode } = req.query;
     
-    // Build branch query
+    // Build branch query for categories
     let branchQuery = {};
     if (branchCode) {
       const branch = await Branch.findOne({ branchCode: branchCode.toUpperCase() });
@@ -411,18 +411,11 @@ const getPublicCategories = async (req, res) => {
       }
     }
 
-    // Get all available menu items
-    const menuItems = await MenuItem.find({
-      isAvailable: true,
-      isDeleted: { $ne: true },
-      ...branchQuery
-    }).distinct('category');
-
-    // Get categories that have available items
+    // Get all active categories
     const Category = require('../models/Category');
     const categories = await Category.find({
-      slug: { $in: menuItems },
-      isActive: true
+      isActive: true,
+      ...branchQuery
     }).sort({ sortOrder: 1, name: 1 });
 
     res.json(categories);
