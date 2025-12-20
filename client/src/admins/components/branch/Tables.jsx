@@ -1,8 +1,21 @@
-import React, { useState } from 'react';
-import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText, Clock, Printer, ArrowRightLeft } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
+
+const getTimeSince = (dateString) => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffInMinutes = Math.floor((now - date) / 60000);
+  
+  if (diffInMinutes < 1) return 'Just now';
+  if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+  const diffInHours = Math.floor(diffInMinutes / 60);
+  if (diffInHours < 24) return `${diffInHours}h ago`;
+  return `${Math.floor(diffInHours / 24)}d ago`;
+};
 
 export default function Tables({ tables, onRefresh }) {
   const [showModal, setShowModal] = useState(false);

@@ -557,8 +557,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </div>
         </div>
 
-        {/* Time filter buttons */}
-        <div className="flex flex-wrap gap-2 items-center">
+        {/* Time filter buttons - REMOVED for Table-First enforcement */}
+        {/* <div className="flex flex-wrap gap-2 items-center">
           <Clock className="w-4 h-4 text-gray-400" />
           {timeFilters.map(filter => (
             <button
@@ -581,7 +581,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           {loading && (
             <div className="ml-2 w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
           )}
-        </div>
+        </div> */}
       </div>
 
       {/* Orders Grid */}

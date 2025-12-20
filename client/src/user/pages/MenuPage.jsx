@@ -22,7 +22,9 @@ export default function MenuPage() {
   const [menuItems, setMenuItems] = useState([]);
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState(null);
-  
+  const [branchId, setBranchId] = useState(null);
+  const { socket, joinBranchRoom } = useSocket();
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   // Fetch menu and categories from database

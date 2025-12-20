@@ -259,6 +259,24 @@ const checkoutOrder = async (req, res) => {
     
     await order.save();
 
+    // If payment is cash (Counter), free the table immediately
+    if (paymentMethod === 'cash' && order.table) {
+      const table = await Table.findById(order.table);
+      if (table) {
+        // Remove from currentOrders
+        table.currentOrders = table.currentOrders.filter(
+          id => id.toString() !== order._id.toString()
+        );
+        
+        // If no more orders, set to available
+        if (table.currentOrders.length === 0) {
+          table.status = 'available';
+        }
+        
+        await table.save();
+      }
+    }
+
     // Apply incremental stats delta
     await applyStatsDelta(order.branch, {
       revenue: order.total,
@@ -466,12 +484,13 @@ const getMergePreview = async (req, res) => {
     const tableIds = orders.map(o => o.table?._id?.toString()).filter(Boolean);
     const uniqueTables = [...new Set(tableIds)];
     
-    if (uniqueTables.length > 1) {
-      return res.status(400).json({ 
-        message: 'Cannot merge orders from different tables',
-        validation: { valid: false, reason: 'different_tables' }
-      });
-    }
+    // Allow merging from different tables (Multi-table merge)
+    // if (uniqueTables.length > 1) {
+    //   return res.status(400).json({ 
+    //     message: 'Cannot merge orders from different tables',
+    //     validation: { valid: false, reason: 'different_tables' }
+    //   });
+    // }
 
     // Validation: All orders must be unpaid
     const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
@@ -574,12 +593,13 @@ const mergeOrders = async (req, res) => {
     const tableIds = orders.map(o => o.table?._id?.toString()).filter(Boolean);
     const uniqueTables = [...new Set(tableIds)];
     
-    if (uniqueTables.length > 1) {
-      await session.abortTransaction();
-      return res.status(400).json({ 
-        message: 'Cannot merge orders from different tables' 
-      });
-    }
+    // Allow merging from different tables
+    // if (uniqueTables.length > 1) {
+    //   await session.abortTransaction();
+    //   return res.status(400).json({ 
+    //     message: 'Cannot merge orders from different tables' 
+    //   });
+    // }
 
     // Validation: All unpaid
     const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
