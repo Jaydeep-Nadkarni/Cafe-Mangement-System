@@ -6,6 +6,7 @@ import {
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import { useSocket } from '../../../user/context/SocketContext';
+import ConfirmationModal from './ConfirmationModal';
 
 const Drawer = ({ isOpen, onClose, title, children }) => {
   return (
@@ -170,6 +171,16 @@ export default function Inventory({ menu, setMenu }) {
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [useDynamicCategories, setUseDynamicCategories] = useState(true);
   const [branch, setBranch] = useState(null);
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false,
+    isLoading: false,
+    onConfirm: null
+  });
   
   const [formData, setFormData] = useState({
     name: '',
@@ -270,18 +281,42 @@ export default function Inventory({ menu, setMenu }) {
       setShowCategoryModal(false);
       setEditingCategory(null);
     } catch (error) {
-      alert('Failed to save category: ' + (error.response?.data?.message || error.message));
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: `Failed to save category: ${error.response?.data?.message || error.message}`,
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
   const handleDeleteCategory = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this category?')) return;
-    try {
-      await axios.delete(`${API_URL}/api/branch/categories/${id}`);
-      fetchCategories();
-    } catch (error) {
-      alert('Failed to delete category: ' + (error.response?.data?.message || error.message));
-    }
+    setModalState({
+      isOpen: true,
+      title: 'Delete Category',
+      description: 'Are you sure you want to delete this category? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/api/branch/categories/${id}`);
+          fetchCategories();
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: `Failed to delete category: ${error.response?.data?.message || error.message}`,
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        }
+      }
+    });
   };
 
   const resetForm = () => {
@@ -316,14 +351,31 @@ export default function Inventory({ menu, setMenu }) {
   };
 
   const handleDelete = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this item?')) return;
-    try {
-      await axios.delete(`${API_URL}/api/branch/menu/${id}`);
-      setMenu(menu.filter(item => item._id !== id));
-    } catch (error) {
-      console.error('Delete error:', error.response?.data || error.message);
-      alert('Failed to delete item: ' + (error.response?.data?.message || error.message));
-    }
+    setModalState({
+      isOpen: true,
+      title: 'Delete Item',
+      description: 'Are you sure you want to delete this item? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/api/branch/menu/${id}`);
+          setMenu(menu.filter(item => item._id !== id));
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          console.error('Delete error:', error.response?.data || error.message);
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: `Failed to delete item: ${error.response?.data?.message || error.message}`,
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        }
+      }
+    });
   };
 
   const handleDuplicate = async (id) => {
@@ -332,7 +384,14 @@ export default function Inventory({ menu, setMenu }) {
       setMenu([...menu, res.data]);
     } catch (error) {
       console.error('Duplicate error:', error.response?.data || error.message);
-      alert('Failed to duplicate item: ' + (error.response?.data?.message || error.message));
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: `Failed to duplicate item: ${error.response?.data?.message || error.message}`,
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
@@ -388,21 +447,38 @@ export default function Inventory({ menu, setMenu }) {
   };
 
   const handleBulkAction = async (action, value) => {
-    if (!window.confirm(`Apply action to ${selectedItems.length} items?`)) return;
-    try {
-      await axios.put(`${API_URL}/api/branch/menu/bulk`, {
-        items: selectedItems,
-        action,
-        value
-      });
-      // Refresh menu
-      const res = await axios.get(`${API_URL}/api/branch/menu`);
-      setMenu(res.data);
-      setSelectedItems([]);
-    } catch (error) {
-      console.error('Bulk action error:', error.response?.data || error.message);
-      alert('Bulk action failed: ' + (error.response?.data?.message || error.message));
-    }
+    setModalState({
+      isOpen: true,
+      title: 'Bulk Action',
+      description: `Apply action to ${selectedItems.length} items?`,
+      confirmText: 'Apply',
+      cancelText: 'Cancel',
+      isDangerous: action === 'delete',
+      onConfirm: async () => {
+        try {
+          await axios.put(`${API_URL}/api/branch/menu/bulk`, {
+            items: selectedItems,
+            action,
+            value
+          });
+          // Refresh menu
+          const res = await axios.get(`${API_URL}/api/branch/menu`);
+          setMenu(res.data);
+          setSelectedItems([]);
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          console.error('Bulk action error:', error.response?.data || error.message);
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: `Bulk action failed: ${error.response?.data?.message || error.message}`,
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        }
+      }
+    });
   };
 
   const filteredMenu = menu.filter(item => {
@@ -830,6 +906,19 @@ export default function Inventory({ menu, setMenu }) {
           )}
         </div>
       </Drawer>
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        description={modalState.description}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        isDangerous={modalState.isDangerous}
+        isLoading={modalState.isLoading}
+      />
     </div>
   );
 }
