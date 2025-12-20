@@ -10,6 +10,8 @@ const {
   sendWhatsappBill,
   removeItemFromOrder,
   cancelOrder,
+  updateOrderStatus,
+  closeOrder,
   mergeOrders,
   getMergePreview
 } = require('../controllers/orderController');
@@ -25,8 +27,10 @@ router.get('/:id', getOrder);
 router.put('/:id/items', addItemsToOrder);
 router.delete('/:id/items/:itemId', removeItemFromOrder);
 router.put('/:id/coupon', applyCoupon);
+router.put('/:id/status', updateOrderStatus);
 router.post('/:id/cancel', cancelOrder);
 router.post('/:id/checkout', checkoutOrder);
+router.post('/:id/close', closeOrder);
 router.post('/:id/send-whatsapp-bill', sendWhatsappBill);
 
 module.exports = router;

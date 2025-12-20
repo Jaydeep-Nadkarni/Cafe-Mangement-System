@@ -5,6 +5,49 @@ const Branch = require('../models/Branch');
 const orderService = require('../services/orderService');
 const billService = require('../services/billService');
 const whatsappService = require('../services/whatsappService');
+const { triggerStatsUpdate, emitToBranch } = require('../services/realtimeService');
+
+// Order lifecycle: CREATED → CONFIRMED → PREPARING → READY → PAID → CLOSED
+const STATUS_FLOW = {
+  created: 'confirmed',
+  confirmed: 'preparing',
+  preparing: 'ready',
+  ready: 'paid',
+  paid: 'closed',
+  closed: null // Terminal state
+};
+
+/**
+ * Validate status transition
+ * @param {String} currentStatus - Current order status
+ * @param {String} newStatus - Desired new status
+ * @returns {Object} { valid: Boolean, message: String }
+ */
+const validateStatusTransition = (currentStatus, newStatus) => {
+  // Allow cancellation from any non-terminal state
+  if (newStatus === 'cancelled' && !['paid', 'closed', 'cancelled'].includes(currentStatus)) {
+    return { valid: true };
+  }
+
+  // Check if already in terminal state
+  if (['closed', 'cancelled'].includes(currentStatus)) {
+    return { 
+      valid: false, 
+      message: `Cannot change status from ${currentStatus}` 
+    };
+  }
+
+  // Check if trying to skip ahead
+  const expectedNext = STATUS_FLOW[currentStatus];
+  if (newStatus !== expectedNext) {
+    return { 
+      valid: false, 
+      message: `Invalid transition: ${currentStatus} → ${newStatus}. Expected: ${currentStatus} → ${expectedNext}` 
+    };
+  }
+
+  return { valid: true };
+};
 
 // @desc    Create new order
 // @route   POST /api/orders
@@ -36,7 +79,7 @@ const createOrder = async (req, res) => {
       subtotal: calculation.subtotal,
       tax: calculation.tax,
       total: calculation.total,
-      status: 'active',
+      status: 'created',
       customerCount: customerCount || 1,
       chefNotes: chefNotes || ''
     });
@@ -50,6 +93,18 @@ const createOrder = async (req, res) => {
     table.currentOrders.push(savedOrder._id);
     table.status = 'occupied';
     await table.save();
+
+    // Emit socket event for new order
+    emitToBranch(table.branch._id, 'order_created', {
+      orderId: savedOrder._id,
+      orderNumber: savedOrder.orderNumber,
+      table: tableId,
+      status: savedOrder.status,
+      total: savedOrder.total
+    });
+
+    // Trigger stats update
+    triggerStatsUpdate(table.branch._id);
 
     res.status(201).json(savedOrder);
   } catch (error) {
@@ -88,7 +143,7 @@ const addItemsToOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status === 'completed' || order.status === 'cancelled') {
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
       return res.status(400).json({ message: 'Cannot modify closed order' });
     }
 
@@ -164,53 +219,48 @@ const applyCoupon = async (req, res) => {
 const checkoutOrder = async (req, res) => {
   try {
     const { paymentMethod, amountPaid } = req.body;
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id).populate('table');
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status === 'completed' || order.status === 'cancelled') {
+    // Check if order is already in terminal state
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
       return res.status(400).json({ message: 'Order is already ' + order.status });
     }
 
-    order.paymentMethod = paymentMethod;
-    order.paymentStatus = 'paid';
-    order.paidAt = Date.now();
-    order.status = 'completed';
-    order.completedAt = Date.now();
-    
-    // Simple payment logic
+    // Validate payment before allowing PAID status
     if (amountPaid < order.total) {
       return res.status(400).json({ message: 'Insufficient payment amount' });
     }
+
+    // Validate status transition to PAID
+    if (order.status !== 'ready') {
+      return res.status(400).json({ 
+        message: `Order must be in READY status before payment. Current status: ${order.status}` 
+      });
+    }
+
+    // Update order with payment details
+    order.paymentMethod = paymentMethod;
+    order.paymentStatus = 'paid';
+    order.paidAt = Date.now();
+    order.status = 'paid';
     
     await order.save();
 
-    // Remove from table's currentOrders array
-    const table = await Table.findById(order.table);
-    if (table) {
-      table.currentOrders = table.currentOrders.filter(
-        orderId => orderId.toString() !== order._id.toString()
-      );
-      // Set status to available only if no more orders
-      if (table.currentOrders.length === 0) {
-        table.status = 'available';
-      }
-      await table.save();
-    }
+    // Emit socket event for payment
+    emitToBranch(order.branch, 'order_paid', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      table: order.table?.tableNumber,
+      paymentMethod,
+      total: order.total
+    });
 
-    // Emit real-time event to branch manager for order completion
-    if (req.io && order.branch) {
-      const branchRoom = `branch_${order.branch}`;
-      req.io.to(branchRoom).emit('order_completed', {
-        orderId: order._id,
-        orderNumber: order.orderNumber,
-        total: order.total,
-        timestamp: new Date()
-      });
-      console.log('Emitted order_completed event to room:', branchRoom);
-    }
+    // Trigger stats update
+    triggerStatsUpdate(order.branch);
 
     res.json(order);
   } catch (error) {
@@ -261,7 +311,7 @@ const removeItemFromOrder = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status === 'completed' || order.status === 'cancelled' || order.status === 'merged') {
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
       return res.status(400).json({ message: 'Cannot modify closed order' });
     }
 
@@ -301,16 +351,18 @@ const removeItemFromOrder = async (req, res) => {
 // @access  Manager
 const cancelOrder = async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    const order = await Order.findById(req.params.id).populate('table');
 
     if (!order) {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    if (order.status === 'completed') {
-      return res.status(400).json({ message: 'Cannot cancel completed order' });
+    // Cannot cancel terminal states
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ message: `Cannot cancel ${order.status} order` });
     }
 
+    const previousStatus = order.status;
     order.status = 'cancelled';
     await order.save();
 
@@ -327,7 +379,19 @@ const cancelOrder = async (req, res) => {
       await table.save();
     }
 
-    res.json({ message: 'Order cancelled successfully' });
+    // Emit socket event
+    emitToBranch(order.branch, 'order_cancelled', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      table: order.table?.tableNumber,
+      previousStatus,
+      timestamp: new Date()
+    });
+
+    // Trigger stats update
+    triggerStatsUpdate(order.branch);
+
+    res.json({ message: 'Order cancelled successfully', order });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -575,12 +639,117 @@ const mergeOrders = async (req, res) => {
   }
 };
 
+// @desc    Update order status (with lifecycle validation)
+// @route   PUT /api/orders/:id/status
+// @access  Manager
+const updateOrderStatus = async (req, res) => {
+  try {
+    const { status } = req.body;
+    const order = await Order.findById(req.params.id).populate('table');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Validate transition
+    const validation = validateStatusTransition(order.status, status);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    // Update status
+    const previousStatus = order.status;
+    order.status = status;
+    await order.save();
+
+    // Emit socket event for status change
+    emitToBranch(order.branch, 'order_status_changed', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      table: order.table?.tableNumber,
+      previousStatus,
+      newStatus: status,
+      timestamp: new Date()
+    });
+
+    // Trigger stats update
+    triggerStatsUpdate(order.branch);
+
+    res.json({ 
+      success: true, 
+      message: `Order status updated: ${previousStatus} → ${status}`,
+      order 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Close order (PAID → CLOSED)
+// @route   POST /api/orders/:id/close
+// @access  Manager
+const closeOrder = async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).populate('table');
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    // Validate status
+    if (order.status !== 'paid') {
+      return res.status(400).json({ 
+        message: `Cannot close order. Current status: ${order.status}. Order must be PAID before closing.` 
+      });
+    }
+
+    // Update status to closed
+    order.status = 'closed';
+    order.completedAt = Date.now();
+    await order.save();
+
+    // Remove from table's currentOrders array
+    const table = await Table.findById(order.table);
+    if (table) {
+      table.currentOrders = table.currentOrders.filter(
+        orderId => orderId.toString() !== order._id.toString()
+      );
+      // Set status to available only if no more orders
+      if (table.currentOrders.length === 0) {
+        table.status = 'available';
+      }
+      await table.save();
+    }
+
+    // Emit socket event
+    emitToBranch(order.branch, 'order_closed', {
+      orderId: order._id,
+      orderNumber: order.orderNumber,
+      table: order.table?.tableNumber,
+      timestamp: new Date()
+    });
+
+    // Trigger stats update
+    triggerStatsUpdate(order.branch);
+
+    res.json({ 
+      success: true, 
+      message: 'Order closed successfully',
+      order 
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
   getOrder,
   addItemsToOrder,
   removeItemFromOrder,
   cancelOrder,
+  updateOrderStatus,
+  closeOrder,
   mergeOrders,
   getMergePreview,
   applyCoupon,
