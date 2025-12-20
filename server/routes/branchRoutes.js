@@ -36,6 +36,7 @@ const {
   clearAICache,
   getAICacheStats,
   getCategories,
+  getDynamicCategories,
   addCategory,
   updateCategory,
   deleteCategory,
@@ -77,6 +78,7 @@ router.get('/details', getBranchDetails);
 router.get('/orders', getOrders);
 
 // Category routes
+router.get('/categories/dynamic', getDynamicCategories);
 router.get('/categories', getCategories);
 router.post('/categories', addCategory);
 router.put('/categories/:id', updateCategory);

@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function Orders({ tables, menu = [], onRefresh }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
@@ -27,6 +28,16 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   const [customEndDate, setCustomEndDate] = useState('');
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false,
+    isLoading: false,
+    onConfirm: null
+  });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -57,7 +68,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       setOrders(response.data);
     } catch (error) {
       console.error('Failed to fetch orders:', error);
-      alert('Failed to fetch orders: ' + (error.response?.data?.message || error.message));
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: `Failed to fetch orders: ${error.response?.data?.message || error.message}`,
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -104,7 +122,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   // Apply custom date filter
   const applyCustomFilter = () => {
     if (!customStartDate) {
-      alert('Please select a start date');
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Please select a start date',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
       return;
     }
     setShowCustomDateModal(false);
@@ -138,7 +163,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       onRefresh();
       setShowAddItem(false);
     } catch (error) {
-      alert('Failed to add item: ' + (error.response?.data?.message || error.message));
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: `Failed to add item: ${error.response?.data?.message || error.message}`,
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     } finally {
       setLoading(false);
     }
@@ -268,42 +300,90 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
   const handleCheckout = async () => {
     if (paymentMode === 'cash' && (!cashReceived || parseFloat(cashReceived) < selectedOrder.total)) {
-      return alert('Please enter valid cash amount');
-    }
-
-    if (!window.confirm(`Confirm payment of ${formatCurrency(selectedOrder.total)} via ${paymentMode.toUpperCase()}?`)) return;
-
-    try {
-      setLoading(true);
-      await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/checkout`, {
-        paymentMethod: paymentMode,
-        amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Please enter valid cash amount',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
       });
-      setSelectedOrder(null);
-      
-      // Trigger payment confirmation event for real-time update
-      window.dispatchEvent(new CustomEvent('payment_confirmed', { 
-        detail: { orderId: selectedOrder._id } 
-      }));
-      
-      fetchOrders(true); // Soft refresh
-      onRefresh();
-    } catch (error) {
-      alert('Checkout failed: ' + (error.response?.data?.message || error.message));
-    } finally {
-      setLoading(false);
+      return;
     }
+
+    setModalState({
+      isOpen: true,
+      title: 'Confirm Payment',
+      description: `Confirm payment of ${formatCurrency(selectedOrder.total)} via ${paymentMode.toUpperCase()}?`,
+      confirmText: 'Complete Payment',
+      cancelText: 'Cancel',
+      isDangerous: false,
+      onConfirm: async () => {
+        try {
+          setLoading(true);
+          await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/checkout`, {
+            paymentMethod: paymentMode,
+            amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
+          });
+          setSelectedOrder(null);
+          
+          // Trigger payment confirmation event for real-time update
+          window.dispatchEvent(new CustomEvent('payment_confirmed', { 
+            detail: { orderId: selectedOrder._id } 
+          }));
+          
+          fetchOrders(true); // Soft refresh
+          onRefresh();
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: `Checkout failed: ${error.response?.data?.message || error.message}`,
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        } finally {
+          setLoading(false);
+        }
+      }
+    });
   };
 
   const handleSendBill = async (orderId, phoneNumber) => {
-    if (!phoneNumber) return alert('Please enter a phone number');
+    if (!phoneNumber) {
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Please enter a phone number',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
+      return;
+    }
     try {
       await axios.post(`${API_URL}/api/orders/${orderId}/send-whatsapp-bill`, {
         phoneNumber
       });
-      alert('Bill sent successfully!');
+      setModalState({
+        isOpen: true,
+        title: 'Success',
+        description: 'Bill sent successfully!',
+        confirmText: 'OK',
+        isDangerous: false,
+        onConfirm: null
+      });
     } catch (error) {
-      alert('Failed to send bill');
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to send bill',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
@@ -1018,44 +1098,17 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       )}
 
       {/* Confirmation Modal */}
-      {showConfirmModal && confirmAction && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex items-center gap-3 mb-4">
-              {confirmAction.isError && <AlertCircle className="w-6 h-6 text-red-600" />}
-              {confirmAction.isSuccess && <CheckCircle className="w-6 h-6 text-green-600" />}
-              {!confirmAction.isError && !confirmAction.isSuccess && (
-                <AlertCircle className="w-6 h-6 text-blue-600" />
-              )}
-              <h3 className="text-lg font-bold text-gray-900">{confirmAction.title}</h3>
-            </div>
-            <p className="text-gray-600 mb-6">{confirmAction.message}</p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false);
-                  setConfirmAction(null);
-                }}
-                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 font-medium"
-              >
-                {confirmAction.isError || confirmAction.isSuccess ? 'Close' : 'Cancel'}
-              </button>
-              {confirmAction.onConfirm && (
-                <button
-                  onClick={() => {
-                    confirmAction.onConfirm();
-                    setShowConfirmModal(false);
-                    setConfirmAction(null);
-                  }}
-                  className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
-                >
-                  Confirm
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        description={modalState.description}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        isDangerous={modalState.isDangerous}
+        isLoading={modalState.isLoading}
+      />
 
       {/* Merge Selection Modal */}
       {showMergeModal && (

@@ -146,7 +146,7 @@ const createQROrder = async (req, res) => {
       subtotal: subtotal,
       tax: tax,
       total: total,
-      status: 'pending',
+      status: 'created',
       paymentStatus: 'unpaid',
       paymentMethod: null, // Will be set when payment is made
       customerCount: customerCount || 1,
@@ -212,7 +212,7 @@ const confirmPayment = async (req, res) => {
     order.paymentStatus = 'paid';
     order.paymentMethod = paymentMethod || 'online';
     order.paidAt = new Date();
-    order.status = 'in_progress';
+    order.status = 'confirmed';
     
     // Store Razorpay payment details if available
     if (razorpayPaymentId) {

@@ -2,12 +2,23 @@ import React, { useState } from 'react';
 import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
+import ConfirmationModal from './ConfirmationModal';
 
 export default function Tables({ tables, onRefresh }) {
   const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
   const [selectedTable, setSelectedTable] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false,
+    isLoading: false,
+    onConfirm: null
+  });
   
   const [formData, setFormData] = useState({
     tableNumber: '',
@@ -45,23 +56,68 @@ export default function Tables({ tables, onRefresh }) {
 
   const handleDelete = async (e, id) => {
     e.stopPropagation();
-    if (!window.confirm('Are you sure you want to delete this table?')) return;
-    try {
-      await axios.delete(`${API_URL}/api/branch/tables/${id}`);
-      onRefresh();
-    } catch (error) {
-      alert('Failed to delete table: ' + (error.response?.data?.message || error.message));
-    }
+    setModalState({
+      isOpen: true,
+      title: 'Delete Table',
+      description: 'Are you sure you want to delete this table? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      isDangerous: true,
+      onConfirm: async () => {
+        try {
+          await axios.delete(`${API_URL}/api/branch/tables/${id}`);
+          onRefresh();
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: `Failed to delete table: ${error.response?.data?.message || error.message}`,
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        }
+      }
+    });
   };
 
   const handleStatusChange = async (e, id, newStatus) => {
     e.stopPropagation();
-    try {
-      await axios.put(`${API_URL}/api/branch/tables/${id}/status`, { status: newStatus });
-      onRefresh();
-    } catch (error) {
-      alert('Failed to update status');
-    }
+    const confirmMessages = {
+      'maintenance': 'Mark this table for maintenance?',
+      'available': 'Mark this table as available?',
+      'occupied': 'Mark this table as occupied?',
+      'reserved': 'Mark this table as reserved?',
+      'paid': 'Mark this table as paid?'
+    };
+
+    const isDangerous = newStatus === 'maintenance';
+
+    setModalState({
+      isOpen: true,
+      title: 'Change Table Status',
+      description: confirmMessages[newStatus] || 'Change table status?',
+      confirmText: 'Confirm',
+      cancelText: 'Cancel',
+      isDangerous: isDangerous,
+      onConfirm: async () => {
+        try {
+          await axios.put(`${API_URL}/api/branch/tables/${id}/status`, { status: newStatus });
+          onRefresh();
+          setModalState({ ...modalState, isOpen: false });
+        } catch (error) {
+          setModalState({
+            isOpen: true,
+            title: 'Error',
+            description: 'Failed to update status',
+            confirmText: 'OK',
+            isDangerous: true,
+            onConfirm: null
+          });
+        }
+      }
+    });
   };
 
   const handleSubmit = async (e) => {
@@ -77,7 +133,14 @@ export default function Tables({ tables, onRefresh }) {
       resetForm();
       onRefresh();
     } catch (error) {
-      alert('Failed to save table: ' + (error.response?.data?.message || error.message));
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: `Failed to save table: ${error.response?.data?.message || error.message}`,
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     } finally {
       setLoading(false);
     }
@@ -441,6 +504,19 @@ export default function Tables({ tables, onRefresh }) {
           </div>
         </div>
       )}
+
+      {/* Confirmation Modal */}
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        description={modalState.description}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        isDangerous={modalState.isDangerous}
+        isLoading={modalState.isLoading}
+      />
     </div>
   );
 }
