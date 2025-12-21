@@ -891,12 +891,26 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             {/* By Table Modal: Show all orders for selected table */}
             {selectedTableForModal && (() => {
               const tableOrders = orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged);
-              const unpaidOrders = tableOrders.filter(o => o.paymentStatus !== 'paid');
-              const sessionTotal = unpaidOrders.reduce((sum, o) => sum + (o.total || 0), 0);
               
+              // Calculate Session Totals
+              const sessionTotal = tableOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+              const paidAmount = tableOrders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + (o.total || 0), 0);
+              const unpaidAmount = sessionTotal - paidAmount;
+              
+              // Group all items from all orders in the session
+              const allSessionItems = tableOrders.flatMap(o => o.items.map(item => ({
+                ...item,
+                orderId: o._id,
+                isPaid: o.paymentStatus === 'paid'
+              })));
+              
+              const groupedSessionItems = groupOrderItems(allSessionItems);
+
               return (
               <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setSelectedTableForModal(null)}>
-                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                  
+                  {/* Header */}
                   <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
                     <div className="flex items-center gap-3">
                       <h2 className="text-xl font-bold text-gray-900">Table {selectedTableForModal.tableNumber}</h2>
@@ -906,74 +920,149 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     <button onClick={() => setSelectedTableForModal(null)}><X className="w-6 h-6 text-gray-400" /></button>
                   </div>
                   
-                  {/* Session Summary & Pay All Button */}
-                  {unpaidOrders.length > 0 && (
-                    <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 flex justify-between items-center">
-                      <div>
-                        <span className="text-sm text-amber-800 font-medium">Session Total: </span>
-                        <span className="text-lg font-bold text-amber-900">{formatCurrency(sessionTotal)}</span>
-                        <span className="text-xs text-amber-600 ml-2">({unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''})</span>
-                      </div>
-                      <button 
-                        onClick={async () => {
-                          try {
-                            setLoading(true);
-                            const token = localStorage.getItem('token');
-                            await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
-                              paymentMethod: 'cash'
-                            }, { headers: { Authorization: `Bearer ${token}` } });
-                            setSelectedTableForModal(null);
-                            fetchOrders(true);
-                            onRefresh();
-                            showSuccess(`Session closed! ${unpaidOrders.length} orders paid`);
-                          } catch (error) {
-                            showError(error?.response?.data?.message || 'Failed to close session');
-                          } finally {
-                            setLoading(false);
-                          }
-                        }}
-                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-2"
-                      >
-                        <Banknote className="w-4 h-4" />
-                        Pay Session (Counter)
-                      </button>
+                  <div className="flex flex-col md:flex-row h-full overflow-hidden">
+                    
+                    {/* LEFT: Items List */}
+                    <div className="flex-1 overflow-y-auto p-6 border-r border-gray-200 bg-gray-50/30">
+                      <h3 className="font-bold text-gray-700 mb-4 uppercase text-xs tracking-wider">Session Items</h3>
+                      
+                      {groupedSessionItems.length === 0 ? (
+                        <div className="text-gray-500 text-center py-8">No items ordered yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {groupedSessionItems.map((item, idx) => (
+                            <div key={idx} className={`flex justify-between items-center p-3 rounded-lg border ${item.isPaid ? 'bg-green-50 border-green-100' : 'bg-white border-gray-200'}`}>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-900">{item.quantity}x</span>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{item.menuItem?.name || 'Unknown'}</p>
+                                  {item.isPaid && <span className="text-[10px] font-bold text-green-600 uppercase bg-green-100 px-1.5 py-0.5 rounded">Paid</span>}
+                                </div>
+                              </div>
+                              <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  )}
-                  
-                  <div className="p-6 overflow-y-auto max-h-[70vh]">
-                    {/* List all orders for this table */}
-                    {tableOrders.length === 0 ? (
-                      <div className="text-gray-500 text-center py-8">No active orders for this table.</div>
-                    ) : (
-                      tableOrders.map(order => (
-                        <div key={order._id} className="mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
-                          <div className="flex justify-between items-center mb-2">
-                            <span className="font-bold text-gray-900">Order #{order.orderNumber}</span>
-                            <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{order.paymentStatus}</span>
+
+                    {/* RIGHT: Payment & Actions */}
+                    <div className="w-full md:w-96 bg-white flex flex-col shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)]">
+                      <div className="p-6 flex-1 overflow-y-auto">
+                        <h3 className="font-bold text-gray-900 mb-6">Payment Summary</h3>
+                        
+                        <div className="space-y-3 text-sm mb-6">
+                          <div className="flex justify-between text-gray-600">
+                            <span>Session Total</span>
+                            <span className="font-medium">{formatCurrency(sessionTotal)}</span>
                           </div>
-                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
-                            <span>{order.items.length} items</span>
-                            <span>•</span>
-                            <span>{getTimeSince(order.createdAt)}</span>
-                            <span>•</span>
-                            <span className="font-medium">{formatCurrency(order.total)}</span>
+                          <div className="flex justify-between text-green-600">
+                            <span>Paid (Online)</span>
+                            <span className="font-medium">-{formatCurrency(paidAmount)}</span>
                           </div>
-                          <div className="flex flex-wrap gap-2 mb-2">
-                            <button onClick={() => { setSelectedOrder(order); setSelectedTableForModal(null); }} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">View Bill</button>
-                            <button onClick={() => handlePrintBill(order._id)} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">Print</button>
-                            {order.paymentStatus !== 'paid' && (
-                              <button onClick={() => handleMarkAsPaid(order._id)} className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">Mark Paid</button>
-                            )}
-                            <button onClick={() => handleCancelOrder(order._id)} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">Cancel</button>
-                          </div>
-                          <div className="text-xs text-gray-600">
-                            {groupOrderItems(order.items).map((item, idx, arr) => (
-                              <span key={idx}>{item.quantity}x {item.menuItem?.name}{idx < arr.length - 1 ? ', ' : ''}</span>
-                            ))}
+                          <div className="border-t border-dashed border-gray-300 pt-3 mt-3">
+                            <div className="flex justify-between items-end">
+                              <span className="font-bold text-gray-900 text-lg">Pending Amount</span>
+                              <span className="font-bold text-red-600 text-2xl">{formatCurrency(unpaidAmount)}</span>
+                            </div>
                           </div>
                         </div>
-                      ))
-                    )}
+
+                        {/* Payment Methods */}
+                        {unpaidAmount > 0 ? (
+                          <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase mb-3">Payment Method</p>
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                              <button
+                                onClick={() => setPaymentMode('cash')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'cash' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <Banknote className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">Cash</span>
+                              </button>
+                              <button
+                                onClick={() => setPaymentMode('card')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'card' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <CreditCard className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">Card</span>
+                              </button>
+                              <button
+                                onClick={() => setPaymentMode('upi')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'upi' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <Smartphone className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">UPI</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center mb-6">
+                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                            <p className="font-bold text-green-800">Fully Paid</p>
+                            <p className="text-xs text-green-600">All items in this session are paid.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        {unpaidAmount > 0 ? (
+                          <button 
+                            onClick={async () => {
+                              try {
+                                setLoading(true);
+                                const token = localStorage.getItem('token');
+                                await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
+                                  paymentMethod: paymentMode,
+                                  amountPaid: unpaidAmount // Charge only pending
+                                }, { headers: { Authorization: `Bearer ${token}` } });
+                                setSelectedTableForModal(null);
+                                fetchOrders(true);
+                                onRefresh();
+                                showSuccess(`Session closed! Payment of ${formatCurrency(unpaidAmount)} received.`);
+                              } catch (error) {
+                                showError(error?.response?.data?.message || 'Failed to close session');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Banknote className="w-6 h-6" />
+                            Pay {formatCurrency(unpaidAmount)}
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={async () => {
+                              // Close session without payment (since already paid)
+                              try {
+                                setLoading(true);
+                                const token = localStorage.getItem('token');
+                                // We can use the same endpoint, amountPaid 0 is fine if total is 0? 
+                                // Actually session-checkout should handle "close only" if fully paid.
+                                await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
+                                  paymentMethod: 'cash', // Dummy
+                                  amountPaid: 0
+                                }, { headers: { Authorization: `Bearer ${token}` } });
+                                setSelectedTableForModal(null);
+                                fetchOrders(true);
+                                onRefresh();
+                                showSuccess(`Session closed successfully.`);
+                              } catch (error) {
+                                showError(error?.response?.data?.message || 'Failed to close session');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Archive className="w-6 h-6" />
+                            Close Session & Free Table
+                          </button>
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -135,7 +135,23 @@ const createQROrder = async (req, res) => {
     const tax = subtotal * taxRate;
     const total = subtotal + tax;
 
-    // TABLE SESSION LOGIC: Check for active session (unpaid orders on this table)
+    // TABLE SESSION LOGIC: Check for active session
+    // 1. Find ANY active order (paid or unpaid) to get the sessionId
+    const lastActiveOrder = await Order.findOne({
+      table: table._id,
+      status: { $nin: ['closed', 'cancelled'] }
+    }).sort({ createdAt: -1 });
+
+    let sessionId;
+    if (lastActiveOrder && lastActiveOrder.sessionId) {
+      sessionId = lastActiveOrder.sessionId;
+      console.log('Found active session:', sessionId);
+    } else {
+      sessionId = `${table._id}-${Date.now()}`;
+      console.log('Creating new session:', sessionId);
+    }
+
+    // 2. Check for an existing UNPAID order to merge into
     const existingActiveOrder = await Order.findOne({
       table: table._id,
       paymentStatus: 'unpaid',
@@ -143,7 +159,12 @@ const createQROrder = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     if (existingActiveOrder) {
-      console.log('Merging into existing session:', existingActiveOrder.sessionId);
+      console.log('Merging into existing unpaid order:', existingActiveOrder._id);
+      
+      // Ensure sessionId matches (just in case)
+      if (!existingActiveOrder.sessionId) {
+        existingActiveOrder.sessionId = sessionId;
+      }
       
       // Merge items
       existingActiveOrder.items.push(...processedItems);
@@ -178,9 +199,8 @@ const createQROrder = async (req, res) => {
       return res.status(200).json(populatedOrder);
     }
 
-    // Create NEW Session
-    const sessionId = `${table._id}-${Date.now()}`;
-    console.log('Creating new session:', sessionId);
+    // 3. If no unpaid order exists, create NEW order but link to SAME session
+    console.log('Creating new order in session:', sessionId);
 
     const order = new Order({
       branch: branch._id,
