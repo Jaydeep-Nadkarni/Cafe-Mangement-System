@@ -15,7 +15,7 @@ import {
     XCircle,
     AlertCircle
 } from 'lucide-react';
-import { formatCurrency } from '../../../utils/formatCurrency';
+import { formatCurrency, formatDate } from '../../../utils/formatCurrency';
 
 export default function Coupons() {
     const [coupons, setCoupons] = useState([]);
@@ -262,8 +262,8 @@ export default function Coupons() {
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-600">
                                     <div className="flex flex-col">
-                                        <span className="text-xs text-gray-400">From: {new Date(coupon.validFrom).toLocaleDateString()}</span>
-                                        <span className="text-xs text-gray-400">Until: {new Date(coupon.validUntil).toLocaleDateString()}</span>
+                                        <span className="text-xs text-gray-400">From: {formatDate(coupon.validFrom)}</span>
+                                        <span className="text-xs text-gray-400">Until: {formatDate(coupon.validUntil)}</span>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-sm text-gray-600">

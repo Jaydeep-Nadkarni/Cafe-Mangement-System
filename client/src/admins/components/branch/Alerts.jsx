@@ -6,6 +6,7 @@ import {
 import axios from 'axios';
 import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 import ConfirmationModal from './ConfirmationModal';
+import { formatDateTime } from '../../../utils/formatCurrency';
 
 export default function Alerts({ branch }) {
   const [alerts, setAlerts] = useState([]);
@@ -405,7 +406,7 @@ export default function Alerts({ branch }) {
                     </div>
                   )}
                   <span className="text-xs text-gray-400 mt-2 block">
-                    {new Date(alert.createdAt).toLocaleString()}
+                    {formatDateTime(alert.createdAt)}
                   </span>
                 </div>
               </div>

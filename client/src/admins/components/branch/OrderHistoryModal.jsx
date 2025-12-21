@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { X, Calendar, Search, RefreshCw, Download, ChevronDown, TrendingUp } from 'lucide-react';
 import axios from 'axios';
-import { formatCurrency } from '../../../utils/formatCurrency';
+import { formatCurrency, formatDate, formatDateTime, formatTime } from '../../../utils/formatCurrency';
 
 export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
     const [orders, setOrders] = useState([]);
@@ -162,7 +162,7 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
             <body>
                 <div class="header">
                     <h1>Order History Report</h1>
-                    <p>Generated on ${new Date().toLocaleString()}</p>
+                    <p>Generated on ${formatDateTime(new Date())}</p>
                     <p>Period: ${dateRange === 'custom' ? `${customStart} to ${customEnd}` : dateRange}</p>
                 </div>
 
@@ -199,7 +199,7 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                     <tbody>
                         ${filteredOrders.map(order => `
                             <tr>
-                                <td>${new Date(order.createdAt).toLocaleString()}</td>
+                                <td>${formatDateTime(order.createdAt)}</td>
                                 <td>#${order.orderNumber?.slice(-6)}</td>
                                 <td>${order.table?.tableNumber || 'N/A'}</td>
                                 <td class="amount">${formatCurrency(order.total)}</td>
@@ -378,8 +378,8 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                                             className="hover:bg-slate-50 transition-colors duration-150"
                                         >
                                             <td className="px-6 py-4 text-sm text-slate-700">
-                                                <div className="font-medium">{new Date(order.createdAt).toLocaleDateString()}</div>
-                                                <div className="text-xs text-slate-500">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                <div className="font-medium">{formatDate(order.createdAt)}</div>
+                                                <div className="text-xs text-slate-500">{formatTime(order.createdAt)}</div>
                                             </td>
                                             <td className="px-6 py-4 text-sm">
                                                 <span className="font-mono font-semibold text-slate-900">#{order.orderNumber?.slice(-8)}</span>

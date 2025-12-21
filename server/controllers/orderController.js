@@ -260,13 +260,18 @@ const createOrder = async (req, res) => {
 
     // PAY_LATER: Always merge into active session order for same table
     if (orderType === 'pay_later') {
-      // Check for existing unpaid order in same session (Active Session)
+      // Check for existing unpaid order in active session (includes QR orders)
+      // Note: QR orders may not have orderType set, so we check for both
       let existingOrder = await Order.findOne({
         table: tableId,
         status: { $nin: ['closed', 'cancelled'] },
         paymentStatus: 'unpaid',
-        orderType: 'pay_later'
-      });
+        $or: [
+          { orderType: 'pay_later' },
+          { orderType: { $exists: false } },  // Old orders without orderType
+          { orderType: null }
+        ]
+      }).sort({ createdAt: -1 });  // Get most recent active order
 
       if (existingOrder) {
         // MERGE into existing order
@@ -293,7 +298,7 @@ const createOrder = async (req, res) => {
         });
 
       } else {
-        // Create NEW Order for pay_later
+        // Create NEW Order for pay_later - first order in new session
         const sessionId = `${tableId}-${Date.now()}`;
         const order = new Order({
           branch: table.branch._id,
@@ -375,7 +380,15 @@ const createOrder = async (req, res) => {
 
       } else {
         // CREATE separate order: Different person or first order
-        const sessionId = `${tableId}-${Date.now()}`;
+        // Check if there's an active session on this table to inherit sessionId
+        const activeSession = await Order.findOne({
+          table: tableId,
+          status: { $nin: ['closed', 'cancelled'] },
+          paymentStatus: 'unpaid'
+        }).sort({ createdAt: -1 });
+        
+        const sessionId = activeSession?.sessionId || `${tableId}-${Date.now()}`;
+        
         const order = new Order({
           branch: table.branch._id,
           table: tableId,
@@ -596,28 +609,51 @@ const checkoutOrder = async (req, res) => {
 
     await order.save();
 
-    // If payment is cash (Counter), free the table immediately
+    // COUNTER PAYMENT = SESSION CLOSURE (Most Important Rule)
+    // Counter payment (cash) represents end of dining - closes entire session
     if (paymentMethod === 'cash' && order.table) {
       const table = await Table.findById(order.table);
       if (table) {
-        // Remove from currentOrders
-        table.currentOrders = table.currentOrders.filter(
-          id => id.toString() !== order._id.toString()
-        );
-
-        // If no more orders, set to available
-        if (table.currentOrders.length === 0) {
-          table.status = 'available';
+        // Find ALL unpaid orders in the same session and mark them paid
+        const sessionOrders = await Order.find({
+          table: order.table._id || order.table,
+          paymentStatus: 'unpaid',
+          status: { $nin: ['closed', 'cancelled'] }
+        });
+        
+        for (const sessionOrder of sessionOrders) {
+          sessionOrder.paymentMethod = paymentMethod;
+          sessionOrder.paymentStatus = 'paid';
+          sessionOrder.paidAt = Date.now();
+          sessionOrder.status = 'paid';
+          await sessionOrder.save();
         }
+        
+        // Clear all orders from the table (session is closed)
+        table.currentOrders = [];
+        table.status = 'available';
+        table.sessionStart = null;  // Reset session
 
         await table.save();
 
-        // Update session stats (will clear if empty)
+        // Update session stats (will clear since empty)
         await updateTableSessionStats(table._id);
+        
+        console.log(`[Session Closed] Table ${table.tableNumber}: ${sessionOrders.length + 1} orders paid, table freed`);
       }
     } else if (order.table) {
-      // Just update stats for non-cash or if table not freed
-      await updateTableSessionStats(order.table);
+      // ONLINE PAYMENT: Does NOT close session, table remains occupied
+      const table = await Table.findById(order.table);
+      if (table) {
+        // Remove only this order from currentOrders
+        table.currentOrders = table.currentOrders.filter(
+          id => id.toString() !== order._id.toString()
+        );
+        await table.save();
+        
+        // Update session stats
+        await updateTableSessionStats(table._id);
+      }
     }
 
     // Apply incremental stats delta
@@ -641,6 +677,94 @@ const checkoutOrder = async (req, res) => {
 
     res.json(order);
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Checkout entire table session (all unpaid orders)
+// @route   POST /api/orders/session-checkout/:tableId
+// @access  Manager
+const sessionCheckout = async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const { paymentMethod } = req.body;
+    
+    const table = await Table.findById(tableId).populate('branch');
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    // Verify authorization
+    if (table.branch.manager.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized for this branch' });
+    }
+    
+    // Find all unpaid orders for this table
+    const unpaidOrders = await Order.find({
+      table: tableId,
+      paymentStatus: 'unpaid',
+      status: { $nin: ['closed', 'cancelled'] }
+    });
+    
+    if (unpaidOrders.length === 0) {
+      return res.status(400).json({ message: 'No unpaid orders found for this table' });
+    }
+    
+    // Calculate total
+    const sessionTotal = unpaidOrders.reduce((sum, order) => sum + order.total, 0);
+    let totalItems = 0;
+    
+    // Mark all orders as paid
+    for (const order of unpaidOrders) {
+      order.paymentMethod = paymentMethod;
+      order.paymentStatus = 'paid';
+      order.paidAt = Date.now();
+      order.status = 'paid';
+      await order.save();
+      totalItems += order.items.reduce((sum, item) => sum + item.quantity, 0);
+    }
+    
+    // COUNTER PAYMENT = SESSION CLOSURE
+    if (paymentMethod === 'cash') {
+      table.currentOrders = [];
+      table.status = 'available';
+      table.sessionStart = null;
+      await table.save();
+    }
+    
+    // Update session stats
+    await updateTableSessionStats(tableId);
+    
+    // Apply incremental stats delta
+    await applyStatsDelta(table.branch._id, {
+      revenue: sessionTotal,
+      orders: unpaidOrders.length,
+      items: totalItems
+    });
+    
+    // Emit socket event
+    emitToBranch(table.branch._id, 'session_closed', {
+      tableId: table._id,
+      tableNumber: table.tableNumber,
+      ordersCount: unpaidOrders.length,
+      total: sessionTotal,
+      paymentMethod
+    });
+    
+    // Trigger stats update
+    triggerStatsUpdate(table.branch._id);
+    
+    console.log(`[Session Checkout] Table ${table.tableNumber}: ${unpaidOrders.length} orders, Total: ${sessionTotal}`);
+    
+    res.json({
+      success: true,
+      tableNumber: table.tableNumber,
+      ordersCount: unpaidOrders.length,
+      total: sessionTotal,
+      paymentMethod
+    });
+  } catch (error) {
+    console.error('[Session Checkout Error]', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -1351,6 +1475,7 @@ module.exports = {
   getMergePreview,
   applyCoupon,
   checkoutOrder,
+  sessionCheckout,
   sendWhatsappBill,
   downloadBill
 };

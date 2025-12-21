@@ -40,7 +40,13 @@ const generateThermalBill = (order) => {
       // --- Order Info ---
       doc.font('Helvetica').fontSize(8);
       doc.text(`Order #: ${order._id.toString().slice(-6).toUpperCase()}`);
-      doc.text(`Date: ${new Date().toLocaleString()}`);
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      doc.text(`Date: ${day}-${month}-${year} ${hours}:${minutes}`);
       if (order.table) {
         // Assuming table is populated or just an ID
         doc.text(`Table: ${order.table.tableNumber || order.table}`);

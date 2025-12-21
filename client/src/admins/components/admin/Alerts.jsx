@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Bell, Trash2 } from 'lucide-react';
 import axios from 'axios';
+import { formatDateTime } from '../../../utils/formatCurrency';
 
 export default function Alerts() {
   const [alerts, setAlerts] = useState([]);
@@ -68,7 +69,7 @@ export default function Alerts() {
                 </div>
                 <p className="text-gray-900 font-medium">{alert.message}</p>
                 <p className="text-sm text-gray-500 mt-1">
-                  {new Date(alert.createdAt).toLocaleString()}
+                  {formatDateTime(alert.createdAt)}
                 </p>
               </div>
               <button

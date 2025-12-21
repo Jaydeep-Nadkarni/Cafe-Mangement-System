@@ -87,8 +87,23 @@ const createQROrder = async (req, res) => {
     }
     console.log('Table found:', table._id);
 
-    // Multiple orders per table are now supported
-    // For QR orders, we'll create a new separate order each time
+    // TABLE SESSION LOGIC: Check for active session (unpaid orders on this table)
+    // If active session exists, attach order to it. Otherwise, create new session.
+    const existingActiveOrder = await Order.findOne({
+      table: table._id,
+      paymentStatus: 'unpaid',
+      status: { $nin: ['closed', 'cancelled'] }
+    }).sort({ createdAt: -1 });  // Get most recent active order
+    
+    // Determine sessionId - reuse existing or create new
+    let sessionId;
+    if (existingActiveOrder && existingActiveOrder.sessionId) {
+      sessionId = existingActiveOrder.sessionId;
+      console.log('Attaching to existing session:', sessionId);
+    } else {
+      sessionId = `${table._id}-${Date.now()}`;
+      console.log('Creating new session:', sessionId);
+    }
     
     // Process items - convert local IDs to MongoDB ObjectIds and validate
     const processedItems = [];
@@ -138,7 +153,7 @@ const createQROrder = async (req, res) => {
     const tax = subtotal * taxRate;
     const total = subtotal + tax;
 
-    // Create order
+    // Create order with session ID for grouping
     const order = new Order({
       branch: branch._id,
       table: table._id,
@@ -152,7 +167,10 @@ const createQROrder = async (req, res) => {
       customerCount: customerCount || 1,
       customerName: customerName || null,
       customerPhone: customerPhone || null,
-      chefNotes: chefNotes || ''
+      chefNotes: chefNotes || '',
+      sessionId: sessionId,  // Attach to session for grouping
+      sessionPerson: customerName || 'QR Order',
+      orderType: 'pay_later'  // QR orders default to pay_later
     });
 
     const savedOrder = await order.save();

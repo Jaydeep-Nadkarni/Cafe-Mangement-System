@@ -7,7 +7,7 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
-import { formatCurrency } from '../../../utils/formatCurrency';
+import { formatCurrency, formatTime, formatDateTime } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
 
@@ -797,7 +797,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                     <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
                     <span className="text-xs text-gray-400">
-                      {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(order.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -830,7 +830,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             })}
 
             {/* By Table Modal: Show all orders for selected table */}
-            {selectedTableForModal && (
+            {selectedTableForModal && (() => {
+              const tableOrders = orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged);
+              const unpaidOrders = tableOrders.filter(o => o.paymentStatus !== 'paid');
+              const sessionTotal = unpaidOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+              
+              return (
               <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setSelectedTableForModal(null)}>
                 <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
                   <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
@@ -841,12 +846,47 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                     <button onClick={() => setSelectedTableForModal(null)}><X className="w-6 h-6 text-gray-400" /></button>
                   </div>
+                  
+                  {/* Session Summary & Pay All Button */}
+                  {unpaidOrders.length > 0 && (
+                    <div className="px-6 py-3 bg-amber-50 border-b border-amber-200 flex justify-between items-center">
+                      <div>
+                        <span className="text-sm text-amber-800 font-medium">Session Total: </span>
+                        <span className="text-lg font-bold text-amber-900">{formatCurrency(sessionTotal)}</span>
+                        <span className="text-xs text-amber-600 ml-2">({unpaidOrders.length} unpaid order{unpaidOrders.length !== 1 ? 's' : ''})</span>
+                      </div>
+                      <button 
+                        onClick={async () => {
+                          try {
+                            setLoading(true);
+                            const token = localStorage.getItem('token');
+                            await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
+                              paymentMethod: 'cash'
+                            }, { headers: { Authorization: `Bearer ${token}` } });
+                            setSelectedTableForModal(null);
+                            fetchOrders(true);
+                            onRefresh();
+                            showSuccess(`Session closed! ${unpaidOrders.length} orders paid`);
+                          } catch (error) {
+                            showError(error?.response?.data?.message || 'Failed to close session');
+                          } finally {
+                            setLoading(false);
+                          }
+                        }}
+                        className="px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 flex items-center gap-2"
+                      >
+                        <Banknote className="w-4 h-4" />
+                        Pay Session (Counter)
+                      </button>
+                    </div>
+                  )}
+                  
                   <div className="p-6 overflow-y-auto max-h-[70vh]">
                     {/* List all orders for this table */}
-                    {orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged).length === 0 ? (
+                    {tableOrders.length === 0 ? (
                       <div className="text-gray-500 text-center py-8">No active orders for this table.</div>
                     ) : (
-                      orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged).map(order => (
+                      tableOrders.map(order => (
                         <div key={order._id} className="mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
                           <div className="flex justify-between items-center mb-2">
                             <span className="font-bold text-gray-900">Order #{order.orderNumber}</span>
@@ -856,6 +896,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                             <span>{order.items.length} items</span>
                             <span>•</span>
                             <span>{getTimeSince(order.createdAt)}</span>
+                            <span>•</span>
+                            <span className="font-medium">{formatCurrency(order.total)}</span>
                           </div>
                           <div className="flex flex-wrap gap-2 mb-2">
                             <button onClick={() => { setSelectedOrder(order); setSelectedTableForModal(null); }} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">View Bill</button>
@@ -876,7 +918,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   </div>
                 </div>
               </div>
-            )}
+              );
+            })()}
           </>
         )}
       </div>
@@ -1157,7 +1200,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 >
                   <div className="flex flex-col items-start">
                     <span className="font-bold text-sm">#{order.orderNumber} (Same Table)</span>
-                    <span className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                    <span className="text-xs text-gray-500">{formatTime(order.createdAt)}</span>
                   </div>
                   <span className="text-sm font-bold">{formatCurrency(order.total)}</span>
                 </button>

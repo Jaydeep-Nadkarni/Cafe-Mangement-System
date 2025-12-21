@@ -11,12 +11,18 @@ const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
  */
 const craftAnalysisPrompt = (aiInsights, branchName = 'Branch') => {
   const { scores, metrics, recommendations, summary, timeRange } = aiInsights;
+  
+  const now = new Date();
+  const day = String(now.getDate()).padStart(2, '0');
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const year = now.getFullYear();
+  const formattedDate = `${day}-${month}-${year}`;
 
   const prompt = `You are an expert business analyst for a cafe/restaurant chain. Analyze the following branch performance data and provide detailed insights in 10 specific sections.
 
 **Branch**: ${branchName}
 **Time Period**: ${timeRange}
-**Generated**: ${new Date().toLocaleDateString()}
+**Generated**: ${formattedDate}
 
 ---
 
