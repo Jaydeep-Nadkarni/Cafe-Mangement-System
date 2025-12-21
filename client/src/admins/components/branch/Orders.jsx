@@ -6,6 +6,7 @@ import {
   ChefHat, Truck, Package, DollarSign, Archive
 } from 'lucide-react';
 import axios from 'axios';
+import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
@@ -58,6 +59,9 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+  // Determine branch from tables (for socket room)
+  const branchId = tables?.[0]?.branch?._id || tables?.[0]?.branch || null;
+
   // Fetch all orders with time filter
   const fetchOrders = useCallback(async (isRefresh = false) => {
     try {
@@ -105,22 +109,36 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   }, [fetchOrders]);
 
   // Real-time updates via webhook/polling simulation
-  useEffect(() => {
-    // Listen for payment confirmations or order updates
-    const handlePaymentUpdate = (event) => {
-      if (event.detail?.orderId) {
-        fetchOrders(true); // Soft refresh
-      }
-    };
+  const handlePaymentUpdate = useCallback((event) => {
+    if (event.detail?.orderId) {
+      fetchOrders(true); // Soft refresh
+    }
+  }, [fetchOrders]);
 
+  useEffect(() => {
     window.addEventListener('payment_confirmed', handlePaymentUpdate);
     window.addEventListener('order_updated', handlePaymentUpdate);
-
     return () => {
       window.removeEventListener('payment_confirmed', handlePaymentUpdate);
       window.removeEventListener('order_updated', handlePaymentUpdate);
     };
-  }, [fetchOrders]);
+  }, [handlePaymentUpdate]);
+
+  // Socket-based updates for order item changes
+  useBranchSocket(branchId, {
+    onOrderItemsUpdated: async (payload) => {
+      fetchOrders(true);
+      if (selectedOrder && payload.orderId === selectedOrder._id) {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await axios.get(`${API_URL}/api/orders/${selectedOrder._id}`, { headers: { Authorization: `Bearer ${token}` } });
+          setSelectedOrder(res.data);
+        } catch (err) {
+          console.error('Failed to refresh selected order:', err);
+        }
+      }
+    }
+  });
 
   // Soft refresh handler
   const handleSoftRefresh = () => {
@@ -205,6 +223,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           setSelectedOrder(res.data);
           fetchOrders(true);
           onRefresh();
+          showSuccess('Item removed');
         } catch (error) {
           console.error('Failed to remove item:', error);
           showError('Failed to remove item. Please try again.');
@@ -213,6 +232,50 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         }
       }
     );
+  };
+
+  const handleMarkAsPaid = async (orderId) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_URL}/api/orders/${orderId}/checkout`, {
+        paymentMethod: 'cash',
+        amountPaid: selectedOrder.total
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      setSelectedOrder(res.data);
+      fetchOrders(true);
+      onRefresh();
+      showSuccess('Order marked as paid');
+    } catch (error) {
+      console.error('Failed to mark as paid:', error);
+      showError(error?.response?.data?.message || 'Failed to mark as paid');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateItemQuantity = async (itemId, quantity) => {
+    if (!selectedOrder) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.put(
+        `${API_URL}/api/orders/${selectedOrder._id}/items/${itemId}`,
+        { quantity },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSelectedOrder(res.data);
+      fetchOrders(true);
+      onRefresh();
+      showSuccess('Quantity updated');
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      showError(error?.response?.data?.message || 'Failed to update quantity');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelOrder = async () => {
@@ -955,64 +1018,44 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   </div>
                 </div>
 
-                {/* Status Badge and Transition */}
+                {/* Billing Actions (Print / Mark Paid / Close) - removed kitchen status controls */}
                 <div className="flex items-center gap-3">
-                  {(() => {
-                    const statusBadge = getStatusBadge(selectedOrder.status);
-                    const StatusIcon = statusBadge.icon;
-                    const nextStatus = getNextStatus(selectedOrder.status);
+                  {/* Print Bill Button */}
+                  <button
+                    onClick={() => handlePrintBill(selectedOrder._id)}
+                    disabled={loading}
+                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
+                    title="Print Bill"
+                  >
+                    <Printer className="w-4 h-4" />
+                    Print
+                  </button>
 
-                    return (
-                      <>
-                        {/* Print Bill Button */}
-                        <button
-                          onClick={() => handlePrintBill(selectedOrder._id)}
-                          disabled={loading}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
-                          title="Print Bill"
-                        >
-                          <Printer className="w-4 h-4" />
-                          Print
-                        </button>
+                  {/* Mark as Paid (Cash) - quick payment for admins */}
+                  {selectedOrder.paymentStatus !== 'paid' && (
+                    <button
+                      onClick={() => handleMarkAsPaid(selectedOrder._id)}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
+                      title="Mark as Paid (Cash)"
+                    >
+                      <DollarSign className="w-4 h-4" />
+                      Mark Paid
+                    </button>
+                  )}
 
-                        {nextStatus && !['cancelled', 'closed'].includes(selectedOrder.status) && (
-                          <>
-                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
-                            <button
-                              onClick={() => handleStatusTransition(selectedOrder._id, nextStatus)}
-                              disabled={loading || (nextStatus === 'paid' && selectedOrder.status !== 'ready')}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {(() => {
-                                const nextBadge = getStatusBadge(nextStatus);
-                                const NextIcon = nextBadge.icon;
-                                return (
-                                  <>
-                                    <NextIcon className="w-4 h-4" />
-                                    {nextBadge.label}
-                                  </>
-                                );
-                              })()}
-                            </button>
-                          </>
-                        )}
-
-                        {selectedOrder.status === 'paid' && (
-                          <>
-                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
-                            <button
-                              onClick={() => handleCloseOrder(selectedOrder._id)}
-                              disabled={loading}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
-                            >
-                              <Archive className="w-4 h-4" />
-                              Close
-                            </button>
-                          </>
-                        )}
-                      </>
-                    );
-                  })()}
+                  {/* Close button for already paid orders */}
+                  {selectedOrder.paymentStatus === 'paid' && (
+                    <button
+                      onClick={() => handleCloseOrder(selectedOrder._id)}
+                      disabled={loading}
+                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
+                      title="Close Order"
+                    >
+                      <Archive className="w-4 h-4" />
+                      Close
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -1021,12 +1064,39 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 {selectedOrder.items.map((item, idx) => (
                   <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between group">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-gray-100 px-2 py-1 rounded text-sm font-bold">{item.quantity}x</span>
+                      <div className="flex items-center gap-3">
+                        <div className="inline-flex items-center border rounded-md overflow-hidden">
+                          <button
+                            onClick={() => handleUpdateItemQuantity(item._id, Math.max(0, item.quantity - 1))}
+                            disabled={loading}
+                            className="px-3 py-1 bg-gray-50 hover:bg-gray-100"
+                            title="Decrease quantity"
+                          >
+                            -
+                          </button>
+                          <input
+                            type="number"
+                            min="0"
+                            value={item.quantity}
+                            onChange={(e) => {
+                              const val = parseInt(e.target.value, 10);
+                              if (!isNaN(val)) handleUpdateItemQuantity(item._id, val);
+                            }}
+                            className="w-14 px-2 text-center outline-none"
+                          />
+                          <button
+                            onClick={() => handleUpdateItemQuantity(item._id, item.quantity + 1)}
+                            disabled={loading}
+                            className="px-3 py-1 bg-gray-50 hover:bg-gray-100"
+                            title="Increase quantity"
+                          >
+                            +
+                          </button>
+                        </div>
                         <span className="font-medium text-gray-900">{item.menuItem?.name}</span>
                       </div>
                       {item.specialInstructions && (
-                        <p className="text-xs text-gray-500 mt-1 ml-9 italic">"{item.specialInstructions}"</p>
+                        <p className="text-xs text-gray-500 mt-1 ml-3 italic">"{item.specialInstructions}"</p>
                       )}
                     </div>
                     <div className="flex items-center gap-4">
@@ -1051,18 +1121,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 </button>
               </div>
 
-              {/* Chef Notes */}
-              {selectedOrder.chefNotes && (
-                <div className="p-4 bg-amber-50 border-t border-amber-100">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-amber-700 uppercase">Chef Notes</p>
-                      <p className="text-sm text-amber-800">{selectedOrder.chefNotes}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* RIGHT COLUMN: Payment & Summary */}
@@ -1199,6 +1257,15 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       </>
                     )}
                   </button>
+                ) : selectedOrder.paymentStatus !== 'paid' ? (
+                  <button
+                    onClick={() => handleMarkAsPaid(selectedOrder._id)}
+                    disabled={loading}
+                    className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-6 h-6" />
+                    Complete Payment
+                  </button>
                 ) : selectedOrder.status === 'paid' ? (
                   <button
                     onClick={() => handleCloseOrder(selectedOrder._id)}
@@ -1212,11 +1279,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold text-lg text-center">
                     Order {selectedOrder.status === 'closed' ? 'Closed' : 'Cancelled'}
                   </div>
-                ) : (
-                  <div className="w-full py-4 bg-blue-50 text-blue-700 rounded-xl font-medium text-sm text-center border border-blue-200">
-                    Order must be in READY status before payment
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -1225,7 +1288,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Modal (Single Order) */}
       {showMergeModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold mb-4">Merge Order</h3>
             <p className="text-gray-500 mb-4 text-sm">Select a table to merge the current order into.</p>
@@ -1295,7 +1358,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Add Item Modal */}
       {showAddItem && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full h-[80vh] flex flex-col">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="text-lg font-bold">Add Item to Order</h3>
@@ -1356,7 +1419,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Selection Modal (Bulk) */}
       {showMergeModal && !selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center">
@@ -1444,7 +1507,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Preview Modal */}
       {showMergePreview && mergePreview && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-70 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200 bg-purple-50">
               <div className="flex justify-between items-start">

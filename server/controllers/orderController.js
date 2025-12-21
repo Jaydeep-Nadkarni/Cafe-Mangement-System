@@ -355,6 +355,8 @@ const addItemsToOrder = async (req, res) => {
       notes: item.notes
     }));
 
+    const prevTotal = order.total || 0;
+
     const allItems = [...currentItems, ...items];
 
     // Recalculate everything
@@ -447,12 +449,8 @@ const checkoutOrder = async (req, res) => {
       return res.status(400).json({ message: 'Insufficient payment amount' });
     }
 
-    // Validate status transition to PAID
-    if (order.status !== 'ready') {
-      return res.status(400).json({
-        message: `Order must be in READY status before payment. Current status: ${order.status}`
-      });
-    }
+    // Allow payment from any non-terminal state (billing-focused UI)
+    // Note: Previously required 'ready' status; managers can now process payment directly.
 
     // Update order with payment details
     order.paymentMethod = paymentMethod;
@@ -560,6 +558,9 @@ const removeItemFromOrder = async (req, res) => {
 
     // Filter out the item
     const initialLength = order.items.length;
+    const prevTotal = order.total || 0;
+    const prevItemsCount = order.items.reduce((s, it) => s + it.quantity, 0);
+
     order.items = order.items.filter(item => item._id.toString() !== itemId);
 
     if (order.items.length === initialLength) {
@@ -584,10 +585,122 @@ const removeItemFromOrder = async (req, res) => {
 
     await order.save();
 
+    // Apply incremental stats delta
+    const newTotalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const deltaItems = newTotalItems - prevItemsCount;
+    const deltaRevenue = order.total - prevTotal;
+
+    if (deltaItems !== 0 || deltaRevenue !== 0) {
+      await applyStatsDelta(order.branch, {
+        revenue: deltaRevenue,
+        orders: 0,
+        items: deltaItems
+      });
+    }
+
     // Update table session stats
     if (order.table) {
       await updateTableSessionStats(order.table);
     }
+
+    // Emit order items updated event and trigger immediate stats update
+    emitToBranch(order.branch, 'order_items_updated', {
+      orderId: order._id,
+      items: order.items,
+      total: order.total
+    });
+
+    triggerStatsUpdate(order.branch);
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update item quantity in order
+// @route   PUT /api/orders/:id/items/:itemId
+// @access  Manager
+const updateItemQuantity = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity } = req.body;
+    const newQty = parseInt(quantity, 10);
+
+    if (isNaN(newQty) || newQty < 0) {
+      return res.status(400).json({ message: 'Invalid quantity' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ message: 'Cannot modify closed order' });
+    }
+
+    const item = order.items.find(it => it._id.toString() === itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found in order' });
+    }
+
+    const prevQty = item.quantity;
+    const prevTotal = order.total;
+    const prevItemsCount = order.items.reduce((s, it) => s + it.quantity, 0);
+
+    if (newQty === 0) {
+      // Remove the item
+      order.items = order.items.filter(it => it._id.toString() !== itemId);
+    } else {
+      // Update quantity
+      item.quantity = newQty;
+    }
+
+    // Reconstruct items for calculation
+    const currentItems = order.items.map(item => ({
+      menuItemId: item.menuItem,
+      quantity: item.quantity,
+      notes: item.specialInstructions
+    }));
+
+    // Recalculate
+    const calculation = await orderService.calculateOrderTotals(currentItems, order.coupon);
+
+    order.items = calculation.items;
+    order.subtotal = calculation.subtotal;
+    order.tax = calculation.tax;
+    order.discount = calculation.discount;
+    order.total = calculation.total;
+
+    await order.save();
+
+    // Update table session stats
+    if (order.table) {
+      await updateTableSessionStats(order.table);
+    }
+
+    // Apply incremental stats delta
+    const newTotalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const deltaItems = newTotalItems - prevItemsCount;
+    const deltaRevenue = order.total - prevTotal;
+
+    if (deltaItems !== 0 || deltaRevenue !== 0) {
+      await applyStatsDelta(order.branch, {
+        revenue: deltaRevenue,
+        orders: 0,
+        items: deltaItems
+      });
+    }
+
+    // Emit order items updated event and trigger immediate stats update
+    emitToBranch(order.branch, 'order_items_updated', {
+      orderId: order._id,
+      items: order.items,
+      total: order.total
+    });
+
+    triggerStatsUpdate(order.branch);
 
     res.json(order);
   } catch (error) {
@@ -1062,6 +1175,7 @@ module.exports = {
   createOrder,
   getOrder,
   addItemsToOrder,
+  updateItemQuantity,
   removeItemFromOrder,
   cancelOrder,
   updateOrderStatus,

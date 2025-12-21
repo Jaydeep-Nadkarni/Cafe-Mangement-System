@@ -5,6 +5,7 @@ const {
   createOrder,
   getOrder,
   addItemsToOrder,
+  updateItemQuantity,
   applyCoupon,
   checkoutOrder,
   sendWhatsappBill,
@@ -27,6 +28,7 @@ router.post('/merge', mergeOrders);
 router.get('/:id', getOrder);
 router.get('/:id/bill', downloadBill);
 router.put('/:id/items', addItemsToOrder);
+router.put('/:id/items/:itemId', updateItemQuantity);
 router.delete('/:id/items/:itemId', removeItemFromOrder);
 router.put('/:id/coupon', applyCoupon);
 router.put('/:id/status', updateOrderStatus);

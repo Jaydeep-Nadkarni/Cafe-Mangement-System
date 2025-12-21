@@ -45,6 +45,7 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
     if (onCriticalMetric) socket.on('critical_metric_update', onCriticalMetric);
     if (onTableOccupancyChange) socket.on('table_occupancy_change', onTableOccupancyChange);
     if (callbacks.onOrderUpdate) socket.on('order_updated', callbacks.onOrderUpdate);
+    if (callbacks.onOrderItemsUpdated) socket.on('order_items_updated', callbacks.onOrderItemsUpdated);
 
     // Cleanup
     return () => {
@@ -59,6 +60,7 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       if (onCriticalMetric) socket.off('critical_metric_update', onCriticalMetric);
       if (onTableOccupancyChange) socket.off('table_occupancy_change', onTableOccupancyChange);
       if (callbacks.onOrderUpdate) socket.off('order_updated', callbacks.onOrderUpdate);
+      if (callbacks.onOrderItemsUpdated) socket.off('order_items_updated', callbacks.onOrderItemsUpdated);
 
       leaveBranchRoom(branchId);
     };
