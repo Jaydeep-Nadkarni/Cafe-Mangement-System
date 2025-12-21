@@ -22,6 +22,7 @@ export default function BranchDashboard() {
   const [tables, setTables] = useState([]);
   const [menu, setMenu] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('orders');
 
   // Fetch Initial Data
@@ -31,8 +32,9 @@ export default function BranchDashboard() {
 
   const fetchData = async () => {
     try {
+      setError(null);
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
+
       // 1. Get Branch Details
       const branchRes = await axios.get(`${API_URL}/api/branch/details`);
       setBranch(branchRes.data);
@@ -47,17 +49,17 @@ export default function BranchDashboard() {
 
       setLoading(false);
     } catch (error) {
-      console.error('Error fetching branch data:', error.response?.data || error.message);
-      
+      console.error('Error fetching branch data:', error);
+
       if (error.response?.status === 404) {
-        alert('No branch assigned to your account. Please contact the administrator.');
+        setError('Your account needs configuration. Contact admin.');
       } else if (error.response?.status === 401) {
-        alert('Your session has expired. Please log in again.');
+        setError('Your session has expired. Please log in again.');
         logout();
       } else {
-        alert('Failed to load branch data. Please try again.');
+        setError('Unable to load dashboard. Please try again later.');
       }
-      
+
       setLoading(false);
     }
   };
@@ -75,8 +77,21 @@ export default function BranchDashboard() {
     },
     onTableMerge: (data) => {
       fetchData();
+    },
+    onTableOccupancyChange: (data) => {
+      fetchData();
+    },
+    onOrderUpdate: (data) => {
+      fetchData();
     }
   });
+
+  // Store branch info in localStorage for Sidebar
+  useEffect(() => {
+    if (branch?._id) {
+      localStorage.setItem('branchId', branch._id);
+    }
+  }, [branch]);
 
   const renderContent = () => {
     if (loading) {
@@ -86,6 +101,27 @@ export default function BranchDashboard() {
         </div>
       );
     }
+
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <svg className="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+            </svg>
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Dashboard Unavailable</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'orders':
         return <Orders tables={tables} menu={menu} onRefresh={fetchData} />;
@@ -113,9 +149,9 @@ export default function BranchDashboard() {
   return (
     <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         branchName={branch?.name}
         onLogout={logout}
       />

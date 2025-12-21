@@ -257,8 +257,9 @@ export default function Inventory({ menu, setMenu }) {
 
   const fetchCategories = async () => {
     try {
+      // Always fetch all categories including empty ones for the manager view
       const endpoint = useDynamicCategories 
-        ? `${API_URL}/api/branch/categories/dynamic?includeEmpty=false`
+        ? `${API_URL}/api/branch/categories/dynamic?includeEmpty=true`
         : `${API_URL}/api/branch/categories`;
       const res = await axios.get(endpoint);
       setCategories(res.data);
@@ -281,10 +282,11 @@ export default function Inventory({ menu, setMenu }) {
       setShowCategoryModal(false);
       setEditingCategory(null);
     } catch (error) {
+      console.error('Failed to save category:', error);
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: `Failed to save category: ${error.response?.data?.message || error.message}`,
+        description: 'Failed to save category. Please try again.',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
@@ -306,10 +308,11 @@ export default function Inventory({ menu, setMenu }) {
           fetchCategories();
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
+          console.error('Failed to delete category:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: `Failed to delete category: ${error.response?.data?.message || error.message}`,
+            description: 'Failed to delete category. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -364,11 +367,11 @@ export default function Inventory({ menu, setMenu }) {
           setMenu(menu.filter(item => item._id !== id));
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
-          console.error('Delete error:', error.response?.data || error.message);
+          console.error('Delete error:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: `Failed to delete item: ${error.response?.data?.message || error.message}`,
+            description: 'Failed to delete item. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -383,11 +386,11 @@ export default function Inventory({ menu, setMenu }) {
       const res = await axios.post(`${API_URL}/api/branch/menu/${id}/duplicate`);
       setMenu([...menu, res.data]);
     } catch (error) {
-      console.error('Duplicate error:', error.response?.data || error.message);
+      console.error('Duplicate error:', error);
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: `Failed to duplicate item: ${error.response?.data?.message || error.message}`,
+        description: 'Failed to duplicate item. Please try again.',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
@@ -409,7 +412,15 @@ export default function Inventory({ menu, setMenu }) {
       setShowDrawer(false);
       resetForm();
     } catch (error) {
-      alert('Failed to save item: ' + (error.response?.data?.message || error.message));
+      console.error('Failed to save item:', error);
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to save item details. Please try again.',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     } finally {
       setLoading(false);
     }
@@ -425,7 +436,14 @@ export default function Inventory({ menu, setMenu }) {
       ));
     } catch (error) {
       console.error('Error updating inventory:', error);
-      alert('Failed to update item status');
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to update item status. Please try again.',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
@@ -467,11 +485,11 @@ export default function Inventory({ menu, setMenu }) {
           setSelectedItems([]);
           setModalState({ ...modalState, isOpen: false });
         } catch (error) {
-          console.error('Bulk action error:', error.response?.data || error.message);
+          console.error('Bulk action error:', error);
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: `Bulk action failed: ${error.response?.data?.message || error.message}`,
+            description: 'Bulk action failed. Please try again.',
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null

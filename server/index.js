@@ -3,6 +3,7 @@ const http = require('http');
 const { Server } = require('socket.io');
 const cors = require('cors');
 const bodyParser = require('body-parser');
+const cookieParser = require('cookie-parser');
 const PDFDocument = require('pdfkit');
 const axios = require('axios');
 const FormData = require('form-data');
@@ -34,6 +35,8 @@ const io = new Server(server, {
 initRealtime(io);
 
 const PORT = process.env.PORT || 5000;
+
+app.use(cookieParser());
 
 // ==================== DATABASE CONNECTION ====================
 connectDB();

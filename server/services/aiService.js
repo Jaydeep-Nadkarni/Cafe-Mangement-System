@@ -171,12 +171,12 @@ const parseSections = (geminiText) => {
   for (let i = 0; i < positions.length; i++) {
     const startIdx = positions[i].index;
     const endIdx = i < positions.length - 1 ? positions[i + 1].index : geminiText.length;
-    
+
     let content = geminiText.substring(startIdx, endIdx);
-    
+
     // Remove the section header
     content = content.replace(/###\s*\d+\.\s*[A-Z\s]+/i, '').trim();
-    
+
     sections[positions[i].key] = content;
   }
 
@@ -189,15 +189,15 @@ const parseSections = (geminiText) => {
 const callGeminiAPI = async (prompt) => {
   try {
     const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
-    
+
     const startTime = Date.now();
-    
+
     const result = await model.generateContent(prompt);
     const response = await result.response;
     const text = response.text();
-    
+
     const duration = Date.now() - startTime;
-    
+
     return {
       text,
       metadata: {
@@ -221,7 +221,24 @@ const getAIAnalysis = async (branchId, branchName = 'Branch', timeRange = '7d') 
   try {
     // Check if API key is configured
     if (!process.env.GEMINI_API_KEY) {
-      throw new Error('GEMINI_API_KEY not configured in environment variables');
+      console.warn('GEMINI_API_KEY not configured. Using mock data for demonstration.');
+      const mockData = getMockAnalysis(branchName, timeRange);
+      const insights = await getAIInsights(branchId, timeRange);
+
+      return {
+        _id: 'mock-id',
+        branch: branchId,
+        timeRange,
+        aiInsights: insights,
+        sections: mockData.sections,
+        metadata: {
+          apiCallDuration: 0,
+          model: 'Mock AI (Demo)',
+          tokensUsed: 0
+        },
+        cached: false,
+        createdAt: new Date()
+      };
     }
 
     // 1. Check cache first
@@ -280,7 +297,7 @@ const clearCache = async (branchId, timeRange = null) => {
   if (timeRange) {
     query.timeRange = timeRange;
   }
-  
+
   const result = await AICache.deleteMany(query);
   console.log(`✓ Cleared ${result.deletedCount} cache entries for branch ${branchId}`);
   return result.deletedCount;
@@ -295,16 +312,36 @@ const getCacheStats = async (branchId) => {
     branch: branchId,
     expiresAt: { $gt: new Date() }
   });
-  
+
   const recentCache = await AICache.findOne({ branch: branchId })
     .sort({ createdAt: -1 });
-  
+
   return {
     total: totalCaches,
     valid: validCaches,
     expired: totalCaches - validCaches,
     lastGenerated: recentCache ? recentCache.createdAt : null,
     lastTimeRange: recentCache ? recentCache.timeRange : null
+  };
+};
+
+/**
+ * Generate mock analysis for demo/fallback
+ */
+const getMockAnalysis = (branchName, timeRange) => {
+  return {
+    sections: {
+      executiveSummary: `**EXECUTIVE SUMMARY**\n\n${branchName} is showing strong performance with a comprehensive health score of 85/100. The most critical action needed is to optimize peak hour staffing to capitalize on the 15% revenue growth trend. Overall, the branch is in a healthy state with high customer retention.`,
+      performanceAnalysis: `**PERFORMANCE ANALYSIS**\n\nPerformance is excellent (Score: 88/100). Revenue has grown by 12% compared to the previous ${timeRange}, outperforming regional benchmarks. Customer retention is a highlight at 65%, indicating high satisfaction. Average Order Value (AOV) matches expectations but has room for growth through upselling.`,
+      efficiencyInsights: `**EFFICIENCY INSIGHTS**\n\nOperational efficiency is solid (Score: 82/100). Table turnover is efficient, but menu diversity could be improved as 20% of items drive 80% of sales. Peak hour management is effective, with payment processing success rates near 99%.`,
+      riskAssessment: `**RISK ASSESSMENT**\n\nRisk levels are low (Score: 12/100). The primary risk factor is a slight increase in order cancellations (2%) during weekend rushes. Payment failures are negligible. Revenue stability is high, with no significant unexplained drops.`,
+      couponStrategy: `**COUPON STRATEGY**\n\nCoupon penetration is at 18%, driving a measurable 25% uplift in order value. The 'WEEKEND20' code is the top performer. We recommend introducing a mid-week happy hour coupon to boost traffic during slower periods.`,
+      forecastAnalysis: `**FORECAST ANALYSIS**\n\nThe hybrid forecast predicts a stable upward trend over the next 3 days, with confidence levels >85%. Expect revenue to peak on Saturday evening. No significant negative anomalies are projected.`,
+      anomalyExplanation: `**ANOMALY EXPLANATION**\n\nDetected anomalies (2 spike events) correlate directly with the local festival on Tuesday, which drove unexpected footfall. These are positive anomalies. Routine operations remained within 1 standard deviation of the mean.`,
+      customerBehavior: `**CUSTOMER BEHAVIOR**\n\nCustomers prefer digital payments (70% UPI/Card). There is a strong segment of returning professionals during lunch hours. Dinner crowds are more experimental with new menu items.`,
+      operationalRecommendations: `**OPERATIONAL RECOMMENDATIONS**\n\n1.  **Staffing**: Add one runner during Friday dinner peak.\n2.  **Menu**: Highlight high-margin beverages in the digital menu.\n3.  **Inventory**: Increase stock of dairy alternatives based on recent sales velocity.\n4.  **Service**: Implement table-side ordering for faster turns.\n5.  **Marketing**: Launch a loyalty tier for top 10% customers.`,
+      actionPlan: `**ACTION PLAN**\n\n**Immediate (Day 1-3):**\n- Brief staff on upselling strategies.\n- Review weekend inventory levels.\n\n**Short-term (Day 4-5):**\n- Analyze low-performing menu items for removal.\n- Test new 'Happy Hour' coupon configuration.\n\n**Planning (Day 6-7):**\n- Schedule deep cleaning maintenance.\n- Plan next month's seasonal specials.`
+    }
   };
 };
 

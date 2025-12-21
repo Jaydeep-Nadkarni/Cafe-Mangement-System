@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { verifyToken } = require('../utils/jwt');
+const { verifyToken, verifyRefreshToken, generateToken } = require('../utils/jwt');
 const Admin = require('../models/Admin');
 
 const protect = async (req, res, next) => {
@@ -9,10 +9,11 @@ const protect = async (req, res, next) => {
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
   ) {
-    try {
-      // Get token from header
-      token = req.headers.authorization.split(' ')[1];
+    token = req.headers.authorization.split(' ')[1];
+  }
 
+  try {
+    if (token) {
       // Verify token
       const decoded = verifyToken(token);
 
@@ -27,13 +28,33 @@ const protect = async (req, res, next) => {
         return res.status(401).json({ message: 'User account is deactivated' });
       }
 
-      next();
-    } catch (error) {
-      console.error(error);
-      res.status(401).json({ message: 'Not authorized, token failed' });
+      return next();
     }
-  } else {
-    res.status(401).json({ message: 'Not authorized, no token' });
+    throw new Error('No token provided');
+  } catch (error) {
+    // If access token is expired or missing, try to refresh using cookie
+    if (req.cookies && req.cookies.refreshToken) {
+      try {
+        const decoded = verifyRefreshToken(req.cookies.refreshToken);
+        const user = await Admin.findById(decoded.id).select('-password');
+
+        if (user && user.isActive) {
+          // Generate new access token
+          const newAccessToken = generateToken(user._id, user.role);
+          
+          // Set header so client can update its local token
+          res.setHeader('x-access-token', newAccessToken);
+          
+          req.user = user;
+          return next();
+        }
+      } catch (refreshError) {
+        // Refresh token also invalid/expired
+        // Fall through to 401
+      }
+    }
+    
+    res.status(401).json({ message: 'Not authorized, token failed' });
   }
 };
 

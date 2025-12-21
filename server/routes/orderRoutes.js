@@ -13,7 +13,8 @@ const {
   updateOrderStatus,
   closeOrder,
   mergeOrders,
-  getMergePreview
+  getMergePreview,
+  downloadBill
 } = require('../controllers/orderController');
 
 // All routes are protected and require branch manager role
@@ -24,6 +25,7 @@ router.post('/', createOrder);
 router.post('/merge/preview', getMergePreview);
 router.post('/merge', mergeOrders);
 router.get('/:id', getOrder);
+router.get('/:id/bill', downloadBill);
 router.put('/:id/items', addItemsToOrder);
 router.delete('/:id/items/:itemId', removeItemFromOrder);
 router.put('/:id/coupon', applyCoupon);

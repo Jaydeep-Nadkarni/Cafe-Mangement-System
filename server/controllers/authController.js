@@ -1,6 +1,17 @@
 const Admin = require('../models/Admin');
 const Branch = require('../models/Branch');
-const { generateToken } = require('../utils/jwt');
+const { generateToken, generateRefreshToken, verifyRefreshToken } = require('../utils/jwt');
+
+// Helper function to set cookie
+const setRefreshTokenCookie = (res, token) => {
+  const cookieOptions = {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    sameSite: process.env.NODE_ENV === 'production' ? 'strict' : 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+  };
+  res.cookie('refreshToken', token, cookieOptions);
+};
 
 // Helper function for authentication
 const authenticateUser = async (req, res, allowedRoles) => {
@@ -27,12 +38,17 @@ const authenticateUser = async (req, res, allowedRoles) => {
       user.lastLogin = Date.now();
       await user.save({ validateBeforeSave: false });
 
+      const accessToken = generateToken(user._id, user.role);
+      const refreshToken = generateRefreshToken(user._id, user.role);
+
+      setRefreshTokenCookie(res, refreshToken);
+
       res.json({
         _id: user._id,
         username: user.username,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id, user.role),
+        token: accessToken,
       });
     } else {
       res.status(401).json({ message: 'Invalid email or password' });
@@ -83,6 +99,11 @@ const loginBranch = async (req, res) => {
       user.lastLogin = Date.now();
       await user.save({ validateBeforeSave: false });
 
+      const accessToken = generateToken(user._id, user.role);
+      const refreshToken = generateRefreshToken(user._id, user.role);
+
+      setRefreshTokenCookie(res, refreshToken);
+
       res.json({
         _id: user._id,
         username: user.username,
@@ -90,7 +111,7 @@ const loginBranch = async (req, res) => {
         role: user.role,
         branchId: branch._id,
         branchName: branch.name,
-        token: generateToken(user._id, user.role),
+        token: accessToken,
       });
     } else {
       res.status(401).json({ message: 'Invalid branch code or password' });
@@ -122,12 +143,17 @@ const registerUser = async (req, res) => {
     });
 
     if (user) {
+      const accessToken = generateToken(user._id, user.role);
+      const refreshToken = generateRefreshToken(user._id, user.role);
+
+      setRefreshTokenCookie(res, refreshToken);
+
       res.status(201).json({
         _id: user._id,
         username: user.username,
         email: user.email,
         role: user.role,
-        token: generateToken(user._id, user.role),
+        token: accessToken,
       });
     } else {
       res.status(400).json({ message: 'Invalid user data' });
@@ -138,8 +164,50 @@ const registerUser = async (req, res) => {
   }
 };
 
+// @desc    Refresh Access Token
+// @route   POST /api/auth/refresh
+// @access  Public (Cookie based)
+const refreshToken = async (req, res) => {
+  const refreshToken = req.cookies.refreshToken;
+
+  if (!refreshToken) {
+    return res.status(401).json({ message: 'No refresh token found' });
+  }
+
+  try {
+    const decoded = verifyRefreshToken(refreshToken);
+    const user = await Admin.findById(decoded.id);
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({ message: 'User not found or inactive' });
+    }
+
+    const newAccessToken = generateToken(user._id, user.role);
+    
+    // Optionally rotate refresh token here for extra security
+    
+    res.json({ token: newAccessToken });
+  } catch (error) {
+    console.error('Refresh Token Error:', error);
+    res.status(401).json({ message: 'Invalid refresh token' });
+  }
+};
+
+// @desc    Logout user / Clear cookie
+// @route   POST /api/auth/logout
+// @access  Public
+const logoutUser = (req, res) => {
+  res.cookie('refreshToken', '', {
+    httpOnly: true,
+    expires: new Date(0)
+  });
+  res.status(200).json({ message: 'Logged out successfully' });
+};
+
 module.exports = {
   loginAdmin,
   loginBranch,
-  registerUser
+  registerUser,
+  refreshToken,
+  logoutUser
 };

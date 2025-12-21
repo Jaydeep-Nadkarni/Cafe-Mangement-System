@@ -3,13 +3,14 @@ import { useAuth } from '../../user/context/AuthContext';
 import QRCodeGenerator from '../../user/components/QRCodeGenerator';
 import Sidebar from '../components/admin/Sidebar';
 import SkeletonDashboard from '../../components/skeletons/SkeletonDashboard';
-import { 
-  LogOut, 
-  Store, 
-  TrendingUp, 
-  Users, 
-  DollarSign, 
-  Plus, 
+import ConfirmationModal from '../components/branch/ConfirmationModal';
+import {
+  LogOut,
+  Store,
+  TrendingUp,
+  Users,
+  DollarSign,
+  Plus,
   MoreVertical,
   CheckCircle,
   XCircle,
@@ -18,6 +19,8 @@ import {
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../utils/formatCurrency';
+import Coupons from '../components/admin/Coupons';
+import Broadcast from '../components/admin/Broadcast';
 
 export default function AdminDashboard() {
   const { user, logout } = useAuth();
@@ -25,13 +28,26 @@ export default function AdminDashboard() {
     totalBranches: 0,
     activeBranches: 0,
     todayOrders: 0,
-    todayRevenue: 0
+    todayRevenue: 0,
+
+    branchPerformance: []
   });
   const [branches, setBranches] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [activeTab, setActiveTab] = useState('branches');
-  
+  const [modalState, setModalState] = useState({
+    isOpen: false,
+    title: '',
+    description: '',
+    confirmText: 'Confirm',
+    cancelText: 'Cancel',
+    isDangerous: false,
+    isLoading: false,
+    onConfirm: null
+  });
+
   // Form State
   const [formData, setFormData] = useState({
     name: '',
@@ -48,7 +64,7 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
+
       // Fetch Analytics
       const analyticsRes = await axios.get(`${API_URL}/api/admin/analytics`);
       const global = analyticsRes.data.global;
@@ -56,16 +72,19 @@ export default function AdminDashboard() {
         totalBranches: global.branches?.total || 0,
         activeBranches: global.branches?.active || 0,
         todayOrders: global.orders?.total || 0,
-        todayRevenue: global.revenue?.today || 0
+        todayRevenue: global.revenue?.today || 0,
+
+        branchPerformance: analyticsRes.data.branchPerformance || []
       });
 
       // Fetch Branches
       const branchesRes = await axios.get(`${API_URL}/api/admin/branches`);
       setBranches(branchesRes.data);
-      
+
       setLoading(false);
     } catch (error) {
       console.error('Error fetching data:', error);
+      setError('Unable to load dashboard. Please try again later.');
       setLoading(false);
     }
   };
@@ -75,13 +94,21 @@ export default function AdminDashboard() {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       await axios.post(`${API_URL}/api/admin/branches`, formData);
-      
+
       // Reset and refresh
       setFormData({ name: '', branchCode: '', email: '', mobileNumber: '', password: '' });
       setShowCreateForm(false);
       fetchData();
     } catch (error) {
-      alert(error.response?.data?.message || 'Failed to create branch');
+      console.error('Create branch error:', error);
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to create branch. Please check your input and try again.',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
     }
   };
 
@@ -106,13 +133,31 @@ export default function AdminDashboard() {
       );
     }
 
+    if (error) {
+      return (
+        <div className="flex flex-col items-center justify-center h-full p-8 text-center">
+          <div className="bg-red-50 p-4 rounded-full mb-4">
+            <XCircle className="w-8 h-8 text-red-500" />
+          </div>
+          <h3 className="text-lg font-bold text-gray-900 mb-2">Dashboard Unavailable</h3>
+          <p className="text-gray-600 mb-6">{error}</p>
+          <button
+            onClick={fetchData}
+            className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            Retry
+          </button>
+        </div>
+      );
+    }
+
     switch (activeTab) {
       case 'branches':
         return (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-gray-900">Manage Branches</h2>
-              <button 
+              <button
                 onClick={() => setShowCreateForm(!showCreateForm)}
                 className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm font-medium"
               >
@@ -131,7 +176,7 @@ export default function AdminDashboard() {
                     required
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     value={formData.name}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
+                    onChange={e => setFormData({ ...formData, name: e.target.value })}
                   />
                   <input
                     type="text"
@@ -139,7 +184,7 @@ export default function AdminDashboard() {
                     required
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     value={formData.branchCode}
-                    onChange={e => setFormData({...formData, branchCode: e.target.value})}
+                    onChange={e => setFormData({ ...formData, branchCode: e.target.value })}
                   />
                   <input
                     type="email"
@@ -147,14 +192,14 @@ export default function AdminDashboard() {
                     required
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     value={formData.email}
-                    onChange={e => setFormData({...formData, email: e.target.value})}
+                    onChange={e => setFormData({ ...formData, email: e.target.value })}
                   />
                   <input
                     type="tel"
                     placeholder="Mobile Number (e.g. +1234567890)"
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     value={formData.mobileNumber}
-                    onChange={e => setFormData({...formData, mobileNumber: e.target.value})}
+                    onChange={e => setFormData({ ...formData, mobileNumber: e.target.value })}
                   />
                   <input
                     type="password"
@@ -162,17 +207,17 @@ export default function AdminDashboard() {
                     required
                     className="px-4 py-2 rounded-lg border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                     value={formData.password}
-                    onChange={e => setFormData({...formData, password: e.target.value})}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
                   />
                   <div className="lg:col-span-4 flex justify-end space-x-3">
-                    <button 
+                    <button
                       type="button"
                       onClick={() => setShowCreateForm(false)}
                       className="px-4 py-2 text-gray-600 hover:text-gray-800"
                     >
                       Cancel
                     </button>
-                    <button 
+                    <button
                       type="submit"
                       className="px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700"
                     >
@@ -208,9 +253,8 @@ export default function AdminDashboard() {
                         </span>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          branch.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-                        }`}>
+                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${branch.isActive ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+                          }`}>
                           {branch.isActive ? 'Active' : 'Inactive'}
                         </span>
                       </td>
@@ -218,11 +262,10 @@ export default function AdminDashboard() {
                         {new Date(branch.createdAt).toLocaleDateString()}
                       </td>
                       <td className="px-6 py-4 text-right">
-                        <button 
+                        <button
                           onClick={() => toggleBranchStatus(branch._id, branch.isActive)}
-                          className={`text-sm font-medium ${
-                            branch.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
-                          }`}
+                          className={`text-sm font-medium ${branch.isActive ? 'text-red-600 hover:text-red-800' : 'text-green-600 hover:text-green-800'
+                            }`}
                         >
                           {branch.isActive ? 'Disable' : 'Enable'}
                         </button>
@@ -255,12 +298,47 @@ export default function AdminDashboard() {
             )}
           </div>
         );
+
+      case 'coupons':
+        return <Coupons />;
+      case 'broadcast':
+        return <Broadcast />;
       case 'stats':
         return (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8 text-center">
-            <TrendingUp className="h-12 w-12 text-gray-300 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900">Detailed Statistics</h3>
-            <p className="text-gray-500 mt-2">Advanced analytics and branch-wise performance metrics coming soon.</p>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <TrendingUp className="h-6 w-6 text-blue-600" />
+              <h2 className="text-xl font-bold text-gray-900">Branch Performance Stats</h2>
+            </div>
+
+            {stats.branchPerformance && stats.branchPerformance.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50 text-gray-500 text-xs uppercase tracking-wider">
+                    <tr>
+                      <th className="px-6 py-4 font-medium">Branch</th>
+                      <th className="px-6 py-4 font-medium">Revenue (Today)</th>
+                      <th className="px-6 py-4 font-medium">Orders (Today)</th>
+                      <th className="px-6 py-4 font-medium">Avg Order Value</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {stats.branchPerformance.map((bp) => (
+                      <tr key={bp.branchId} className="hover:bg-gray-50">
+                        <td className="px-6 py-4 font-medium text-gray-900">{bp.branchName}</td>
+                        <td className="px-6 py-4">{formatCurrency(bp.revenue || 0)}</td>
+                        <td className="px-6 py-4">{bp.orders || 0}</td>
+                        <td className="px-6 py-4">{formatCurrency(bp.avgOrderValue || 0)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="p-8 text-center text-gray-500">
+                No performance data available yet.
+              </div>
+            )}
           </div>
         );
       case 'reports':
@@ -287,9 +365,9 @@ export default function AdminDashboard() {
   return (
     <div className="min-h-screen bg-bg-cream flex">
       {/* Sidebar */}
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         onLogout={logout}
       />
 
@@ -305,27 +383,27 @@ export default function AdminDashboard() {
 
         {/* Stats Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <StatCard 
-            title="Total Branches" 
-            value={stats.totalBranches} 
+          <StatCard
+            title="Total Branches"
+            value={stats.totalBranches}
             icon={<Store className="h-6 w-6 text-blue-600" />}
             bg="bg-blue-50"
           />
-          <StatCard 
-            title="Active Branches" 
-            value={stats.activeBranches} 
+          <StatCard
+            title="Active Branches"
+            value={stats.activeBranches}
             icon={<CheckCircle className="h-6 w-6 text-green-600" />}
             bg="bg-green-50"
           />
-          <StatCard 
-            title="Today's Orders" 
-            value={stats.todayOrders} 
+          <StatCard
+            title="Today's Orders"
+            value={stats.todayOrders}
             icon={<TrendingUp className="h-6 w-6 text-purple-600" />}
             bg="bg-purple-50"
           />
-          <StatCard 
-            title="Today's Revenue" 
-            value={formatCurrency(stats.todayRevenue)} 
+          <StatCard
+            title="Today's Revenue"
+            value={formatCurrency(stats.todayRevenue)}
             icon={<IndianRupee className="h-6 w-6 text-yellow-600" />}
             bg="bg-yellow-50"
           />
@@ -334,6 +412,18 @@ export default function AdminDashboard() {
         {/* Dynamic Content */}
         {renderContent()}
       </main>
+
+      <ConfirmationModal
+        isOpen={modalState.isOpen}
+        onClose={() => setModalState({ ...modalState, isOpen: false })}
+        onConfirm={modalState.onConfirm}
+        title={modalState.title}
+        description={modalState.description}
+        confirmText={modalState.confirmText}
+        cancelText={modalState.cancelText}
+        isDangerous={modalState.isDangerous}
+        isLoading={modalState.isLoading}
+      />
     </div>
   );
 }

@@ -8,7 +8,7 @@ const alertSchema = new mongoose.Schema({
   },
   type: {
     type: String,
-    enum: ['order', 'payment', 'system', 'kitchen'],
+    enum: ['order', 'payment', 'system', 'kitchen', 'memo', 'task'],
     required: true
   },
   title: {
@@ -19,9 +19,22 @@ const alertSchema = new mongoose.Schema({
     type: String,
     required: true
   },
+  priority: {
+    type: String,
+    enum: ['low', 'medium', 'high', 'critical'],
+    default: 'medium'
+  },
   isRead: {
     type: Boolean,
     default: false
+  },
+  isDismissed: {
+    type: Boolean,
+    default: false
+  },
+  createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin'
   },
   relatedId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -29,10 +42,18 @@ const alertSchema = new mongoose.Schema({
   },
   onModel: {
     type: String,
-    enum: ['Order', 'Table', 'Payment']
-  }
+    enum: ['Order', 'Table', 'Payment', 'Memo']
+  },
+  actionUrl: String,
+  readAt: Date,
+  dismissedAt: Date
 }, {
   timestamps: true
 });
+
+// Indexes for performance
+alertSchema.index({ branch: 1, isRead: 1 });
+alertSchema.index({ branch: 1, isDismissed: 1 });
+alertSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model('Alert', alertSchema);

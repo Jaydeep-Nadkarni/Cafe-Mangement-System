@@ -39,6 +39,17 @@ const tableSchema = new mongoose.Schema(
       type: String,
       default: null
     },
+    // Session Tracking
+    sessionStart: {
+      type: Date,
+      default: null
+    },
+    sessionStats: {
+      totalOrders: { type: Number, default: 0 },
+      totalAmount: { type: Number, default: 0 },
+      paidAmount: { type: Number, default: 0 },
+      unpaidAmount: { type: Number, default: 0 }
+    },
     notes: {
       type: String,
       default: ''
