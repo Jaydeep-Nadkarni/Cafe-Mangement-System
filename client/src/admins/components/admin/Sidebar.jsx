@@ -1,12 +1,15 @@
 import React from 'react';
-import { 
-  Store, 
-  QrCode, 
-  BarChart2, 
-  FileText, 
-  Bell, 
+import {
+  Store,
+  QrCode,
+  BarChart2,
+  FileText,
+  Bell,
   LogOut,
-  LayoutDashboard
+  LayoutDashboard,
+  Tag,
+  MessageSquare,
+  Radio
 } from 'lucide-react';
 
 export default function Sidebar({ activeTab, setActiveTab, onLogout }) {
@@ -14,6 +17,9 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout }) {
     { id: 'branches', label: 'Branches', icon: Store },
     { id: 'qrcodes', label: 'QR Codes', icon: QrCode },
     { id: 'stats', label: 'Statistics', icon: BarChart2 },
+    { id: 'memos', label: 'Memos', icon: MessageSquare },
+    { id: 'coupons', label: 'Coupons', icon: Tag },
+    { id: 'broadcast', label: 'Broadcast', icon: Radio },
     { id: 'reports', label: 'Reports', icon: FileText },
     { id: 'alerts', label: 'Alerts', icon: Bell },
   ];
@@ -36,16 +42,15 @@ export default function Sidebar({ activeTab, setActiveTab, onLogout }) {
         {menuItems.map((item) => {
           const Icon = item.icon;
           const isActive = activeTab === item.id;
-          
+
           return (
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
-                isActive 
-                  ? 'bg-green-50 text-green-700 font-medium' 
-                  : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+              className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${isActive
+                ? 'bg-green-50 text-green-700 font-medium'
+                : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                }`}
             >
               <Icon className={`w-5 h-5 ${isActive ? 'text-green-600' : 'text-gray-400'}`} />
               <span>{item.label}</span>

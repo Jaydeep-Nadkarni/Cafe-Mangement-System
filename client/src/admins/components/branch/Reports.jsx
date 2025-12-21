@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { 
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, 
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
   LineChart, Line, AreaChart, Area, ComposedChart
 } from 'recharts';
-import { 
-  TrendingUp, 
+import {
+  TrendingUp,
   Calendar,
   ShoppingBag,
   AlertTriangle,
@@ -28,6 +28,7 @@ import {
   VixsBoxPlot,
   VixsScatter
 } from '../../../components/charts';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -36,7 +37,7 @@ export default function Reports({ branch }) {
   const [refreshing, setRefreshing] = useState(false);
   const [timeRange, setTimeRange] = useState('30d');
   const [granularity, setGranularity] = useState('daily'); // daily, weekly, monthly
-  
+
   // Analytics data states
   const [revenueGrowth, setRevenueGrowth] = useState([]);
   const [seasonalityData, setSeasonalityData] = useState([]);
@@ -58,10 +59,10 @@ export default function Reports({ branch }) {
   // Fetch all analytics data
   const fetchAnalytics = async () => {
     if (!branch?._id) return;
-    
+
     try {
       setLoading(true);
-      
+
       // Fetch all data in parallel
       const [
         revenuePatternRes,
@@ -84,34 +85,34 @@ export default function Reports({ branch }) {
       // Process revenue growth data
       const revenuePattern = revenuePatternRes.data.pattern || [];
       processRevenueGrowth(revenuePattern);
-      
+
       // Process seasonality (weekly patterns)
       processSeasonality(revenuePattern);
-      
+
       // Process weekday patterns
       processWeekdayPattern(revenuePattern);
-      
+
       // Process hourly heatmap
       const heatmap = tableHeatmapRes.data.heatmap || [];
       setHourlyHeatmap(heatmap);
-      
+
       // Process menu lifecycle
       const menuItems = menuVelocityRes.data.items || [];
       processMenuLifecycle(menuItems);
-      
+
       // Process menu treemap
       processMenuTreemap(menuItems);
-      
+
       // Payment reliability
       setPaymentReliability(paymentStatsRes.data);
-      
+
       // Order distribution for box plots
       const recentOrders = realtimeRes.data?.recentOrders || [];
       processOrderDistribution(recentOrders);
-      
+
       // Calculate risk metrics
       calculateRiskMetrics(paymentStatsRes.data, realtimeRes.data);
-      
+
       // Calculate executive summary
       calculateExecutiveSummary(
         revenuePattern,
@@ -119,7 +120,7 @@ export default function Reports({ branch }) {
         realtimeRes.data,
         menuItems
       );
-      
+
       setLoading(false);
       setRefreshing(false);
     } catch (error) {
@@ -142,7 +143,7 @@ export default function Reports({ branch }) {
   // Data processing functions
   const processRevenueGrowth = (pattern) => {
     if (!pattern || pattern.length === 0) return;
-    
+
     const growthData = pattern.map((item, index) => {
       if (index === 0) return { ...item, growth: 0 };
       const prevRevenue = pattern[index - 1].revenue || 0;
@@ -150,20 +151,20 @@ export default function Reports({ branch }) {
       const growth = prevRevenue > 0 ? ((currentRevenue - prevRevenue) / prevRevenue) * 100 : 0;
       return { ...item, growth: growth.toFixed(2) };
     });
-    
+
     setRevenueGrowth(growthData);
   };
 
   const processSeasonality = (pattern) => {
     // Aggregate by day of week or month
     const seasonalMap = {};
-    
+
     pattern.forEach(item => {
       const date = new Date(item.label || item.hour);
-      const key = granularity === 'monthly' 
+      const key = granularity === 'monthly'
         ? date.toLocaleString('default', { month: 'short' })
         : date.toLocaleString('default', { weekday: 'short' });
-      
+
       if (!seasonalMap[key]) {
         seasonalMap[key] = { period: key, revenue: 0, orders: 0, count: 0 };
       }
@@ -171,25 +172,25 @@ export default function Reports({ branch }) {
       seasonalMap[key].orders += item.orders || 0;
       seasonalMap[key].count += 1;
     });
-    
+
     const seasonalData = Object.values(seasonalMap).map(item => ({
       period: item.period,
       avgRevenue: item.count > 0 ? item.revenue / item.count : 0,
       avgOrders: item.count > 0 ? item.orders / item.count : 0
     }));
-    
+
     setSeasonalityData(seasonalData);
   };
 
   const processWeekdayPattern = (pattern) => {
     const weekdayMap = {};
     const weekdays = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    
+
     pattern.forEach(item => {
       const date = new Date(item.label || item.hour);
       const dayIndex = date.getDay();
       const dayName = weekdays[dayIndex];
-      
+
       if (!weekdayMap[dayName]) {
         weekdayMap[dayName] = { day: dayName, revenue: 0, orders: 0, count: 0, index: dayIndex };
       }
@@ -197,7 +198,7 @@ export default function Reports({ branch }) {
       weekdayMap[dayName].orders += item.orders || 0;
       weekdayMap[dayName].count += 1;
     });
-    
+
     const weekdayData = Object.values(weekdayMap)
       .sort((a, b) => a.index - b.index)
       .map(item => ({
@@ -205,7 +206,7 @@ export default function Reports({ branch }) {
         revenue: item.count > 0 ? item.revenue / item.count : 0,
         orders: item.count > 0 ? item.orders / item.count : 0
       }));
-    
+
     setWeekdayPattern(weekdayData);
   };
 
@@ -217,7 +218,7 @@ export default function Reports({ branch }) {
       revenue: item.revenue || 0,
       orders: item.orders || 0
     }));
-    
+
     setMenuLifecycle(lifecycleData);
   };
 
@@ -226,7 +227,7 @@ export default function Reports({ branch }) {
     const treeData = [
       { id: 'root', parent: null, value: 0, name: 'Menu' }
     ];
-    
+
     items.forEach((item, index) => {
       treeData.push({
         id: `item-${index}`,
@@ -235,36 +236,36 @@ export default function Reports({ branch }) {
         name: item.name || 'Unknown'
       });
     });
-    
+
     setMenuTreemap(treeData);
   };
 
   const processOrderDistribution = (orders) => {
     if (!orders || orders.length === 0) return;
-    
+
     const ordersByPayment = {};
     orders.forEach(order => {
       const method = order.paymentMethod || 'Unknown';
       if (!ordersByPayment[method]) ordersByPayment[method] = [];
       ordersByPayment[method].push(order.totalAmount || 0);
     });
-    
+
     const boxPlotData = Object.entries(ordersByPayment).map(([method, values]) => ({
       category: method,
       values: values
     }));
-    
+
     setOrderDistribution(boxPlotData);
   };
 
   const calculateRiskMetrics = (paymentData, realtimeData) => {
-    const failureRate = paymentData?.failedCount 
-      ? (paymentData.failedCount / (paymentData.totalCount || 1)) * 100 
+    const failureRate = paymentData?.failedCount
+      ? (paymentData.failedCount / (paymentData.totalCount || 1)) * 100
       : 0;
-    
+
     const avgResponseTime = realtimeData?.avgTurnaroundTime || 0;
     const stressLevel = avgResponseTime > 30 ? 'High' : avgResponseTime > 15 ? 'Medium' : 'Low';
-    
+
     setRiskMetrics({
       failureRate: failureRate.toFixed(2),
       avgResponseTime,
@@ -279,25 +280,25 @@ export default function Reports({ branch }) {
     const avgRevenue = revenuePattern.length > 0 ? totalRevenue / revenuePattern.length : 0;
     const recentRevenue = revenuePattern.slice(-7).reduce((sum, item) => sum + (item.revenue || 0), 0) / 7;
     const performanceScore = avgRevenue > 0 ? Math.min(100, (recentRevenue / avgRevenue) * 100) : 0;
-    
+
     // Efficiency Score (0-100): Based on velocity and turnaround
-    const avgVelocity = menuItems.length > 0 
-      ? menuItems.reduce((sum, item) => sum + (item.velocity || 0), 0) / menuItems.length 
+    const avgVelocity = menuItems.length > 0
+      ? menuItems.reduce((sum, item) => sum + (item.velocity || 0), 0) / menuItems.length
       : 0;
-    const turnaroundScore = realtimeData?.avgTurnaroundTime 
+    const turnaroundScore = realtimeData?.avgTurnaroundTime
       ? Math.max(0, 100 - (realtimeData.avgTurnaroundTime * 2))
       : 50;
     const efficiencyScore = (avgVelocity * 10 + turnaroundScore) / 2;
-    
+
     // Stability Score (0-100): Based on payment reliability
     const stabilityScore = paymentData?.successRate || 0;
-    
+
     // Risk Index (0-100): Lower is better
-    const failureRate = paymentData?.failedCount 
-      ? (paymentData.failedCount / (paymentData.totalCount || 1)) * 100 
+    const failureRate = paymentData?.failedCount
+      ? (paymentData.failedCount / (paymentData.totalCount || 1)) * 100
       : 0;
     const riskIndex = failureRate + (realtimeData?.avgTurnaroundTime > 30 ? 30 : 0);
-    
+
     setExecutiveSummary({
       performanceScore: Math.min(100, performanceScore).toFixed(1),
       efficiencyScore: Math.min(100, efficiencyScore).toFixed(1),
@@ -311,21 +312,21 @@ export default function Reports({ branch }) {
 
 
 
-    // Listen for payments - INCREMENT revenue
-    const handlePayment = (data) => {
-      console.log('[Reports] Payment received:', data);
-      // Update revenue growth incrementally
-      setRevenueGrowth(prev => {
-        if (!prev || prev.length === 0) return prev;
-        const updated = [...prev];
-        const last = updated[updated.length - 1];
-        if (last) {
-          last.revenue = (last.revenue || 0) + (data.amount || 0);
-          last.orders = (last.orders || 0) + 1;
-        }
-        return updated;
-      });
-    };
+  // Listen for payments - INCREMENT revenue
+  const handlePayment = (data) => {
+    console.log('[Reports] Payment received:', data);
+    // Update revenue growth incrementally
+    setRevenueGrowth(prev => {
+      if (!prev || prev.length === 0) return prev;
+      const updated = [...prev];
+      const last = updated[updated.length - 1];
+      if (last) {
+        last.revenue = (last.revenue || 0) + (data.amount || 0);
+        last.orders = (last.orders || 0) + 1;
+      }
+      return updated;
+    });
+  };
 
   if (!branch) {
     return (
@@ -367,18 +368,17 @@ export default function Reports({ branch }) {
             <RefreshCw className={`w-5 h-5 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
           <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
-          
+
           {/* Granularity Toggle */}
           <div className="flex items-center gap-2 border border-gray-300 rounded-lg p-1">
             {['daily', 'weekly', 'monthly'].map(g => (
               <button
                 key={g}
                 onClick={() => setGranularity(g)}
-                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
-                  granularity === g
+                className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${granularity === g
                     ? 'bg-orange-100 text-orange-700'
                     : 'text-gray-600 hover:bg-gray-50'
-                }`}
+                  }`}
               >
                 {g.charAt(0).toUpperCase() + g.slice(1)}
               </button>
@@ -399,7 +399,7 @@ export default function Reports({ branch }) {
                   <XAxis dataKey="label" tick={{ fontSize: 10 }} stroke="#666" />
                   <YAxis yAxisId="left" tick={{ fontSize: 11 }} stroke="#666" />
                   <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} stroke="#666" />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                     formatter={(value, name) => {
                       if (name === 'revenue') return [`₹${value}`, 'Revenue'];
@@ -422,16 +422,16 @@ export default function Reports({ branch }) {
                 <AreaChart data={seasonalityData}>
                   <defs>
                     <linearGradient id="colorSeasonality" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#9e9e9e" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="#9e9e9e" stopOpacity={0}/>
+                      <stop offset="5%" stopColor="#9e9e9e" stopOpacity={0.3} />
+                      <stop offset="95%" stopColor="#9e9e9e" stopOpacity={0} />
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="period" tick={{ fontSize: 11 }} stroke="#666" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
-                    formatter={(value) => [`₹${value.toFixed(0)}`, 'Avg Revenue']}
+                    formatter={(value) => [formatCurrency(value), 'Avg Revenue']}
                   />
                   <Area type="monotone" dataKey="avgRevenue" stroke="#757575" fillOpacity={1} fill="url(#colorSeasonality)" />
                 </AreaChart>
@@ -452,10 +452,10 @@ export default function Reports({ branch }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="#666" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#666" />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                     formatter={(value, name) => {
-                      if (name === 'revenue') return [`₹${value.toFixed(0)}`, 'Avg Revenue'];
+                      if (name === 'revenue') return [formatCurrency(value), 'Avg Revenue'];
                       if (name === 'orders') return [value.toFixed(0), 'Avg Orders'];
                       return [value, name];
                     }}
@@ -594,8 +594,8 @@ export default function Reports({ branch }) {
             icon={<Activity className="w-5 h-5 text-yellow-600" />}
             valueClassName={
               riskMetrics?.stressLevel === 'High' ? 'text-red-600' :
-              riskMetrics?.stressLevel === 'Medium' ? 'text-yellow-600' :
-              'text-green-600'
+                riskMetrics?.stressLevel === 'Medium' ? 'text-yellow-600' :
+                  'text-green-600'
             }
           />
         </div>
@@ -658,7 +658,7 @@ export default function Reports({ branch }) {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div>
               <p className="text-sm text-gray-500 mb-1">Total Revenue</p>
-              <p className="text-2xl font-bold text-gray-900">₹{executiveSummary?.totalRevenue?.toLocaleString() || 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(executiveSummary?.totalRevenue || 0)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500 mb-1">Total Orders</p>
@@ -666,7 +666,7 @@ export default function Reports({ branch }) {
             </div>
             <div>
               <p className="text-sm text-gray-500 mb-1">Average Order Value</p>
-              <p className="text-2xl font-bold text-gray-900">₹{executiveSummary?.avgOrderValue?.toFixed(0) || 0}</p>
+              <p className="text-2xl font-bold text-gray-900">{formatCurrency(executiveSummary?.avgOrderValue || 0)}</p>
             </div>
           </div>
         </div>

@@ -9,7 +9,7 @@ const getTimeSince = (dateString) => {
   const date = new Date(dateString);
   const now = new Date();
   const diffInMinutes = Math.floor((now - date) / 60000);
-  
+
   if (diffInMinutes < 1) return 'Just now';
   if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
   const diffInHours = Math.floor(diffInMinutes / 60);
@@ -32,7 +32,7 @@ export default function Tables({ tables, onRefresh }) {
     isLoading: false,
     onConfirm: null
   });
-  
+
   const [formData, setFormData] = useState({
     tableNumber: '',
     capacity: '',
@@ -175,13 +175,24 @@ export default function Tables({ tables, onRefresh }) {
 
   const getCardColor = (status) => {
     switch (status) {
-      case 'occupied': return 'bg-red-50 border-red-100 hover:border-red-200';
-      case 'available': return 'bg-green-50 border-green-100 hover:border-green-200';
-      case 'reserved': return 'bg-amber-50 border-amber-100 hover:border-amber-200';
-      case 'maintenance': return 'bg-gray-50 border-gray-200 hover:border-gray-300';
-      case 'paid': return 'bg-blue-50 border-blue-100 hover:border-blue-200';
-      default: return 'bg-white border-gray-100';
+      case 'occupied': return 'bg-white border-red-500 shadow-sm hover:shadow-md';
+      case 'available': return 'bg-white border-green-500 shadow-sm hover:shadow-md';
+      case 'reserved': return 'bg-white border-amber-500 shadow-sm hover:shadow-md';
+      case 'maintenance': return 'bg-gray-50 border-gray-300 shadow-inner';
+      case 'paid': return 'bg-white border-blue-500 shadow-sm hover:shadow-md';
+      default: return 'bg-white border-gray-200';
     }
+  };
+
+  const getStatusIndicator = (status) => {
+    const colors = {
+      occupied: 'bg-red-500',
+      available: 'bg-green-500',
+      reserved: 'bg-amber-500',
+      maintenance: 'bg-gray-400',
+      paid: 'bg-blue-500'
+    };
+    return colors[status] || 'bg-gray-300';
   };
 
   // Calculate stats for multiple orders
@@ -221,260 +232,144 @@ export default function Tables({ tables, onRefresh }) {
         {tables.map(table => {
           const orderStats = getTableOrderStats(table);
           // Calculate last activity
-          const lastActivity = table.currentOrders?.length > 0 
+          const lastActivity = table.currentOrders?.length > 0
             ? table.currentOrders.reduce((latest, order) => {
-                const orderDate = new Date(order.updatedAt || order.createdAt);
-                return orderDate > latest ? orderDate : latest;
-              }, new Date(table.updatedAt))
+              const orderDate = new Date(order.updatedAt || order.createdAt);
+              return orderDate > latest ? orderDate : latest;
+            }, new Date(table.updatedAt))
             : new Date(table.updatedAt);
 
+          const isOccupied = table.status === 'occupied' || table.status === 'paid';
+
           return (
-          <div 
-            key={table._id} 
-            onClick={() => setSelectedTable(table)}
-            className={`relative p-5 rounded-2xl border-2 transition-all duration-200 hover:shadow-md cursor-pointer group ${getCardColor(table.status)}`}
-          >
-            {/* Order Count Badge */}
-            {orderStats.count > 0 && (
-              <div className="absolute -top-2 -right-2 bg-red-600 text-white rounded-full w-8 h-8 flex items-center justify-center font-bold text-sm shadow-lg z-10">
-                {orderStats.count}
+            <div
+              key={table._id}
+              onClick={() => setSelectedTable(table)}
+              className={`relative p-3 rounded-lg border-l-4 transition-all duration-200 cursor-pointer group flex flex-col justify-between min-h-[140px] ${getCardColor(table.status)}`}
+            >
+              <div className="flex justify-between items-start mb-2">
+                <span className="text-2xl font-bold text-gray-800">
+                  {table.tableNumber}
+                </span>
+                <div className={`w-3 h-3 rounded-full ${getStatusIndicator(table.status)}`} title={table.status}></div>
               </div>
-            )}
 
-            {/* Hover Actions Overlay */}
-            <div className="absolute inset-0 bg-black/60 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3 z-20 backdrop-blur-[2px]">
-               <button 
-                 onClick={(e) => { e.stopPropagation(); /* handlePrint(table) */ }}
-                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-blue-50 hover:text-blue-600 transition-colors shadow-lg"
-                 title="Print Bill"
-               >
-                 <Printer className="w-5 h-5" />
-               </button>
-               <button 
-                 onClick={(e) => { e.stopPropagation(); /* handleMerge(table) */ }}
-                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-purple-50 hover:text-purple-600 transition-colors shadow-lg"
-                 title="Merge Table"
-               >
-                 <ArrowRightLeft className="w-5 h-5" />
-               </button>
-               <button 
-                 onClick={(e) => handleEdit(e, table)} 
-                 className="p-3 bg-white text-gray-800 rounded-full hover:bg-amber-50 hover:text-amber-600 transition-colors shadow-lg"
-                 title="Edit Table"
-               >
-                 <Edit2 className="w-5 h-5" />
-               </button>
-            </div>
+              {/* Middle Content */}
+              <div className="flex-1">
+                <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
+                  <Users className="w-3 h-3" />
+                  <span>{table.capacity}</span>
+                  <span className="mx-1">•</span>
+                  <span className="capitalize">{table.location}</span>
+                </div>
 
-            {/* Header */}
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex items-center gap-2">
-                <span className="text-3xl font-bold text-gray-900">{table.tableNumber}</span>
-                {table.notes && (
-                  <AlertCircle className="w-4 h-4 text-amber-500" />
-                )}
-              </div>
-              {/* Time Since Activity */}
-              <div className="flex items-center gap-1 text-xs font-medium text-gray-500 bg-gray-100 px-2 py-1 rounded-lg">
-                <Clock className="w-3 h-3" />
-                {getTimeSince(lastActivity)}
-              </div>
-            </div>
-            
-            {/* Stats */}
-            <div className="flex justify-between items-center mb-4 text-sm">
-              <span className="flex items-center gap-1 font-medium text-gray-600">
-                <Users className="w-4 h-4" /> {table.capacity}
-              </span>
-              <span className="font-medium text-gray-600 capitalize">
-                {table.location}
-              </span>
-            </div>
-
-            {/* Bill Amount Display */}
-            {orderStats.totalAmount > 0 && (
-              <div className={`mb-3 p-2 rounded-lg border ${orderStats.unpaidAmount > 0 ? 'bg-red-50 border-red-100' : 'bg-green-50 border-green-100'}`}>
-                <div className="flex justify-between items-end">
-                  <div>
-                    <div className={`text-xs font-bold uppercase ${orderStats.unpaidAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                      {orderStats.unpaidAmount > 0 ? 'Unpaid' : 'Total'}
-                    </div>
-                    <div className={`text-lg font-bold ${orderStats.unpaidAmount > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                      {formatCurrency(orderStats.unpaidAmount > 0 ? orderStats.unpaidAmount : orderStats.totalAmount)}
-                    </div>
-                  </div>
-                  {orderStats.unpaidAmount > 0 && orderStats.totalAmount > orderStats.unpaidAmount && (
-                    <div className="text-right">
-                      <div className="text-[10px] text-gray-500 font-medium uppercase">Total Bill</div>
-                      <div className="text-sm font-bold text-gray-600">{formatCurrency(orderStats.totalAmount)}</div>
-                    </div>
-                  )}
+                <div className="flex items-center gap-1 text-xs text-gray-400">
+                  <Clock className="w-3 h-3" />
+                  {getTimeSince(lastActivity)}
                 </div>
               </div>
-            )}
 
-            {/* Status & Actions */}
-            <div className="space-y-2">
-              <div className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider text-center border ${getStatusColor(table.status)}`}>
-                {table.status}
-              </div>
-              
-              {table.status === 'paid' && (
-                <button 
-                  onClick={(e) => handleStatusChange(e, table._id, 'available')}
-                  className="w-full py-1.5 bg-green-600 text-white text-xs font-bold rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                >
-                  Mark Available
-                </button>
+              {/* Bottom: Financials */}
+              {isOccupied && orderStats.count > 0 && (
+                <div className="mt-3 pt-2 border-t border-gray-100 text-right">
+                  <div className="text-xs font-medium text-gray-500">
+                    {orderStats.unpaidAmount > 0 ? 'Unpaid' : 'Total'}
+                  </div>
+                  <div className={`font-bold ${orderStats.unpaidAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                    {formatCurrency(orderStats.unpaidAmount > 0 ? orderStats.unpaidAmount : orderStats.totalAmount)}
+                  </div>
+                </div>
               )}
-              
             </div>
-          </div>
-        );})}
+          );
+        })}
       </div>
 
       {/* Table Details Modal */}
       {selectedTable && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedTable(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
-            <div className="flex justify-between items-center mb-6">
-              <h2 className="text-2xl font-bold text-gray-900">Table {selectedTable.tableNumber}</h2>
-              <div className="flex gap-2">
-                <button 
-                  onClick={() => {
-                    handleEdit(null, selectedTable);
-                    setSelectedTable(null);
-                  }}
-                  className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                  title="Edit Table"
-                >
-                  <Edit2 className="w-5 h-5" />
-                </button>
-                <button onClick={() => setSelectedTable(null)}><X className="w-6 h-6 text-gray-400" /></button>
+          <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
+            <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+              <div className="flex items-center gap-3">
+                <h2 className="text-xl font-bold text-gray-900">Table {selectedTable.tableNumber}</h2>
+                <span className={`w-3 h-3 rounded-full ${getStatusIndicator(selectedTable.status)}`}></span>
+                <span className="text-sm text-gray-500 capitalize">{selectedTable.status}</span>
               </div>
+              <button onClick={() => setSelectedTable(null)}><X className="w-5 h-5 text-gray-400 hover:text-gray-600" /></button>
             </div>
 
-            <div className="space-y-6">
-              {/* Basic Info */}
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-3 rounded-xl">
-                  <span className="text-xs text-gray-500 font-bold uppercase block mb-1">Status</span>
-                  <span className={`inline-block px-2 py-0.5 rounded text-xs font-bold uppercase ${getStatusColor(selectedTable.status)}`}>
-                    {selectedTable.status}
-                  </span>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-xl">
-                  <span className="text-xs text-gray-500 font-bold uppercase block mb-1">Location</span>
-                  <span className="font-medium capitalize">{selectedTable.location}</span>
-                </div>
-                <div className="bg-gray-50 p-3 rounded-xl">
-                  <span className="text-xs text-gray-500 font-bold uppercase block mb-1">Capacity</span>
-                  <span className="font-medium">{selectedTable.capacity} Seats</span>
+            <div className="p-6 overflow-y-auto max-h-[70vh]">
+              {/* Quick Actions Grid */}
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                {/* Main Actions */}
+                <button className="flex items-center justify-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">
+                  <FileText className="w-4 h-4" /> View Order
+                </button>
+                <button className="flex items-center justify-center gap-2 p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium">
+                  <ArrowRightLeft className="w-4 h-4" /> Merge Table
+                </button>
+                <button
+                  onClick={(e) => {
+                    handleEdit(e, selectedTable);
+                    setSelectedTable(null);
+                  }}
+                  className="flex items-center justify-center gap-2 p-3 bg-gray-50 text-gray-700 rounded-lg hover:bg-gray-100 font-medium"
+                >
+                  <Edit2 className="w-4 h-4" /> Edit Details
+                </button>
+                <button
+                  onClick={(e) => {
+                    handleDelete(e, selectedTable._id);
+                    setSelectedTable(null);
+                  }}
+                  className="flex items-center justify-center gap-2 p-3 bg-red-50 text-red-700 rounded-lg hover:bg-red-100 font-medium"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </button>
+              </div>
+
+              {/* Status Management */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Set Status</h3>
+                <div className="grid grid-cols-4 gap-2">
+                  {['available', 'occupied', 'reserved', 'maintenance'].map(status => (
+                    <button
+                      key={status}
+                      disabled={selectedTable.status === status}
+                      onClick={(e) => {
+                        handleStatusChange(e, selectedTable._id, status);
+                        setSelectedTable(null);
+                      }}
+                      className={`py-2 px-1 text-xs font-bold rounded-lg capitalize border ${selectedTable.status === status
+                          ? 'bg-gray-800 text-white border-gray-800'
+                          : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'
+                        }`}
+                    >
+                      {status}
+                    </button>
+                  ))}
                 </div>
               </div>
 
-              {/* Notes */}
-              {selectedTable.notes && (
-                <div className="bg-amber-50 border border-amber-100 p-4 rounded-xl">
-                  <h3 className="text-sm font-bold text-amber-800 mb-1 flex items-center gap-2">
-                    <AlertCircle className="w-4 h-4" /> Notes
-                  </h3>
-                  <p className="text-sm text-amber-700">{selectedTable.notes}</p>
-                </div>
-              )}
-
-              {/* Status Change Options */}
-              <div className="border border-gray-200 rounded-xl p-4">
-                <p className="text-xs font-bold text-gray-500 uppercase mb-3 block">Change Status</p>
-                <div className="grid grid-cols-2 gap-2">
-                  <button
-                    onClick={(e) => {
-                      handleStatusChange(e, selectedTable._id, 'available');
-                      setSelectedTable(null);
-                    }}
-                    className="py-2 px-3 bg-green-50 text-green-700 text-xs font-bold rounded-lg hover:bg-green-100 border border-green-200 transition-colors"
-                  >
-                    Available
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      handleStatusChange(e, selectedTable._id, 'occupied');
-                      setSelectedTable(null);
-                    }}
-                    className="py-2 px-3 bg-red-50 text-red-700 text-xs font-bold rounded-lg hover:bg-red-100 border border-red-200 transition-colors"
-                  >
-                    Occupied
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      handleStatusChange(e, selectedTable._id, 'reserved');
-                      setSelectedTable(null);
-                    }}
-                    className="py-2 px-3 bg-amber-50 text-amber-700 text-xs font-bold rounded-lg hover:bg-amber-100 border border-amber-200 transition-colors"
-                  >
-                    Reserved
-                  </button>
-                  <button
-                    onClick={(e) => {
-                      handleStatusChange(e, selectedTable._id, 'maintenance');
-                      setSelectedTable(null);
-                    }}
-                    className="py-2 px-3 bg-gray-100 text-gray-700 text-xs font-bold rounded-lg hover:bg-gray-200 border border-gray-300 transition-colors"
-                  >
-                    Maintenance
-                  </button>
-                </div>
-              </div>
-
-              {/* Active Orders */}
-              {selectedTable.currentOrders && selectedTable.currentOrders.length > 0 ? (
-                <div className="border border-gray-200 rounded-xl overflow-hidden">
-                  <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-                    <h3 className="font-bold text-gray-900 flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> Active Orders ({selectedTable.currentOrders.length})
-                    </h3>
+              {/* Active Order Summary (if any) */}
+              {selectedTable.currentOrders && selectedTable.currentOrders.length > 0 && (
+                <div className="mt-6 border-t pt-4">
+                  <h3 className="text-sm font-bold text-gray-900 mb-2">Active Session</h3>
+                  <div className="bg-gray-50 rounded-lg p-3">
+                    {/* Summary details */}
+                    <div className="flex justify-between items-center text-sm mb-1">
+                      <span className="text-gray-500">Orders</span>
+                      <span className="font-medium">{selectedTable.currentOrders.length}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm">
+                      <span className="text-gray-500">Unpaid Balance</span>
+                      <span className="font-bold text-red-600">
+                        {formatCurrency(
+                          selectedTable.currentOrders.reduce((sum, o) => sum + (o.paymentStatus !== 'paid' ? o.total : 0), 0)
+                        )}
+                      </span>
+                    </div>
                   </div>
-                  <div className="p-4 space-y-4 max-h-80 overflow-y-auto">
-                    {selectedTable.currentOrders.map((order, orderIdx) => (
-                      <div key={order._id || orderIdx} className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
-                          <span className="text-xs font-mono font-bold">#{order.orderNumber}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-bold ${
-                            order.paymentStatus === 'paid' 
-                              ? 'bg-green-100 text-green-700' 
-                              : 'bg-red-100 text-red-700'
-                          }`}>
-                            {order.paymentStatus === 'paid' ? 'PAID' : 'UNPAID'}
-                          </span>
-                        </div>
-                        <div className="p-3">
-                          <div className="space-y-1 mb-2">
-                            {order.items?.slice(0, 3).map((item, idx) => (
-                              <div key={idx} className="flex justify-between text-xs">
-                                <span className="text-gray-600">{item.quantity}x {item.menuItem?.name || 'Item'}</span>
-                                <span className="font-medium">{formatCurrency(item.price * item.quantity)}</span>
-                              </div>
-                            ))}
-                            {order.items?.length > 3 && (
-                              <div className="text-xs text-gray-400 italic">+ {order.items.length - 3} more...</div>
-                            )}
-                          </div>
-                          <div className="flex justify-between items-center pt-2 border-t border-gray-100">
-                            <span className="font-bold text-gray-900 text-sm">Total</span>
-                            <span className={`font-bold text-sm ${
-                              order.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'
-                            }`}>
-                              {formatCurrency(order.total)}
-                            </span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center py-8 bg-gray-50 rounded-xl border-2 border-dashed border-gray-200">
-                  <p className="text-gray-500 text-sm">No active order</p>
                 </div>
               )}
             </div>
@@ -490,7 +385,7 @@ export default function Tables({ tables, onRefresh }) {
               <h2 className="text-xl font-bold text-gray-900">{editingTable ? 'Edit Table' : 'Add New Table'}</h2>
               <button onClick={() => setShowModal(false)}><X className="w-6 h-6 text-gray-400" /></button>
             </div>
-            
+
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
@@ -499,7 +394,7 @@ export default function Tables({ tables, onRefresh }) {
                     required
                     type="number"
                     value={formData.tableNumber}
-                    onChange={(e) => setFormData({...formData, tableNumber: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, tableNumber: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   />
                 </div>
@@ -509,7 +404,7 @@ export default function Tables({ tables, onRefresh }) {
                     required
                     type="number"
                     value={formData.capacity}
-                    onChange={(e) => setFormData({...formData, capacity: e.target.value})}
+                    onChange={(e) => setFormData({ ...formData, capacity: e.target.value })}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   />
                 </div>
@@ -519,7 +414,7 @@ export default function Tables({ tables, onRefresh }) {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Location</label>
                 <select
                   value={formData.location}
-                  onChange={(e) => setFormData({...formData, location: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
                   <option value="indoor">Indoor</option>
@@ -533,7 +428,7 @@ export default function Tables({ tables, onRefresh }) {
                 <textarea
                   rows="2"
                   value={formData.notes}
-                  onChange={(e) => setFormData({...formData, notes: e.target.value})}
+                  onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
                   placeholder="e.g., Near window, Reserved for VIP"
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />

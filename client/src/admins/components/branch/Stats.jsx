@@ -1,9 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
-import { 
-  TrendingUp, 
-  Users, 
-  CreditCard, 
+import {
+  TrendingUp,
+  Users,
+  CreditCard,
   Clock,
   DollarSign,
   ShoppingBag,
@@ -25,6 +25,7 @@ import {
   VixsScatter,
   VixsHistogram
 } from '../../../components/charts';
+import { formatCurrency } from '../../../utils/formatCurrency';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -46,10 +47,10 @@ export default function Stats({ branch }) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
-  
+
   // Real-time stats
   const [realtimeStats, setRealtimeStats] = useState(null);
-  
+
   // Analytics data
   const [revenueData, setRevenueData] = useState([]);
   const [paymentBreakdown, setPaymentBreakdown] = useState([]);
@@ -68,13 +69,13 @@ export default function Stats({ branch }) {
   const fetchAnalytics = async () => {
     try {
       setLoading(true);
-      
+
       console.log('[Stats] Fetching analytics with timeRange:', timeRange);
-      
+
       // Get auth token from localStorage
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      
+
       const [
         realtimeRes,
         revenueByPaymentRes,
@@ -102,12 +103,12 @@ export default function Stats({ branch }) {
       setTableHeatmap(tableHeatmapRes.data.heatmap || []);
       setMenuVelocity(velocityRes.data.items || []);
       setPaymentStats(paymentStatsRes.data);
-      
+
       // Set peak hours data - filter to only show hours with activity
       const hourlyData = peakHoursRes.data.hourlyPattern || [];
       setPeakHours(hourlyData);
       console.log('[Stats] Setting peakHours:', hourlyData);
-      
+
       // Set revenue pattern data
       const patternData = revenuePatternRes.data.pattern || [];
       setRevenuePattern(patternData);
@@ -122,7 +123,7 @@ export default function Stats({ branch }) {
           if (!ordersByPayment[method]) ordersByPayment[method] = [];
           ordersByPayment[method].push(order.totalAmount);
         });
-        
+
         const boxPlotData = Object.entries(ordersByPayment).map(([method, values]) => ({
           category: method,
           values: values
@@ -134,7 +135,7 @@ export default function Stats({ branch }) {
       setRefreshing(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
-      const errorMessage = error.response?.status === 401 
+      const errorMessage = error.response?.status === 401
         ? 'Authentication failed. Please log in again.'
         : error.response?.data?.message || 'Failed to load analytics data';
       setError(errorMessage);
@@ -264,7 +265,7 @@ export default function Stats({ branch }) {
           <div className="grid grid-cols-2 gap-4">
             <KPICard
               label="Total Revenue"
-              value={`₹${realtimeStats?.totalRevenue?.toLocaleString() || 0}`}
+              value={formatCurrency(realtimeStats?.totalRevenue || 0)}
               trend={realtimeStats?.revenueTrend}
               icon={<TrendingUp className="w-5 h-5 text-green-600" />}
             />
@@ -276,7 +277,7 @@ export default function Stats({ branch }) {
             />
             <KPICard
               label="Avg Order Value"
-              value={`₹${realtimeStats?.avgOrderValue?.toFixed(0) || 0}`}
+              value={formatCurrency(realtimeStats?.avgOrderValue || 0)}
               icon={<DollarSign className="w-5 h-5 text-purple-600" />}
             />
             <KPICard
@@ -295,39 +296,39 @@ export default function Stats({ branch }) {
                   <AreaChart data={revenuePattern}>
                     <defs>
                       <linearGradient id="colorRevenue" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#757575" stopOpacity={0.3}/>
-                        <stop offset="95%" stopColor="#757575" stopOpacity={0}/>
+                        <stop offset="5%" stopColor="#757575" stopOpacity={0.3} />
+                        <stop offset="95%" stopColor="#757575" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                    <XAxis 
-                      dataKey="label" 
-                      tick={{ fontSize: 10 }} 
+                    <XAxis
+                      dataKey="label"
+                      tick={{ fontSize: 10 }}
                       stroke="#666"
                       interval={2}
                     />
-                    <YAxis 
-                      tick={{ fontSize: 11 }} 
-                      stroke="#666" 
+                    <YAxis
+                      tick={{ fontSize: 11 }}
+                      stroke="#666"
                       domain={[0, (dataMax) => Math.max(dataMax, 100)]}
                     />
-                    <Tooltip 
-                      contentStyle={{ 
-                        backgroundColor: '#fff', 
+                    <Tooltip
+                      contentStyle={{
+                        backgroundColor: '#fff',
                         border: '1px solid #e0e0e0',
                         borderRadius: '8px',
                         boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                       }}
-                      formatter={(value) => [`₹${value.toLocaleString()}`, 'Revenue']}
+                      formatter={(value) => [formatCurrency(value), 'Revenue']}
                       labelStyle={{ fontWeight: 'bold', marginBottom: '4px' }}
                       animationDuration={200}
                     />
-                    <Area 
-                      type="monotone" 
-                      dataKey="revenue" 
-                      stroke="#424242" 
+                    <Area
+                      type="monotone"
+                      dataKey="revenue"
+                      stroke="#424242"
                       strokeWidth={2}
-                      fillOpacity={1} 
+                      fillOpacity={1}
                       fill="url(#colorRevenue)"
                       animationBegin={0}
                       animationDuration={800}
@@ -350,57 +351,57 @@ export default function Stats({ branch }) {
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={peakHours}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
-                <XAxis 
-                  dataKey="hour" 
-                  tick={{ fontSize: 11 }} 
+                <XAxis
+                  dataKey="hour"
+                  tick={{ fontSize: 11 }}
                   stroke="#666"
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="left"
-                  tick={{ fontSize: 11 }} 
+                  tick={{ fontSize: 11 }}
                   stroke="#666"
                   label={{ value: 'Orders', angle: -90, position: 'insideLeft', style: { fontSize: 11 } }}
                 />
-                <YAxis 
+                <YAxis
                   yAxisId="right"
                   orientation="right"
-                  tick={{ fontSize: 11 }} 
+                  tick={{ fontSize: 11 }}
                   stroke="#666"
                   label={{ value: 'Revenue (₹)', angle: 90, position: 'insideRight', style: { fontSize: 11 } }}
                 />
-                <Tooltip 
-                  contentStyle={{ 
-                    backgroundColor: '#fff', 
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
                     border: '1px solid #e0e0e0',
                     borderRadius: '8px',
                     boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
                   }}
                   formatter={(value, name) => {
                     if (name === 'Orders') return [value, 'Orders'];
-                    return [`₹${value.toLocaleString()}`, 'Revenue'];
+                    return [formatCurrency(value), 'Revenue'];
                   }}
                   labelFormatter={(label) => `Hour: ${label}`}
                   animationDuration={200}
                 />
-                <Legend 
+                <Legend
                   verticalAlign="top"
                   height={36}
                   iconType="circle"
                 />
-                <Bar 
+                <Bar
                   yAxisId="left"
-                  dataKey="orders" 
-                  fill="#616161" 
+                  dataKey="orders"
+                  fill="#616161"
                   name="Orders"
                   radius={[4, 4, 0, 0]}
                   animationBegin={0}
                   animationDuration={800}
                   animationEasing="ease-in-out"
                 />
-                <Bar 
+                <Bar
                   yAxisId="right"
-                  dataKey="revenue" 
-                  fill="#9e9e9e" 
+                  dataKey="revenue"
+                  fill="#9e9e9e"
                   name="Revenue"
                   radius={[4, 4, 0, 0]}
                   animationBegin={200}
@@ -485,7 +486,7 @@ export default function Stats({ branch }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis type="number" tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
                   <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10 }} stroke="#666" />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                     formatter={(value) => [value.toFixed(2), 'Velocity']}
                   />
@@ -507,7 +508,7 @@ export default function Stats({ branch }) {
                   <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                   <XAxis dataKey="name" tick={{ fontSize: 9, angle: -45 }} height={80} stroke="#666" />
                   <YAxis tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                     formatter={(value) => [`₹${value}`, 'Revenue']}
                   />
@@ -564,7 +565,7 @@ export default function Stats({ branch }) {
                       <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip 
+                  <Tooltip
                     contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                     formatter={(value, name) => {
                       if (name === 'revenue') return [`₹${value}`, 'Revenue'];
@@ -626,8 +627,8 @@ export default function Stats({ branch }) {
             icon={<AlertCircle className="w-5 h-5 text-yellow-600" />}
             valueClassName={
               realtimeStats?.stressLevel === 'High' ? 'text-red-600' :
-              realtimeStats?.stressLevel === 'Medium' ? 'text-yellow-600' :
-              'text-green-600'
+                realtimeStats?.stressLevel === 'Medium' ? 'text-yellow-600' :
+                  'text-green-600'
             }
           />
           <KPICard
@@ -646,22 +647,22 @@ export default function Stats({ branch }) {
                 <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
                 <XAxis dataKey="hour" tick={{ fontSize: 11 }} stroke="#666" />
                 <YAxis tick={{ fontSize: 11 }} stroke="#666" domain={[0, 'auto']} />
-                <Tooltip 
+                <Tooltip
                   contentStyle={{ backgroundColor: '#fff', border: '1px solid #e0e0e0' }}
                 />
                 <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="orders" 
-                  stroke="#616161" 
+                <Line
+                  type="monotone"
+                  dataKey="orders"
+                  stroke="#616161"
                   strokeWidth={2}
                   dot={{ fill: '#616161', r: 4 }}
                   name="Order Count"
                 />
-                <Line 
-                  type="monotone" 
-                  dataKey="avgWaitTime" 
-                  stroke="#9e9e9e" 
+                <Line
+                  type="monotone"
+                  dataKey="avgWaitTime"
+                  stroke="#9e9e9e"
                   strokeWidth={2}
                   dot={{ fill: '#9e9e9e', r: 4 }}
                   name="Avg Wait (min)"

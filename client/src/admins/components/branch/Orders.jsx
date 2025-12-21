@@ -1,20 +1,21 @@
 import React, { useState, useMemo, useEffect, useCallback } from 'react';
-import { 
-  Coffee, XCircle, MessageCircle, Printer, CheckCircle, 
-  Plus, Trash2, CreditCard, Banknote, Smartphone, 
+import {
+  Coffee, XCircle, MessageCircle, Printer, CheckCircle,
+  Plus, Trash2, CreditCard, Banknote, Smartphone,
   ArrowRightLeft, AlertCircle, Search, X, RefreshCw, Calendar, Clock, ShieldCheck,
   ChefHat, Truck, Package, DollarSign, Archive
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
+import OrderHistoryModal from './OrderHistoryModal';
 
 const getTimeSince = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
   const diffInMinutes = Math.floor((now - date) / 60000);
-  
+
   if (diffInMinutes < 1) return 'Just now';
   if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
   const diffInHours = Math.floor(diffInMinutes / 60);
@@ -24,6 +25,7 @@ const getTimeSince = (dateString) => {
 
 export default function Orders({ tables, menu = [], onRefresh }) {
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showHistory, setShowHistory] = useState(false);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
   const [cashReceived, setCashReceived] = useState('');
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -151,14 +153,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   };
 
   // Derived state
-  const activeTables = useMemo(() => 
+  const activeTables = useMemo(() =>
     tables.filter(t => t.currentOrder && t.currentOrder._id !== selectedOrder?._id),
     [tables, selectedOrder]
   );
 
-  const filteredMenu = useMemo(() => 
-    menu.filter(item => 
-      item.isAvailable && 
+  const filteredMenu = useMemo(() =>
+    menu.filter(item =>
+      item.isAvailable &&
       item.name.toLowerCase().includes(itemSearch.toLowerCase())
     ),
     [menu, itemSearch]
@@ -264,7 +266,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         { orderIds: selectedOrdersForMerge },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       setMergePreview(response.data);
       setShowMergePreview(true);
     } catch (error) {
@@ -284,14 +286,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         { orderIds: selectedOrdersForMerge },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       setShowMergePreview(false);
       setShowMergeModal(false);
       setSelectedOrdersForMerge([]);
       setMergePreview(null);
       fetchOrders(true);
       onRefresh();
-      
+
       showSuccess(`Successfully merged ${response.data.mergedOrderIds.length + 1} orders`);
     } catch (error) {
       console.error('Failed to merge orders:', error);
@@ -345,12 +347,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
           });
           setSelectedOrder(null);
-          
+
           // Trigger payment confirmation event for real-time update
-          window.dispatchEvent(new CustomEvent('payment_confirmed', { 
-            detail: { orderId: selectedOrder._id } 
+          window.dispatchEvent(new CustomEvent('payment_confirmed', {
+            detail: { orderId: selectedOrder._id }
           }));
-          
+
           fetchOrders(true); // Soft refresh
           onRefresh();
           setModalState({ ...modalState, isOpen: false });
@@ -415,7 +417,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         headers: { Authorization: `Bearer ${token}` },
         responseType: 'blob'
       });
-      
+
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement('a');
       link.href = url;
@@ -423,7 +425,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      
+
       showSuccess('Bill generated successfully');
     } catch (error) {
       console.error('Download failed:', error);
@@ -443,10 +445,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         { status: newStatus },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      
+
       // Refresh orders
       await fetchOrders(true);
-      
+
       showSuccess(`Order status updated to ${newStatus.toUpperCase()}`);
     } catch (error) {
       console.error('Failed to update order status:', error);
@@ -470,11 +472,11 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             {},
             { headers: { Authorization: `Bearer ${token}` } }
           );
-          
+
           // Close modal and refresh
           setSelectedOrder(null);
           await fetchOrders(true);
-          
+
           showSuccess('Order closed successfully!');
         } catch (error) {
           console.error('Failed to close order:', error);
@@ -486,7 +488,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     );
   };
 
-  // Get status badge configuration
+  // Get status badge configuration (REMOVED as per request)
+  // const getStatusBadge = (status) => { ... }
   const getStatusBadge = (status) => {
     const statusConfig = {
       created: {
@@ -582,17 +585,15 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             <div className="bg-gray-100 p-1 rounded-lg flex h-fit">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 List
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
-                  viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
+                  }`}
               >
                 By Table
               </button>
@@ -606,6 +607,17 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             >
               <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
             </button>
+
+            {/* History Button */}
+            <button
+              onClick={() => setShowHistory(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors shadow-sm"
+              title="View History"
+            >
+              <Calendar className="w-4 h-4" />
+              History
+            </button>
+
             <div className="flex items-center gap-2 px-3 py-1  text-sm">
               <div className="w-3 h-3 rounded-full bg-green-500"></div>
               <span>Paid</span>
@@ -649,12 +661,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         {viewMode === 'list' ? (
           orders.map(order => {
             const colors = getOrderColorClass(order.paymentStatus);
-            const statusBadge = getStatusBadge(order.status);
-            const StatusIcon = statusBadge.icon;
-            
+            // const statusBadge = getStatusBadge(order.status); // Removed
+            // const StatusIcon = statusBadge.icon; 
+
             return (
-              <div 
-                key={order._id} 
+              <div
+                key={order._id}
                 onClick={() => setSelectedOrder(order)}
                 className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${colors.border} ${colors.bg}`}
               >
@@ -663,10 +675,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     <span className="font-bold text-lg text-gray-900">
                       {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
                     </span>
-                    <span className={`flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border font-medium ${statusBadge.color}`}>
-                      <StatusIcon className="w-3 h-3" />
-                      {statusBadge.label}
-                    </span>
+
                     <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
                       {order.paymentStatus}
                     </span>
@@ -679,13 +688,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   </div>
                   <span className="text-sm text-gray-500 font-mono">#{order.orderNumber?.slice(-6)}</span>
                 </div>
-                
+
                 <div className="p-4">
                   <div className="space-y-2 mb-4 min-h-20">
                     {order.items.slice(0, 3).map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm">
                         <span className="text-gray-600 flex items-center gap-2">
-                          <span className="font-bold text-gray-900">{item.quantity}x</span> 
+                          <span className="font-bold text-gray-900">{item.quantity}x</span>
                           {item.menuItem?.name || 'Unknown Item'}
                         </span>
                       </div>
@@ -696,11 +705,11 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       </div>
                     )}
                   </div>
-                  
+
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                     <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
                     <span className="text-xs text-gray-400">
-                      {new Date(order.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                      {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>
@@ -734,23 +743,35 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   </div>
                   <div>
                     <h3 className="font-bold text-gray-900">Table {group.table?.tableNumber || 'Unknown'}</h3>
-                    <span className="text-xs text-gray-500">{group.orders.length} Orders • {getTimeSince(group.lastActivity)}</span>
+                    <div className="flex items-center gap-2 text-xs text-gray-500">
+                      <span>{group.orders.length} Orders</span>
+                      <span>•</span>
+                      <span>{getTimeSince(group.lastActivity)}</span>
+                    </div>
                   </div>
                 </div>
+                {group.table?.sessionStats && (
+                  <div className="flex flex-col items-end text-xs">
+                    <span className="text-gray-500">Session Total: <span className="font-bold text-gray-900">{formatCurrency(group.table.sessionStats.totalAmount || 0)}</span></span>
+                    <div className="flex gap-2 mt-0.5">
+                      <span className="text-green-600 font-medium">Pd: {formatCurrency(group.table.sessionStats.paidAmount || 0)}</span>
+                      <span className="text-red-500 font-medium">Un: {formatCurrency(group.table.sessionStats.unpaidAmount || 0)}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              
+
               <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
                 {group.orders.map(o => (
-                  <div 
-                    key={o._id} 
-                    onClick={() => setSelectedOrder(o)} 
-                    className={`flex justify-between items-center p-2.5 rounded-lg border cursor-pointer transition-colors ${
-                      o.paymentStatus === 'paid' ? 'bg-green-50 border-green-100 hover:bg-green-100' : 'bg-white border-gray-200 hover:bg-gray-50'
-                    }`}
+                  <div
+                    key={o._id}
+                    onClick={() => setSelectedOrder(o)}
+                    className={`flex justify-between items-center p-2.5 rounded-lg border cursor-pointer transition-colors ${o.paymentStatus === 'paid' ? 'bg-green-50 border-green-100 hover:bg-green-100' : 'bg-white border-gray-200 hover:bg-gray-50'
+                      }`}
                   >
                     <div className="flex flex-col">
                       <span className="text-xs font-bold text-gray-700">#{o.orderNumber}</span>
-                      <span className="text-[10px] text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                      <span className="text-[10px] text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                     <span className={`font-bold text-sm ${o.paymentStatus === 'paid' ? 'text-green-700' : 'text-gray-900'}`}>
                       {formatCurrency(o.total)}
@@ -768,7 +789,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             </div>
           ))
         )}
-        
+
         {orders.length === 0 && !loading && (
           <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
             <div className="bg-gray-50 p-4 rounded-full mb-4">
@@ -790,7 +811,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 <X className="w-6 h-6 text-gray-400" />
               </button>
             </div>
-            
+
             <div className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
@@ -834,7 +855,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       {selectedOrder && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
           <div className="bg-white w-full max-w-4xl rounded-2xl shadow-2xl max-h-[90vh] overflow-hidden flex flex-col md:flex-row md:h-[90vh]">
-            
+
             {/* LEFT COLUMN: Items & Actions */}
             <div className="flex-1 flex flex-col border-r border-gray-200 bg-gray-50/50 min-h-0">
               {/* Header */}
@@ -849,14 +870,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                   </div>
                   <div className="flex gap-2">
-                    <button 
+                    <button
                       onClick={() => setShowMergeModal(true)}
                       className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Merge Order"
                     >
                       <ArrowRightLeft className="w-5 h-5" />
                     </button>
-                    <button 
+                    <button
                       onClick={handleCancelOrder}
                       disabled={['paid', 'closed', 'cancelled'].includes(selectedOrder.status)}
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
@@ -873,7 +894,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     const statusBadge = getStatusBadge(selectedOrder.status);
                     const StatusIcon = statusBadge.icon;
                     const nextStatus = getNextStatus(selectedOrder.status);
-                    
+
                     return (
                       <>
                         {/* Print Bill Button */}
@@ -943,7 +964,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                     <div className="flex items-center gap-4">
                       <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
-                      <button 
+                      <button
                         onClick={() => handleRemoveItem(item._id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                       >
@@ -954,7 +975,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 ))}
 
                 {/* Add Item Button */}
-                <button 
+                <button
                   onClick={() => setShowAddItem(true)}
                   className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-green-500 hover:text-green-600 transition-colors flex items-center justify-center gap-2 font-medium"
                 >
@@ -995,7 +1016,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       <p className="font-medium text-gray-900">{selectedOrder.customerName || 'Guest'}</p>
                     </div>
                     {selectedOrder.customerPhone && (
-                      <button 
+                      <button
                         onClick={() => handleSendBill(selectedOrder._id, selectedOrder.customerPhone)}
                         className="text-green-600 hover:bg-green-50 p-1.5 rounded-lg transition-colors"
                         title="WhatsApp Bill"
@@ -1031,7 +1052,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       <span>{selectedOrder.coupon.code}</span>
                     </div>
                   )}
-                  
+
                   <div className="border-t border-dashed border-gray-300 pt-3 mt-3">
                     <div className="flex justify-between items-end">
                       <span className="font-bold text-gray-900 text-lg">Total</span>
@@ -1044,29 +1065,26 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                 <div className="mt-8">
                   <p className="text-xs font-bold text-gray-500 uppercase mb-3">Payment Method</p>
                   <div className="grid grid-cols-3 gap-2 mb-4">
-                    <button 
+                    <button
                       onClick={() => setPaymentMode('cash')}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
-                        paymentMode === 'cash' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'cash' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <Banknote className="w-6 h-6 mb-1" />
                       <span className="text-xs font-medium">Cash</span>
                     </button>
-                    <button 
+                    <button
                       onClick={() => setPaymentMode('card')}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
-                        paymentMode === 'card' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'card' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <CreditCard className="w-6 h-6 mb-1" />
                       <span className="text-xs font-medium">Card</span>
                     </button>
-                    <button 
+                    <button
                       onClick={() => setPaymentMode('upi')}
-                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${
-                        paymentMode === 'upi' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
-                      }`}
+                      className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'upi' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'
+                        }`}
                     >
                       <Smartphone className="w-6 h-6 mb-1" />
                       <span className="text-xs font-medium">UPI</span>
@@ -1078,8 +1096,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Cash Received</label>
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">₹</span>
-                        <input 
-                          type="number" 
+                        <input
+                          type="number"
                           value={cashReceived}
                           onChange={(e) => setCashReceived(e.target.value)}
                           className="w-full pl-8 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -1100,7 +1118,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               {/* Footer Actions */}
               <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
                 {selectedOrder.status === 'ready' && selectedOrder.paymentStatus === 'unpaid' ? (
-                  <button 
+                  <button
                     onClick={handleCheckout}
                     disabled={loading}
                     className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1115,7 +1133,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     )}
                   </button>
                 ) : selectedOrder.status === 'paid' ? (
-                  <button 
+                  <button
                     onClick={() => handleCloseOrder(selectedOrder._id)}
                     disabled={loading}
                     className="w-full py-4 bg-gray-600 text-white rounded-xl font-bold text-lg hover:bg-gray-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
@@ -1144,7 +1162,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold mb-4">Merge Order</h3>
             <p className="text-gray-500 mb-4 text-sm">Select a table to merge the current order into.</p>
-            
+
             <div className="space-y-2 max-h-60 overflow-y-auto mb-6">
               {activeTables.length === 0 ? (
                 <p className="text-center text-gray-400 py-4">No other active tables available.</p>
@@ -1153,11 +1171,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   <button
                     key={table._id}
                     onClick={() => setMergeTargetId(table._id)}
-                    className={`w-full p-3 rounded-lg border flex justify-between items-center ${
-                      mergeTargetId === table._id 
-                        ? 'border-green-500 bg-green-50 text-green-700' 
-                        : 'border-gray-200 hover:bg-gray-50'
-                    }`}
+                    className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === table._id
+                      ? 'border-green-500 bg-green-50 text-green-700'
+                      : 'border-gray-200 hover:bg-gray-50'
+                      }`}
                   >
                     <span className="font-bold">Table {table.tableNumber}</span>
                     <span className="text-sm">{formatCurrency(table.currentOrder.total)}</span>
@@ -1167,13 +1184,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             </div>
 
             <div className="flex gap-3">
-              <button 
+              <button
                 onClick={() => setShowMergeModal(false)}
                 className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
               >
                 Cancel
               </button>
-              <button 
+              <button
                 onClick={handleMergeOrder}
                 disabled={!mergeTargetId || loading}
                 className="flex-1 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50"
@@ -1193,11 +1210,11 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               <h3 className="text-lg font-bold">Add Item to Order</h3>
               <button onClick={() => setShowAddItem(false)}><X className="w-6 h-6 text-gray-400" /></button>
             </div>
-            
+
             <div className="p-4 border-b">
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
-                <input 
+                <input
                   type="text"
                   placeholder="Search menu items..."
                   value={itemSearch}
@@ -1270,11 +1287,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     <div
                       key={order._id}
                       onClick={() => toggleOrderSelection(order._id)}
-                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                        isSelected
-                          ? 'border-purple-600 bg-purple-50'
-                          : 'border-gray-200 hover:border-gray-300 bg-white'
-                      }`}
+                      className={`p-4 rounded-xl border-2 cursor-pointer transition-all ${isSelected
+                        ? 'border-purple-600 bg-purple-50'
+                        : 'border-gray-200 hover:border-gray-300 bg-white'
+                        }`}
                     >
                       <div className="flex items-center justify-between mb-3">
                         <div className="flex items-center gap-2">
@@ -1377,7 +1393,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               {/* Combined Order Preview */}
               <div className="bg-purple-50 border-2 border-purple-200 rounded-xl p-6">
                 <h3 className="text-sm font-bold text-purple-900 uppercase mb-4">Combined Order</h3>
-                
+
                 <div className="space-y-2 mb-4">
                   {mergePreview.combined.items.map((item, idx) => (
                     <div key={idx} className="flex justify-between items-center text-sm">
@@ -1446,6 +1462,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </div>
         </div>
       )}
+      <OrderHistoryModal
+        isOpen={showHistory}
+        onClose={() => setShowHistory(false)}
+      />
     </div>
   );
 }
