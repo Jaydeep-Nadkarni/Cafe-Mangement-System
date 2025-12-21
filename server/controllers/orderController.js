@@ -116,39 +116,84 @@ const createOrder = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized for this branch' });
     }
 
-    // Multiple orders per table are now allowed
-    // No check for existing orders
-
-    // Calculate totals
-    const calculation = await orderService.calculateOrderTotals(items);
-
-    const order = new Order({
-      branch: table.branch._id,
+    // Check for existing unpaid order (Active Session)
+    // "Table 1 order both were ordered under the same active session so the order should be merged"
+    let existingOrder = await Order.findOne({
       table: tableId,
-      items: calculation.items,
-      subtotal: calculation.subtotal,
-      tax: calculation.tax,
-      total: calculation.total,
-      status: 'created',
-      customerCount: customerCount || 1,
-      chefNotes: chefNotes || ''
+      status: { $nin: ['closed', 'cancelled'] },
+      paymentStatus: 'unpaid'
     });
 
-    const savedOrder = await order.save();
+    // Calculate totals for new items
+    const calculation = await orderService.calculateOrderTotals(items);
 
-    // Add to currentOrders array
-    if (!table.currentOrders) {
-      table.currentOrders = [];
+    let savedOrder;
+    let isMerge = false;
+
+    if (existingOrder) {
+      // MERGE into existing order
+      //console.log(`Merging items into existing order ${existingOrder._id}`);
+      isMerge = true;
+
+      // Combine items
+      const newItems = [...existingOrder.items, ...calculation.items];
+
+      existingOrder.items = newItems;
+      existingOrder.subtotal += calculation.subtotal;
+      existingOrder.tax += calculation.tax;
+      existingOrder.total += calculation.total;
+
+      savedOrder = await existingOrder.save();
+
+      // Emit update event
+      emitToBranch(table.branch._id, 'order_updated', {
+        orderId: savedOrder._id,
+        orderNumber: savedOrder.orderNumber,
+        table: table.tableNumber,
+        total: savedOrder.total,
+        items: savedOrder.items
+      });
+
+    } else {
+      // Create NEW Order
+      const order = new Order({
+        branch: table.branch._id,
+        table: tableId,
+        items: calculation.items,
+        subtotal: calculation.subtotal,
+        tax: calculation.tax,
+        total: calculation.total,
+        status: 'created',
+        customerCount: customerCount || 1,
+        chefNotes: chefNotes || ''
+      });
+
+      savedOrder = await order.save();
+
+      // Add to currentOrders array
+      if (!table.currentOrders) {
+        table.currentOrders = [];
+      }
+      table.currentOrders.push(savedOrder._id);
+      table.status = 'occupied';
+
+      // Initialize session if needed
+      if (!table.sessionStart && table.currentOrders.length === 1) {
+        table.sessionStart = new Date();
+      }
+
+      await table.save();
+
+      // Real-time broadcast
+      emitToBranch(table.branch._id, 'new_order', {
+        orderId: savedOrder._id,
+        orderNumber: savedOrder.orderNumber,
+        table: table.tableNumber,
+        status: savedOrder.status,
+        total: savedOrder.total,
+        createdAt: savedOrder.createdAt
+      });
     }
-    table.currentOrders.push(savedOrder._id);
-    table.status = 'occupied';
-
-    // Initialize session if needed
-    if (!table.sessionStart && table.currentOrders.length === 1) {
-      table.sessionStart = new Date();
-    }
-
-    await table.save();
 
     // Update session stats
     await updateTableSessionStats(table._id);

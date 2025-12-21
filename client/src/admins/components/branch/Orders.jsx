@@ -1193,22 +1193,46 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             <p className="text-gray-500 mb-4 text-sm">Select a table to merge the current order into.</p>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-6">
-              {activeTables.length === 0 ? (
-                <p className="text-center text-gray-400 py-4">No other active tables available.</p>
-              ) : (
-                activeTables.map(table => (
-                  <button
-                    key={table._id}
-                    onClick={() => setMergeTargetId(table._id)}
-                    className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === table._id
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    <span className="font-bold">Table {table.tableNumber}</span>
-                    <span className="text-sm">{formatCurrency(table.currentOrder.total)}</span>
-                  </button>
-                ))
+              {/* Same Table Orders */}
+              {orders.filter(o =>
+                o.table?._id === selectedOrder.table?._id &&
+                o._id !== selectedOrder._id &&
+                o.paymentStatus === 'unpaid' &&
+                !['closed', 'cancelled'].includes(o.status)
+              ).map(order => (
+                <button
+                  key={order._id}
+                  onClick={() => setMergeTargetId(order._id)}
+                  className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === order._id
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-purple-200 bg-purple-50 hover:bg-purple-100'
+                    }`}
+                >
+                  <div className="flex flex-col items-start">
+                    <span className="font-bold text-sm">#{order.orderNumber} (Same Table)</span>
+                    <span className="text-xs text-gray-500">{new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                  </div>
+                  <span className="text-sm font-bold">{formatCurrency(order.total)}</span>
+                </button>
+              ))}
+
+              {/* Other Active Tables */}
+              {activeTables.map(table => (
+                <button
+                  key={table._id}
+                  onClick={() => setMergeTargetId(table.currentOrder?._id)}
+                  className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === table.currentOrder?._id
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                  <span className="font-bold">Table {table.tableNumber}</span>
+                  <span className="text-sm">{formatCurrency(table.currentOrder?.total || 0)}</span>
+                </button>
+              ))}
+
+              {activeTables.length === 0 && orders.filter(o => o.table?._id === selectedOrder.table?._id && o._id !== selectedOrder._id).length === 0 && (
+                <p className="text-center text-gray-400 py-4">No other active orders available to merge.</p>
               )}
             </div>
 
