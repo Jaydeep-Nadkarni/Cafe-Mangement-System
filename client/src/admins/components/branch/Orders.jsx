@@ -688,7 +688,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {viewMode === 'list' ? (
-          orders.map(order => {
+          orders.filter(o => !o.isMerged).map(order => {
             const colors = getOrderColorClass(order.paymentStatus);
             // const statusBadge = getStatusBadge(order.status); // Removed
             // const StatusIcon = statusBadge.icon; 
@@ -746,25 +746,45 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             );
           })
         ) : (
-          Object.values(orders.reduce((acc, order) => {
-            const tableId = order.table?._id || 'unknown';
-            if (!acc[tableId]) {
-              acc[tableId] = {
+          Object.values(orders.filter(o => !o.isMerged).reduce((acc, order) => {
+            const sessionId = order.sessionId || `table-${order.table?._id}`;
+            const groupKey = `${order.table?._id}-${sessionId}`;
+            if (!acc[groupKey]) {
+              acc[groupKey] = {
                 table: order.table,
+                sessionId: sessionId,
+                sessionPerson: order.sessionPerson || 'Table Order',
+                orderType: order.orderType || 'pay_later',
                 orders: [],
                 totalAmount: 0,
-                lastActivity: new Date(0)
+                lastActivity: new Date(0),
+                paidAmount: 0,
+                unpaidAmount: 0,
+                mainOrder: null // First/primary order of the session
               };
             }
-            acc[tableId].orders.push(order);
-            acc[tableId].totalAmount += order.total;
+            acc[groupKey].orders.push(order);
+            acc[groupKey].totalAmount += order.total;
+            
+            // Track paid vs unpaid amounts
+            if (order.paymentStatus === 'paid') {
+              acc[groupKey].paidAmount += order.total;
+            } else {
+              acc[groupKey].unpaidAmount += order.total;
+            }
+            
+            // Set main order as the first one created in this session
+            if (!acc[groupKey].mainOrder || new Date(order.createdAt) < new Date(acc[groupKey].mainOrder.createdAt)) {
+              acc[groupKey].mainOrder = order;
+            }
+            
             const orderDate = new Date(order.updatedAt || order.createdAt);
-            if (orderDate > acc[tableId].lastActivity) {
-              acc[tableId].lastActivity = orderDate;
+            if (orderDate > acc[groupKey].lastActivity) {
+              acc[groupKey].lastActivity = orderDate;
             }
             return acc;
           }, {})).map(group => (
-            <div key={group.table?._id || 'unknown'} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all">
+            <div key={group.sessionId || 'unknown'} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all">
               <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
                 <div className="flex items-center gap-2">
                   <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
@@ -773,43 +793,61 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   <div>
                     <h3 className="font-bold text-gray-900">Table {group.table?.tableNumber || 'Unknown'}</h3>
                     <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{group.orders.length} Orders</span>
+                      <span>{group.orders.length} {group.orders.length === 1 ? 'Order' : 'Orders'} ({group.sessionPerson})</span>
+                      <span>•</span>
+                      <span>{group.orderType === 'pay_now' ? 'Pay Now' : 'Pay Later'}</span>
                       <span>•</span>
                       <span>{getTimeSince(group.lastActivity)}</span>
                     </div>
                   </div>
                 </div>
-                {group.table?.sessionStats && (
-                  <div className="flex flex-col items-end text-xs">
-                    <span className="text-gray-500">Session Total: <span className="font-bold text-gray-900">{formatCurrency(group.table.sessionStats.totalAmount || 0)}</span></span>
-                    <div className="flex gap-2 mt-0.5">
-                      <span className="text-green-600 font-medium">Pd: {formatCurrency(group.table.sessionStats.paidAmount || 0)}</span>
-                      <span className="text-red-500 font-medium">Un: {formatCurrency(group.table.sessionStats.unpaidAmount || 0)}</span>
-                    </div>
+                <div className="flex flex-col items-end text-xs">
+                  <span className="text-gray-500">Session Total: <span className="font-bold text-gray-900">{formatCurrency(group.totalAmount || 0)}</span></span>
+                  <div className="flex gap-2 mt-0.5">
+                    {group.paidAmount > 0 && <span className="text-green-600 font-medium">Pd: {formatCurrency(group.paidAmount || 0)}</span>}
+                    {group.unpaidAmount > 0 && <span className="text-red-500 font-medium">Un: {formatCurrency(group.unpaidAmount || 0)}</span>}
                   </div>
-                )}
+                </div>
               </div>
 
-              <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                {group.orders.map(o => (
-                  <div
-                    key={o._id}
-                    onClick={() => setSelectedOrder(o)}
-                    className={`flex justify-between items-center p-2.5 rounded-lg border cursor-pointer transition-colors ${o.paymentStatus === 'paid' ? 'bg-green-50 border-green-100 hover:bg-green-100' : 'bg-white border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-gray-700">#{o.orderNumber}</span>
-                      <span className="text-[10px] text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+              {/* Show individual orders if multiple, otherwise show main order */}
+              {group.orders.length > 1 && (
+                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto text-xs text-gray-600">
+                  <p className="font-semibold text-gray-700">Orders in this session:</p>
+                  {group.orders.map(o => (
+                    <div key={o._id} className="flex justify-between p-2 bg-gray-50 rounded">
+                      <span>#{o.orderNumber}</span>
+                      <span>{formatCurrency(o.total)} - {o.paymentStatus === 'paid' ? '✓ Paid' : 'Unpaid'}</span>
                     </div>
-                    <span className={`font-bold text-sm ${o.paymentStatus === 'paid' ? 'text-green-700' : 'text-gray-900'}`}>
-                      {formatCurrency(o.total)}
-                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Click on combined session/bill */}
+              <div
+                onClick={() => setSelectedOrder(group.mainOrder)}
+                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                  group.mainOrder?.paymentStatus === 'paid' 
+                    ? 'bg-green-50 border-green-100 hover:bg-green-100' 
+                    : 'bg-blue-50 border-blue-100 hover:bg-blue-100'
+                }`}
+              >
+                <div className="flex justify-between items-center">
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-gray-700">Combined Session Bill</span>
+                    <span className="text-[10px] text-gray-500">Click to view details</span>
                   </div>
-                ))}
+                  <span className={`font-bold text-lg ${
+                    group.mainOrder?.paymentStatus === 'paid' 
+                      ? 'text-green-700' 
+                      : 'text-blue-900'
+                  }`}>
+                    {formatCurrency(group.totalAmount)}
+                  </span>
+                </div>
               </div>
 
-              <div className="pt-3 border-t border-dashed border-gray-200">
+              <div className="pt-3 border-t border-dashed border-gray-200 mt-3">
                 <div className="flex justify-between items-end">
                   <span className="text-sm font-medium text-gray-500">Total Bill</span>
                   <span className="text-xl font-bold text-gray-900">{formatCurrency(group.totalAmount)}</span>

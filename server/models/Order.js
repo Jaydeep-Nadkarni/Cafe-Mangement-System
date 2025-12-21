@@ -143,6 +143,24 @@ const orderSchema = new mongoose.Schema(
     mergeNote: {
       type: String,
       default: ''
+    },
+    // Session management for pay-later and pay-now scenarios
+    sessionId: {
+      type: String,
+      index: true,
+      default: null,
+      comment: 'Groups orders from same table session - null means separate session'
+    },
+    sessionPerson: {
+      type: String,
+      default: null,
+      comment: 'Person/customer name for this part of the session'
+    },
+    orderType: {
+      type: String,
+      enum: ['pay_later', 'pay_now'],
+      default: 'pay_later',
+      comment: 'pay_later: auto-merge orders; pay_now: check session before merging'
     }
   },
   { timestamps: true }

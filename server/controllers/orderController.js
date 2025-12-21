@@ -104,7 +104,7 @@ const updateTableSessionStats = async (tableId) => {
 // @access  Manager
 const createOrder = async (req, res) => {
   try {
-    const { tableId, items, customerCount, chefNotes } = req.body;
+    const { tableId, items, customerCount, chefNotes, sessionPerson, orderType = 'pay_later' } = req.body;
 
     // Verify table belongs to manager's branch
     const table = await Table.findById(tableId).populate('branch');
@@ -116,83 +116,171 @@ const createOrder = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized for this branch' });
     }
 
-    // Check for existing unpaid order (Active Session)
-    // "Table 1 order both were ordered under the same active session so the order should be merged"
-    let existingOrder = await Order.findOne({
-      table: tableId,
-      status: { $nin: ['closed', 'cancelled'] },
-      paymentStatus: 'unpaid'
-    });
-
     // Calculate totals for new items
     const calculation = await orderService.calculateOrderTotals(items);
 
     let savedOrder;
     let isMerge = false;
 
-    if (existingOrder) {
-      // MERGE into existing order
-      //console.log(`Merging items into existing order ${existingOrder._id}`);
-      isMerge = true;
-
-      // Combine items
-      const newItems = [...existingOrder.items, ...calculation.items];
-
-      existingOrder.items = newItems;
-      existingOrder.subtotal += calculation.subtotal;
-      existingOrder.tax += calculation.tax;
-      existingOrder.total += calculation.total;
-
-      savedOrder = await existingOrder.save();
-
-      // Emit update event
-      emitToBranch(table.branch._id, 'order_updated', {
-        orderId: savedOrder._id,
-        orderNumber: savedOrder.orderNumber,
-        table: table.tableNumber,
-        total: savedOrder.total,
-        items: savedOrder.items
-      });
-
-    } else {
-      // Create NEW Order
-      const order = new Order({
-        branch: table.branch._id,
+    // PAY_LATER: Always merge into active session order for same table
+    if (orderType === 'pay_later') {
+      // Check for existing unpaid order in same session (Active Session)
+      let existingOrder = await Order.findOne({
         table: tableId,
-        items: calculation.items,
-        subtotal: calculation.subtotal,
-        tax: calculation.tax,
-        total: calculation.total,
-        status: 'created',
-        customerCount: customerCount || 1,
-        chefNotes: chefNotes || ''
+        status: { $nin: ['closed', 'cancelled'] },
+        paymentStatus: 'unpaid',
+        orderType: 'pay_later'
       });
 
-      savedOrder = await order.save();
+      if (existingOrder) {
+        // MERGE into existing order
+        isMerge = true;
 
-      // Add to currentOrders array
-      if (!table.currentOrders) {
-        table.currentOrders = [];
+        // Combine items
+        const newItems = [...existingOrder.items, ...calculation.items];
+
+        existingOrder.items = newItems;
+        existingOrder.subtotal += calculation.subtotal;
+        existingOrder.tax += calculation.tax;
+        existingOrder.total += calculation.total;
+        existingOrder.sessionPerson = sessionPerson || existingOrder.sessionPerson;
+
+        savedOrder = await existingOrder.save();
+
+        // Emit update event
+        emitToBranch(table.branch._id, 'order_updated', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          total: savedOrder.total,
+          items: savedOrder.items
+        });
+
+      } else {
+        // Create NEW Order for pay_later
+        const sessionId = `${tableId}-${Date.now()}`;
+        const order = new Order({
+          branch: table.branch._id,
+          table: tableId,
+          items: calculation.items,
+          subtotal: calculation.subtotal,
+          tax: calculation.tax,
+          total: calculation.total,
+          status: 'created',
+          customerCount: customerCount || 1,
+          chefNotes: chefNotes || '',
+          sessionId: sessionId,
+          sessionPerson: sessionPerson || 'Table Order',
+          orderType: 'pay_later'
+        });
+
+        savedOrder = await order.save();
+
+        // Add to currentOrders array
+        if (!table.currentOrders) {
+          table.currentOrders = [];
+        }
+        table.currentOrders.push(savedOrder._id);
+        table.status = 'occupied';
+
+        // Initialize session if needed
+        if (!table.sessionStart && table.currentOrders.length === 1) {
+          table.sessionStart = new Date();
+        }
+
+        await table.save();
+
+        // Real-time broadcast
+        emitToBranch(table.branch._id, 'new_order', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          status: savedOrder.status,
+          total: savedOrder.total,
+          createdAt: savedOrder.createdAt
+        });
       }
-      table.currentOrders.push(savedOrder._id);
-      table.status = 'occupied';
+    } 
+    // PAY_NOW: Check if same session/person before merging
+    else if (orderType === 'pay_now') {
+      let existingOrder = null;
 
-      // Initialize session if needed
-      if (!table.sessionStart && table.currentOrders.length === 1) {
-        table.sessionStart = new Date();
+      // Check for unpaid pay_now orders from same session/person
+      if (sessionPerson) {
+        existingOrder = await Order.findOne({
+          table: tableId,
+          sessionPerson: sessionPerson,
+          status: { $nin: ['closed', 'cancelled'] },
+          paymentStatus: 'unpaid',
+          orderType: 'pay_now'
+        });
       }
 
-      await table.save();
+      if (existingOrder) {
+        // MERGE: Same session and same person
+        isMerge = true;
 
-      // Real-time broadcast
-      emitToBranch(table.branch._id, 'new_order', {
-        orderId: savedOrder._id,
-        orderNumber: savedOrder.orderNumber,
-        table: table.tableNumber,
-        status: savedOrder.status,
-        total: savedOrder.total,
-        createdAt: savedOrder.createdAt
-      });
+        const newItems = [...existingOrder.items, ...calculation.items];
+
+        existingOrder.items = newItems;
+        existingOrder.subtotal += calculation.subtotal;
+        existingOrder.tax += calculation.tax;
+        existingOrder.total += calculation.total;
+
+        savedOrder = await existingOrder.save();
+
+        emitToBranch(table.branch._id, 'order_updated', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          total: savedOrder.total,
+          items: savedOrder.items
+        });
+
+      } else {
+        // CREATE separate order: Different person or first order
+        const sessionId = `${tableId}-${Date.now()}`;
+        const order = new Order({
+          branch: table.branch._id,
+          table: tableId,
+          items: calculation.items,
+          subtotal: calculation.subtotal,
+          tax: calculation.tax,
+          total: calculation.total,
+          status: 'created',
+          customerCount: customerCount || 1,
+          chefNotes: chefNotes || '',
+          sessionId: sessionId,
+          sessionPerson: sessionPerson || 'Guest',
+          orderType: 'pay_now'
+        });
+
+        savedOrder = await order.save();
+
+        // Add to currentOrders array
+        if (!table.currentOrders) {
+          table.currentOrders = [];
+        }
+        table.currentOrders.push(savedOrder._id);
+        table.status = 'occupied';
+
+        // Initialize session if needed
+        if (!table.sessionStart && table.currentOrders.length === 1) {
+          table.sessionStart = new Date();
+        }
+
+        await table.save();
+
+        // Real-time broadcast
+        emitToBranch(table.branch._id, 'new_order', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          status: savedOrder.status,
+          total: savedOrder.total,
+          createdAt: savedOrder.createdAt
+        });
+      }
     }
 
     // Update session stats
@@ -767,6 +855,7 @@ const mergeOrders = async (req, res) => {
           combinedItems[itemId].quantity += item.quantity;
         } else {
           combinedItems[itemId] = {
+            _id: item._id,
             menuItem: item.menuItem,
             quantity: item.quantity,
             price: item.price,
@@ -781,19 +870,21 @@ const mergeOrders = async (req, res) => {
     targetOrder.items = Object.values(combinedItems);
     targetOrder.subtotal = targetOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     targetOrder.tax = targetOrder.subtotal * 0.10;
-    targetOrder.total = targetOrder.subtotal + targetOrder.tax;
+    // Preserve the discount from target order (or clear it)
+    targetOrder.discount = targetOrder.discount || 0;
+    targetOrder.total = targetOrder.subtotal + targetOrder.tax - targetOrder.discount;
 
-    // Add merge metadata to target order
-    targetOrder.isMerged = true;
+    // Add merge metadata to target order (but DON'T mark as isMerged - only source orders are marked merged)
     targetOrder.mergedAt = new Date();
     targetOrder.originalOrderIds = orders.map(o => o.orderNumber || o._id.toString());
     targetOrder.mergeNote = `Merged ${orders.length} orders: ${targetOrder.originalOrderIds.join(', ')}`;
 
     await targetOrder.save({ session });
 
-    // Mark source orders as merged
+    // Mark source orders as merged (keep original status, just add isMerged flag)
     for (const sourceOrder of sourceOrders) {
-      sourceOrder.status = 'merged';
+      sourceOrder.isMerged = true;
+      sourceOrder.mergedAt = new Date();
       sourceOrder.mergeNote = `Merged into order ${targetOrder.orderNumber || targetOrder._id}`;
       await sourceOrder.save({ session });
 
