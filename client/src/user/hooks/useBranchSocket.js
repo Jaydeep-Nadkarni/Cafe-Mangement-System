@@ -12,6 +12,8 @@ import { useSocket } from '../context/SocketContext';
  * @param {Function} callbacks.onStatsUpdate - Called when stats are updated (every 7s)
  * @param {Function} callbacks.onCriticalMetric - Called when critical metrics change (instant)
  * @param {Function} callbacks.onTableOccupancyChange - Called when table occupancy changes
+ * @param {Function} callbacks.onNewAlert - Called when a new alert is created
+ * @param {Function} callbacks.onMemoCreated - Called when a new memo is created
  */
 export const useBranchSocket = (branchId, callbacks = {}) => {
   const { socket, joinBranchRoom, leaveBranchRoom } = useSocket();
@@ -28,6 +30,7 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       onPaymentConfirmation,
       onTableMerge,
       onNewAlert,
+      onMemoCreated,
       onStatsUpdate,
       onCriticalMetric,
       onTableOccupancyChange
@@ -39,12 +42,14 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
     if (onPaymentConfirmation) socket.on('payment_confirmation', onPaymentConfirmation);
     if (onTableMerge) socket.on('table_merge', onTableMerge);
     if (onNewAlert) socket.on('new_alert', onNewAlert);
+    if (onMemoCreated) socket.on('memo_created', onMemoCreated);
 
     // Stats-specific events
     if (onStatsUpdate) socket.on('stats_update', onStatsUpdate);
     if (onCriticalMetric) socket.on('critical_metric_update', onCriticalMetric);
     if (onTableOccupancyChange) socket.on('table_occupancy_change', onTableOccupancyChange);
     if (callbacks.onOrderUpdate) socket.on('order_updated', callbacks.onOrderUpdate);
+    if (callbacks.onOrderItemsUpdated) socket.on('order_items_updated', callbacks.onOrderItemsUpdated);
 
     // Cleanup
     return () => {
@@ -53,12 +58,14 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       if (onPaymentConfirmation) socket.off('payment_confirmation', onPaymentConfirmation);
       if (onTableMerge) socket.off('table_merge', onTableMerge);
       if (onNewAlert) socket.off('new_alert', onNewAlert);
+      if (onMemoCreated) socket.off('memo_created', onMemoCreated);
 
       // Remove stats listeners
       if (onStatsUpdate) socket.off('stats_update', onStatsUpdate);
       if (onCriticalMetric) socket.off('critical_metric_update', onCriticalMetric);
       if (onTableOccupancyChange) socket.off('table_occupancy_change', onTableOccupancyChange);
       if (callbacks.onOrderUpdate) socket.off('order_updated', callbacks.onOrderUpdate);
+      if (callbacks.onOrderItemsUpdated) socket.off('order_items_updated', callbacks.onOrderItemsUpdated);
 
       leaveBranchRoom(branchId);
     };

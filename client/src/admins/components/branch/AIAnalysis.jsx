@@ -3,6 +3,7 @@ import axios from 'axios';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import html2pdf from 'html2pdf.js';
+import { formatDateTime } from '../../../utils/formatCurrency';
 import {
   Brain,
   RefreshCw,
@@ -247,7 +248,7 @@ function AIAnalysisContent({ branch }) {
           <div className="flex items-center gap-2 px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-xs md:text-sm text-gray-700">
             <Clock className="w-4 h-4" />
             <span>
-              Analysis generated {new Date(analysis.createdAt).toLocaleString()}
+              Analysis generated {formatDateTime(analysis.createdAt)}
               {' - '}
               Using cached data
             </span>
@@ -333,7 +334,7 @@ function AIAnalysisContent({ branch }) {
           </div>
           <div className="flex items-center gap-2">
             <span className="font-medium">Generated:</span>
-            <span>{new Date(analysis.createdAt).toLocaleString()}</span>
+            <span>{formatDateTime(analysis.createdAt)}</span>
           </div>
         </div>
       </div>

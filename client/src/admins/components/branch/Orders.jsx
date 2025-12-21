@@ -6,9 +6,24 @@ import {
   ChefHat, Truck, Package, DollarSign, Archive
 } from 'lucide-react';
 import axios from 'axios';
-import { formatCurrency } from '../../../utils/formatCurrency';
+import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
+import { formatCurrency, formatTime, formatDateTime } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
+
+// Helper to group items for display
+const groupOrderItems = (items) => {
+  if (!items) return [];
+  const groups = {};
+  items.forEach(item => {
+    const key = `${item.menuItem?._id}-${item.specialInstructions || ''}-${item.price}`;
+    if (!groups[key]) {
+      groups[key] = { ...item, quantity: 0 };
+    }
+    groups[key].quantity += item.quantity;
+  });
+  return Object.values(groups);
+};
 
 const getTimeSince = (dateString) => {
   if (!dateString) return '';
@@ -24,6 +39,9 @@ const getTimeSince = (dateString) => {
 };
 
 export default function Orders({ tables, menu = [], onRefresh }) {
+    // State for By Table modal
+    const [selectedTableForModal, setSelectedTableForModal] = useState(null);
+
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
@@ -57,6 +75,9 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   });
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+
+  // Determine branch from tables (for socket room)
+  const branchId = tables?.[0]?.branch?._id || tables?.[0]?.branch || null;
 
   // Fetch all orders with time filter
   const fetchOrders = useCallback(async (isRefresh = false) => {
@@ -105,22 +126,36 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   }, [fetchOrders]);
 
   // Real-time updates via webhook/polling simulation
-  useEffect(() => {
-    // Listen for payment confirmations or order updates
-    const handlePaymentUpdate = (event) => {
-      if (event.detail?.orderId) {
-        fetchOrders(true); // Soft refresh
-      }
-    };
+  const handlePaymentUpdate = useCallback((event) => {
+    if (event.detail?.orderId) {
+      fetchOrders(true); // Soft refresh
+    }
+  }, [fetchOrders]);
 
+  useEffect(() => {
     window.addEventListener('payment_confirmed', handlePaymentUpdate);
     window.addEventListener('order_updated', handlePaymentUpdate);
-
     return () => {
       window.removeEventListener('payment_confirmed', handlePaymentUpdate);
       window.removeEventListener('order_updated', handlePaymentUpdate);
     };
-  }, [fetchOrders]);
+  }, [handlePaymentUpdate]);
+
+  // Socket-based updates for order item changes
+  useBranchSocket(branchId, {
+    onOrderItemsUpdated: async (payload) => {
+      fetchOrders(true);
+      if (selectedOrder && payload.orderId === selectedOrder._id) {
+        try {
+          const token = localStorage.getItem('token');
+          const res = await axios.get(`${API_URL}/api/orders/${selectedOrder._id}`, { headers: { Authorization: `Bearer ${token}` } });
+          setSelectedOrder(res.data);
+        } catch (err) {
+          console.error('Failed to refresh selected order:', err);
+        }
+      }
+    }
+  });
 
   // Soft refresh handler
   const handleSoftRefresh = () => {
@@ -167,6 +202,51 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     [menu, itemSearch]
   );
 
+  // Group items for display
+  const groupedItems = useMemo(() => {
+    if (!selectedOrder) return [];
+    const groups = {};
+    selectedOrder.items.forEach(item => {
+      // Group by MenuItem ID + Special Instructions + Price
+      const key = `${item.menuItem?._id}-${item.specialInstructions || ''}-${item.price}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          ...item,
+          quantity: 0,
+          originalItems: [] // Keep track of original items for updates
+        };
+      }
+      groups[key].quantity += item.quantity;
+      groups[key].originalItems.push(item);
+    });
+    return Object.values(groups);
+  }, [selectedOrder]);
+
+  const handleUpdateGroupQuantity = async (group, newTotalQuantity) => {
+    const diff = newTotalQuantity - group.quantity;
+    if (diff === 0) return;
+
+    // We operate on the last item in the group (most recent)
+    const lastItem = group.originalItems[group.originalItems.length - 1];
+    
+    if (diff > 0) {
+      // Increase quantity of the last item
+      await handleUpdateItemQuantity(lastItem._id, lastItem.quantity + diff);
+    } else {
+      // Decrease quantity
+      // If the decrease is less than the last item's quantity, just reduce it
+      if (lastItem.quantity > Math.abs(diff)) {
+        await handleUpdateItemQuantity(lastItem._id, lastItem.quantity + diff);
+      } else {
+        // If we need to remove the item entirely or more
+        // For simplicity, we just remove the last item if it goes to 0 or below
+        // The user can click '-' again to reduce the next item
+        await handleRemoveItem(lastItem._id);
+      }
+    }
+  };
+
   // Actions
   const handleAddItem = async (menuItem) => {
     if (!selectedOrder) return;
@@ -205,6 +285,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           setSelectedOrder(res.data);
           fetchOrders(true);
           onRefresh();
+          showSuccess('Item removed');
         } catch (error) {
           console.error('Failed to remove item:', error);
           showError('Failed to remove item. Please try again.');
@@ -213,6 +294,50 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         }
       }
     );
+  };
+
+  const handleMarkAsPaid = async (orderId) => {
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.post(`${API_URL}/api/orders/${orderId}/checkout`, {
+        paymentMethod: 'cash',
+        amountPaid: selectedOrder.total
+      }, { headers: { Authorization: `Bearer ${token}` } });
+
+      setSelectedOrder(res.data);
+      fetchOrders(true);
+      onRefresh();
+      showSuccess('Order marked as paid');
+    } catch (error) {
+      console.error('Failed to mark as paid:', error);
+      showError(error?.response?.data?.message || 'Failed to mark as paid');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleUpdateItemQuantity = async (itemId, quantity) => {
+    if (!selectedOrder) return;
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      const res = await axios.put(
+        `${API_URL}/api/orders/${selectedOrder._id}/items/${itemId}`,
+        { quantity },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setSelectedOrder(res.data);
+      fetchOrders(true);
+      onRefresh();
+      showSuccess('Quantity updated');
+    } catch (error) {
+      console.error('Failed to update quantity:', error);
+      showError(error?.response?.data?.message || 'Failed to update quantity');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCancelOrder = async () => {
@@ -614,15 +739,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             <div className="bg-gray-100 p-1 rounded-lg flex h-fit">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 List
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 By Table
               </button>
@@ -688,11 +811,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       {/* Orders Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {viewMode === 'list' ? (
-          orders.map(order => {
+          orders.filter(o => !o.isMerged).map(order => {
             const colors = getOrderColorClass(order.paymentStatus);
-            // const statusBadge = getStatusBadge(order.status); // Removed
-            // const StatusIcon = statusBadge.icon; 
-
             return (
               <div
                 key={order._id}
@@ -704,7 +824,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     <span className="font-bold text-lg text-gray-900">
                       {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
                     </span>
-
                     <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
                       {order.paymentStatus}
                     </span>
@@ -720,7 +839,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
                 <div className="p-4">
                   <div className="space-y-2 mb-4 min-h-20">
-                    {order.items.slice(0, 3).map((item, idx) => (
+                    {groupOrderItems(order.items).slice(0, 3).map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm">
                         <span className="text-gray-600 flex items-center gap-2">
                           <span className="font-bold text-gray-900">{item.quantity}x</span>
@@ -728,17 +847,16 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                         </span>
                       </div>
                     ))}
-                    {order.items.length > 3 && (
+                    {groupOrderItems(order.items).length > 3 && (
                       <div className="text-xs text-gray-400 italic pl-6">
-                        + {order.items.length - 3} more items...
+                        + {groupOrderItems(order.items).length - 3} more items...
                       </div>
                     )}
                   </div>
-
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                     <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
                     <span className="text-xs text-gray-400">
-                      {new Date(order.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(order.createdAt)}
                     </span>
                   </div>
                 </div>
@@ -746,139 +864,213 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             );
           })
         ) : (
-          Object.values(orders.reduce((acc, order) => {
-            const tableId = order.table?._id || 'unknown';
-            if (!acc[tableId]) {
-              acc[tableId] = {
-                table: order.table,
-                orders: [],
-                totalAmount: 0,
-                lastActivity: new Date(0)
-              };
-            }
-            acc[tableId].orders.push(order);
-            acc[tableId].totalAmount += order.total;
-            const orderDate = new Date(order.updatedAt || order.createdAt);
-            if (orderDate > acc[tableId].lastActivity) {
-              acc[tableId].lastActivity = orderDate;
-            }
-            return acc;
-          }, {})).map(group => (
-            <div key={group.table?._id || 'unknown'} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all">
-              <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                    <Coffee className="w-5 h-5" />
+          <>
+            {tables.map(table => {
+              const relatedOrders = orders.filter(o => o.table?._id === table._id && !o.isMerged);
+              const total = relatedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+              const unpaid = relatedOrders.filter(o => o.paymentStatus !== 'paid').reduce((sum, o) => sum + (o.total || 0), 0);
+              return (
+                <div
+                  key={table._id}
+                  className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all cursor-pointer flex flex-col`}
+                  onClick={() => setSelectedTableForModal(table)}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-lg text-gray-900">Table {table.tableNumber}</span>
+                    <span className={`w-3 h-3 rounded-full ${table.status === 'occupied' ? 'bg-red-500' : 'bg-green-500'}`}></span>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Table {group.table?.tableNumber || 'Unknown'}</h3>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{group.orders.length} Orders</span>
-                      <span>•</span>
-                      <span>{getTimeSince(group.lastActivity)}</span>
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-xs text-gray-500">{relatedOrders.length} Active Order{relatedOrders.length !== 1 ? 's' : ''}</span>
+                    <span className="text-xs text-gray-500">Total: <span className="font-bold text-gray-900">{formatCurrency(total)}</span></span>
+                    {unpaid > 0 && <span className="text-xs text-red-600">Unpaid: {formatCurrency(unpaid)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* By Table Modal: Show all orders for selected table */}
+            {selectedTableForModal && (() => {
+              const tableOrders = orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged);
+              
+              // Calculate Session Totals
+              const sessionTotal = tableOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+              const paidAmount = tableOrders.filter(o => o.paymentStatus === 'paid').reduce((sum, o) => sum + (o.total || 0), 0);
+              const unpaidAmount = sessionTotal - paidAmount;
+              
+              // Group all items from all orders in the session
+              const allSessionItems = tableOrders.flatMap(o => o.items.map(item => ({
+                ...item,
+                orderId: o._id,
+                isPaid: o.paymentStatus === 'paid'
+              })));
+              
+              const groupedSessionItems = groupOrderItems(allSessionItems);
+
+              return (
+              <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setSelectedTableForModal(null)}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full overflow-hidden flex flex-col max-h-[90vh]" onClick={e => e.stopPropagation()}>
+                  
+                  {/* Header */}
+                  <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-xl font-bold text-gray-900">Table {selectedTableForModal.tableNumber}</h2>
+                      <span className={`w-3 h-3 rounded-full ${selectedTableForModal.status === 'occupied' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                      <span className="text-sm text-gray-500 capitalize">{selectedTableForModal.status}</span>
+                    </div>
+                    <button onClick={() => setSelectedTableForModal(null)}><X className="w-6 h-6 text-gray-400" /></button>
+                  </div>
+                  
+                  <div className="flex flex-col md:flex-row h-full overflow-hidden">
+                    
+                    {/* LEFT: Items List */}
+                    <div className="flex-1 overflow-y-auto p-6 border-r border-gray-200 bg-gray-50/30">
+                      <h3 className="font-bold text-gray-700 mb-4 uppercase text-xs tracking-wider">Session Items</h3>
+                      
+                      {groupedSessionItems.length === 0 ? (
+                        <div className="text-gray-500 text-center py-8">No items ordered yet.</div>
+                      ) : (
+                        <div className="space-y-2">
+                          {groupedSessionItems.map((item, idx) => (
+                            <div key={idx} className={`flex justify-between items-center p-3 rounded-lg border ${item.isPaid ? 'bg-green-50 border-green-100' : 'bg-white border-gray-200'}`}>
+                              <div className="flex items-center gap-3">
+                                <span className="font-bold text-gray-900">{item.quantity}x</span>
+                                <div>
+                                  <p className="text-sm font-medium text-gray-900">{item.menuItem?.name || 'Unknown'}</p>
+                                  {item.isPaid && <span className="text-[10px] font-bold text-green-600 uppercase bg-green-100 px-1.5 py-0.5 rounded">Paid</span>}
+                                </div>
+                              </div>
+                              <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* RIGHT: Payment & Actions */}
+                    <div className="w-full md:w-96 bg-white flex flex-col shadow-[-4px_0_15px_-3px_rgba(0,0,0,0.1)]">
+                      <div className="p-6 flex-1 overflow-y-auto">
+                        <h3 className="font-bold text-gray-900 mb-6">Payment Summary</h3>
+                        
+                        <div className="space-y-3 text-sm mb-6">
+                          <div className="flex justify-between text-gray-600">
+                            <span>Session Total</span>
+                            <span className="font-medium">{formatCurrency(sessionTotal)}</span>
+                          </div>
+                          <div className="flex justify-between text-green-600">
+                            <span>Paid (Online)</span>
+                            <span className="font-medium">-{formatCurrency(paidAmount)}</span>
+                          </div>
+                          <div className="border-t border-dashed border-gray-300 pt-3 mt-3">
+                            <div className="flex justify-between items-end">
+                              <span className="font-bold text-gray-900 text-lg">Pending Amount</span>
+                              <span className="font-bold text-red-600 text-2xl">{formatCurrency(unpaidAmount)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Payment Methods */}
+                        {unpaidAmount > 0 ? (
+                          <div>
+                            <p className="text-xs font-bold text-gray-500 uppercase mb-3">Payment Method</p>
+                            <div className="grid grid-cols-3 gap-2 mb-4">
+                              <button
+                                onClick={() => setPaymentMode('cash')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'cash' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <Banknote className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">Cash</span>
+                              </button>
+                              <button
+                                onClick={() => setPaymentMode('card')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'card' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <CreditCard className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">Card</span>
+                              </button>
+                              <button
+                                onClick={() => setPaymentMode('upi')}
+                                className={`flex flex-col items-center justify-center p-3 rounded-xl border transition-all ${paymentMode === 'upi' ? 'border-green-500 bg-green-50 text-green-700' : 'border-gray-200 hover:border-gray-300'}`}
+                              >
+                                <Smartphone className="w-6 h-6 mb-1" />
+                                <span className="text-xs font-medium">UPI</span>
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="bg-green-50 border border-green-200 rounded-xl p-4 text-center mb-6">
+                            <CheckCircle className="w-8 h-8 text-green-500 mx-auto mb-2" />
+                            <p className="font-bold text-green-800">Fully Paid</p>
+                            <p className="text-xs text-green-600">All items in this session are paid.</p>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Footer Actions */}
+                      <div className="p-4 border-t border-gray-200 bg-gray-50">
+                        {unpaidAmount > 0 ? (
+                          <button 
+                            onClick={async () => {
+                              try {
+                                setLoading(true);
+                                const token = localStorage.getItem('token');
+                                await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
+                                  paymentMethod: paymentMode,
+                                  amountPaid: unpaidAmount // Charge only pending
+                                }, { headers: { Authorization: `Bearer ${token}` } });
+                                setSelectedTableForModal(null);
+                                fetchOrders(true);
+                                onRefresh();
+                                showSuccess(`Session closed! Payment of ${formatCurrency(unpaidAmount)} received.`);
+                              } catch (error) {
+                                showError(error?.response?.data?.message || 'Failed to close session');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg shadow-lg shadow-green-200 hover:bg-green-700 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Banknote className="w-6 h-6" />
+                            Pay {formatCurrency(unpaidAmount)}
+                          </button>
+                        ) : (
+                          <button 
+                            onClick={async () => {
+                              // Close session without payment (since already paid)
+                              try {
+                                setLoading(true);
+                                const token = localStorage.getItem('token');
+                                // We can use the same endpoint, amountPaid 0 is fine if total is 0? 
+                                // Actually session-checkout should handle "close only" if fully paid.
+                                await axios.post(`${API_URL}/api/orders/session-checkout/${selectedTableForModal._id}`, {
+                                  paymentMethod: 'cash', // Dummy
+                                  amountPaid: 0
+                                }, { headers: { Authorization: `Bearer ${token}` } });
+                                setSelectedTableForModal(null);
+                                fetchOrders(true);
+                                onRefresh();
+                                showSuccess(`Session closed successfully.`);
+                              } catch (error) {
+                                showError(error?.response?.data?.message || 'Failed to close session');
+                              } finally {
+                                setLoading(false);
+                              }
+                            }}
+                            className="w-full py-4 bg-gray-800 text-white rounded-xl font-bold text-lg hover:bg-gray-900 transition-all flex items-center justify-center gap-2"
+                          >
+                            <Archive className="w-6 h-6" />
+                            Close Session & Free Table
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
-                {group.table?.sessionStats && (
-                  <div className="flex flex-col items-end text-xs">
-                    <span className="text-gray-500">Session Total: <span className="font-bold text-gray-900">{formatCurrency(group.table.sessionStats.totalAmount || 0)}</span></span>
-                    <div className="flex gap-2 mt-0.5">
-                      <span className="text-green-600 font-medium">Pd: {formatCurrency(group.table.sessionStats.paidAmount || 0)}</span>
-                      <span className="text-red-500 font-medium">Un: {formatCurrency(group.table.sessionStats.unpaidAmount || 0)}</span>
-                    </div>
-                  </div>
-                )}
               </div>
-
-              <div className="space-y-2 mb-4 max-h-60 overflow-y-auto">
-                {group.orders.map(o => (
-                  <div
-                    key={o._id}
-                    onClick={() => setSelectedOrder(o)}
-                    className={`flex justify-between items-center p-2.5 rounded-lg border cursor-pointer transition-colors ${o.paymentStatus === 'paid' ? 'bg-green-50 border-green-100 hover:bg-green-100' : 'bg-white border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    <div className="flex flex-col">
-                      <span className="text-xs font-bold text-gray-700">#{o.orderNumber}</span>
-                      <span className="text-[10px] text-gray-500">{new Date(o.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                    </div>
-                    <span className={`font-bold text-sm ${o.paymentStatus === 'paid' ? 'text-green-700' : 'text-gray-900'}`}>
-                      {formatCurrency(o.total)}
-                    </span>
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-3 border-t border-dashed border-gray-200">
-                <div className="flex justify-between items-end">
-                  <span className="text-sm font-medium text-gray-500">Total Bill</span>
-                  <span className="text-xl font-bold text-gray-900">{formatCurrency(group.totalAmount)}</span>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-
-        {orders.length === 0 && !loading && (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
-            <div className="bg-gray-50 p-4 rounded-full mb-4">
-              <Coffee className="h-8 w-8 text-gray-400" />
-            </div>
-            <p className="text-lg font-medium text-gray-900">No orders found</p>
-            <p className="text-sm">Orders for the selected time period will appear here</p>
-          </div>
+              );
+            })()}
+          </>
         )}
       </div>
-
-      {/* Custom Date Modal */}
-      {showCustomDateModal && (
-        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Custom Date Range</h3>
-              <button onClick={() => setShowCustomDateModal(false)}>
-                <X className="w-6 h-6 text-gray-400" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                <input
-                  type="datetime-local"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Optional)</label>
-                <input
-                  type="datetime-local"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCustomDateModal(false)}
-                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={applyCustomFilter}
-                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Order Details Modal */}
       {selectedOrder && (
@@ -912,89 +1104,41 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Cancel Order"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <XCircle className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
-
-                {/* Status Badge and Transition */}
-                <div className="flex items-center gap-3">
-                  {(() => {
-                    const statusBadge = getStatusBadge(selectedOrder.status);
-                    const StatusIcon = statusBadge.icon;
-                    const nextStatus = getNextStatus(selectedOrder.status);
-
-                    return (
-                      <>
-                        {/* Print Bill Button */}
-                        <button
-                          onClick={() => handlePrintBill(selectedOrder._id)}
-                          disabled={loading}
-                          className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
-                          title="Print Bill"
-                        >
-                          <Printer className="w-4 h-4" />
-                          Print
-                        </button>
-
-                        {nextStatus && !['cancelled', 'closed'].includes(selectedOrder.status) && (
-                          <>
-                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
-                            <button
-                              onClick={() => handleStatusTransition(selectedOrder._id, nextStatus)}
-                              disabled={loading || (nextStatus === 'paid' && selectedOrder.status !== 'ready')}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                              {(() => {
-                                const nextBadge = getStatusBadge(nextStatus);
-                                const NextIcon = nextBadge.icon;
-                                return (
-                                  <>
-                                    <NextIcon className="w-4 h-4" />
-                                    {nextBadge.label}
-                                  </>
-                                );
-                              })()}
-                            </button>
-                          </>
-                        )}
-
-                        {selectedOrder.status === 'paid' && (
-                          <>
-                            <ArrowRightLeft className="w-4 h-4 text-gray-400" />
-                            <button
-                              onClick={() => handleCloseOrder(selectedOrder._id)}
-                              disabled={loading}
-                              className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
-                            >
-                              <Archive className="w-4 h-4" />
-                              Close
-                            </button>
-                          </>
-                        )}
-                      </>
-                    );
-                  })()}
                 </div>
               </div>
 
               {/* Items List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {selectedOrder.items.map((item, idx) => (
-                  <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between group">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <span className="bg-gray-100 px-2 py-1 rounded text-sm font-bold">{item.quantity}x</span>
-                        <span className="font-medium text-gray-900">{item.menuItem?.name}</span>
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
+                {groupedItems.map((group, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm transition-all group">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-gray-900">{group.quantity}x</span>
+                        <span className="text-sm text-gray-700 truncate">{group.menuItem?.name || 'Unknown Item'}</span>
                       </div>
-                      {item.specialInstructions && (
-                        <p className="text-xs text-gray-500 mt-1 ml-9 italic">"{item.specialInstructions}"</p>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateGroupQuantity(group, Math.max(0, group.quantity - 1))}
+                          className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
+                        >
+                          −
+                        </button>
+                        <span className="text-xs text-gray-500">{group.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateGroupQuantity(group, group.quantity + 1)}
+                          className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900 whitespace-nowrap">{formatCurrency(group.price * group.quantity)}</span>
                       <button
-                        onClick={() => handleRemoveItem(item._id)}
+                        onClick={() => handleRemoveItem(group.originalItems[group.originalItems.length - 1]._id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <XCircle className="w-5 h-5" />
@@ -1002,8 +1146,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                   </div>
                 ))}
+              </div>
 
-                {/* Add Item Button */}
+              {/* Add Item Button */}
+              <div className="p-4 border-t border-gray-200 bg-white">
                 <button
                   onClick={() => setShowAddItem(true)}
                   className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-green-500 hover:text-green-600 transition-colors flex items-center justify-center gap-2 font-medium"
@@ -1012,19 +1158,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   Add Item
                 </button>
               </div>
-
-              {/* Chef Notes */}
-              {selectedOrder.chefNotes && (
-                <div className="p-4 bg-amber-50 border-t border-amber-100">
-                  <div className="flex items-start gap-2">
-                    <AlertCircle className="w-5 h-5 text-amber-600 mt-0.5" />
-                    <div>
-                      <p className="text-xs font-bold text-amber-700 uppercase">Chef Notes</p>
-                      <p className="text-sm text-amber-800">{selectedOrder.chefNotes}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
             </div>
 
             {/* RIGHT COLUMN: Payment & Summary */}
@@ -1161,6 +1294,15 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       </>
                     )}
                   </button>
+                ) : selectedOrder.paymentStatus !== 'paid' ? (
+                  <button
+                    onClick={() => handleMarkAsPaid(selectedOrder._id)}
+                    disabled={loading}
+                    className="w-full py-4 bg-green-600 text-white rounded-xl font-bold text-lg hover:bg-green-700 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+                  >
+                    <CheckCircle className="w-6 h-6" />
+                    Complete Payment
+                  </button>
                 ) : selectedOrder.status === 'paid' ? (
                   <button
                     onClick={() => handleCloseOrder(selectedOrder._id)}
@@ -1174,11 +1316,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   <div className="w-full py-4 bg-gray-100 text-gray-500 rounded-xl font-bold text-lg text-center">
                     Order {selectedOrder.status === 'closed' ? 'Closed' : 'Cancelled'}
                   </div>
-                ) : (
-                  <div className="w-full py-4 bg-blue-50 text-blue-700 rounded-xl font-medium text-sm text-center border border-blue-200">
-                    Order must be in READY status before payment
-                  </div>
-                )}
+                ) : null}
               </div>
             </div>
           </div>
@@ -1187,28 +1325,52 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Modal (Single Order) */}
       {showMergeModal && selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold mb-4">Merge Order</h3>
             <p className="text-gray-500 mb-4 text-sm">Select a table to merge the current order into.</p>
 
             <div className="space-y-2 max-h-60 overflow-y-auto mb-6">
-              {activeTables.length === 0 ? (
-                <p className="text-center text-gray-400 py-4">No other active tables available.</p>
-              ) : (
-                activeTables.map(table => (
-                  <button
-                    key={table._id}
-                    onClick={() => setMergeTargetId(table._id)}
-                    className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === table._id
-                      ? 'border-green-500 bg-green-50 text-green-700'
-                      : 'border-gray-200 hover:bg-gray-50'
-                      }`}
-                  >
-                    <span className="font-bold">Table {table.tableNumber}</span>
-                    <span className="text-sm">{formatCurrency(table.currentOrder.total)}</span>
-                  </button>
-                ))
+              {/* Same Table Orders */}
+              {orders.filter(o =>
+                o.table?._id === selectedOrder.table?._id &&
+                o._id !== selectedOrder._id &&
+                o.paymentStatus === 'unpaid' &&
+                !['closed', 'cancelled'].includes(o.status)
+              ).map(order => (
+                <button
+                  key={order._id}
+                  onClick={() => setMergeTargetId(order._id)}
+                  className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === order._id
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-purple-200 bg-purple-50 hover:bg-purple-100'
+                    }`}
+                >
+                  <div className="flex flex-col items-start">
+                    <span className="font-bold text-sm">#{order.orderNumber} (Same Table)</span>
+                    <span className="text-xs text-gray-500">{formatTime(order.createdAt)}</span>
+                  </div>
+                  <span className="text-sm font-bold">{formatCurrency(order.total)}</span>
+                </button>
+              ))}
+
+              {/* Other Active Tables */}
+              {activeTables.map(table => (
+                <button
+                  key={table._id}
+                  onClick={() => setMergeTargetId(table.currentOrder?._id)}
+                  className={`w-full p-3 rounded-lg border flex justify-between items-center ${mergeTargetId === table.currentOrder?._id
+                    ? 'border-green-500 bg-green-50 text-green-700'
+                    : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                >
+                  <span className="font-bold">Table {table.tableNumber}</span>
+                  <span className="text-sm">{formatCurrency(table.currentOrder?.total || 0)}</span>
+                </button>
+              ))}
+
+              {activeTables.length === 0 && orders.filter(o => o.table?._id === selectedOrder.table?._id && o._id !== selectedOrder._id).length === 0 && (
+                <p className="text-center text-gray-400 py-4">No other active orders available to merge.</p>
               )}
             </div>
 
@@ -1233,7 +1395,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Add Item Modal */}
       {showAddItem && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-lg w-full h-[80vh] flex flex-col">
             <div className="p-4 border-b flex justify-between items-center">
               <h3 className="text-lg font-bold">Add Item to Order</h3>
@@ -1294,7 +1456,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Selection Modal (Bulk) */}
       {showMergeModal && !selectedOrder && (
-        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200">
               <div className="flex justify-between items-center">
@@ -1382,7 +1544,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
       {/* Merge Preview Modal */}
       {showMergePreview && mergePreview && (
-        <div className="fixed inset-0 bg-black/50 z-[70] flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/50 z-70 flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200 bg-purple-50">
               <div className="flex justify-between items-start">

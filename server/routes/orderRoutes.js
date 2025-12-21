@@ -5,8 +5,10 @@ const {
   createOrder,
   getOrder,
   addItemsToOrder,
+  updateItemQuantity,
   applyCoupon,
   checkoutOrder,
+  sessionCheckout,
   sendWhatsappBill,
   removeItemFromOrder,
   cancelOrder,
@@ -24,9 +26,11 @@ router.use(requireBranch);
 router.post('/', createOrder);
 router.post('/merge/preview', getMergePreview);
 router.post('/merge', mergeOrders);
+router.post('/session-checkout/:tableId', sessionCheckout);  // Session-based checkout
 router.get('/:id', getOrder);
 router.get('/:id/bill', downloadBill);
 router.put('/:id/items', addItemsToOrder);
+router.put('/:id/items/:itemId', updateItemQuantity);
 router.delete('/:id/items/:itemId', removeItemFromOrder);
 router.put('/:id/coupon', applyCoupon);
 router.put('/:id/status', updateOrderStatus);

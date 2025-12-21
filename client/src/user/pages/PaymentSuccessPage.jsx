@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { AlertTriangle, Check, ClipboardList, Bell, Clock, Phone, Home } from 'lucide-react';
-import { formatCurrency } from '../../utils/formatCurrency';
+import { formatCurrency, formatDateTime } from '../../utils/formatCurrency';
 
 export default function PaymentSuccessPage() {
   const navigate = useNavigate();
@@ -188,7 +188,7 @@ export default function PaymentSuccessPage() {
             <div className="flex justify-between items-center">
               <span className="text-gray-600">Date & Time</span>
               <span className="text-sm font-medium text-gray-900">
-                {new Date(paymentData.timestamp).toLocaleString()}
+                {formatDateTime(paymentData.timestamp)}
               </span>
             </div>
           </div>

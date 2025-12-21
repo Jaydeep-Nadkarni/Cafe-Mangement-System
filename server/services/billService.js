@@ -40,7 +40,13 @@ const generateThermalBill = (order) => {
       // --- Order Info ---
       doc.font('Helvetica').fontSize(8);
       doc.text(`Order #: ${order._id.toString().slice(-6).toUpperCase()}`);
-      doc.text(`Date: ${new Date().toLocaleString()}`);
+      const now = new Date();
+      const day = String(now.getDate()).padStart(2, '0');
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const year = now.getFullYear();
+      const hours = String(now.getHours()).padStart(2, '0');
+      const minutes = String(now.getMinutes()).padStart(2, '0');
+      doc.text(`Date: ${day}-${month}-${year} ${hours}:${minutes}`);
       if (order.table) {
         // Assuming table is populated or just an ID
         doc.text(`Table: ${order.table.tableNumber || order.table}`);
@@ -54,12 +60,24 @@ const generateThermalBill = (order) => {
       // Item Name x Qty   Price
       
       doc.font('Helvetica').fontSize(8);
+
+      // Group items for cleaner bill
+      const groupedItems = {};
       order.items.forEach(item => {
-        const itemName = item.menuItem.name || 'Unknown Item';
-        const qty = item.quantity;
-        const price = formatCurrency(item.price * qty);
-        
-        doc.text(`${itemName} x ${qty}`, { continued: true });
+        const key = `${item.menuItem._id}-${item.price}`; // Group by ID and Price
+        if (!groupedItems[key]) {
+          groupedItems[key] = {
+            name: item.menuItem.name || 'Unknown Item',
+            quantity: 0,
+            price: item.price
+          };
+        }
+        groupedItems[key].quantity += item.quantity;
+      });
+
+      Object.values(groupedItems).forEach(item => {
+        const price = formatCurrency(item.price * item.quantity);
+        doc.text(`${item.name} x ${item.quantity}`, { continued: true });
         doc.text(price, { align: 'right' });
       });
 

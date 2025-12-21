@@ -2,9 +2,12 @@ const Order = require('../models/Order');
 const Table = require('../models/Table');
 const MenuItem = require('../models/MenuItem');
 const Branch = require('../models/Branch');
+const Alert = require('../models/Alert');
+const Memo = require('../models/Memo');
 const orderService = require('../services/orderService');
 const billService = require('../services/billService');
 const whatsappService = require('../services/whatsappService');
+const auditService = require('../services/auditService');
 const { triggerStatsUpdate, emitToBranch } = require('../services/realtimeService');
 const { applyStatsDelta } = require('../services/analyticsService');
 
@@ -48,6 +51,139 @@ const validateStatusTransition = (currentStatus, newStatus) => {
   }
 
   return { valid: true };
+};
+
+/**
+ * Validate order for modifications (items, prices, etc.)
+ * @param {Object} order - Order document
+ * @returns {Object} { valid: Boolean, message: String }
+ */
+const validateOrderForModification = (order) => {
+  if (!order) {
+    return { valid: false, message: 'Order not found' };
+  }
+
+  if (['paid', 'closed', 'cancelled'].includes(order.status)) {
+    return {
+      valid: false,
+      message: `Cannot modify ${order.status} order`
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Validate orders can be merged
+ * @param {Array} orders - Array of order documents
+ * @returns {Object} { valid: Boolean, message: String }
+ */
+const validateOrdersForMerge = (orders) => {
+  if (!orders || orders.length < 2) {
+    return { valid: false, message: 'At least 2 orders required to merge' };
+  }
+
+  // All orders must be unpaid
+  const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
+  if (paidOrders.length > 0) {
+    return {
+      valid: false,
+      message: 'Cannot merge paid orders. All orders must be unpaid.'
+    };
+  }
+
+  // All orders must have valid statuses
+  const validStatuses = ['created', 'confirmed', 'preparing', 'ready'];
+  const invalidOrders = orders.filter(o => !validStatuses.includes(o.status));
+  if (invalidOrders.length > 0) {
+    return {
+      valid: false,
+      message: `Can only merge orders with status: ${validStatuses.join(', ')}`
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Validate order for deletion
+ * @param {Object} order - Order document
+ * @returns {Object} { valid: Boolean, message: String, requiresApproval: Boolean }
+ */
+const validateOrderForDeletion = (order) => {
+  if (!order) {
+    return { valid: false, message: 'Order not found' };
+  }
+
+  // Cannot delete closed/paid orders without refund setup
+  if (order.status === 'paid' && order.paymentStatus === 'paid') {
+    return {
+      valid: false,
+      message: 'Cannot delete paid orders. Issue refund first.',
+      requiresApproval: true
+    };
+  }
+
+  // Flag for approval if high-value order
+  const requiresApproval = order.total > 5000;
+
+  return { valid: true, requiresApproval };
+};
+
+/**
+ * Log order edit to editHistory
+ * @param {Object} order - Order document
+ * @param {String} changeType - Type of change
+ * @param {String} fieldChanged - Field that was changed
+ * @param {*} beforeValue - Previous value
+ * @param {*} afterValue - New value
+ * @param {Object} context - { editedBy, editedByName, editedByRole, reason }
+ */
+const recordOrderEdit = (order, changeType, fieldChanged, beforeValue, afterValue, context) => {
+  if (!order.editHistory) {
+    order.editHistory = [];
+  }
+
+  order.editHistory.push({
+    editedAt: new Date(),
+    editedBy: context.editedBy,
+    editedByName: context.editedByName,
+    editedByRole: context.editedByRole,
+    changeType,
+    fieldChanged,
+    beforeValue,
+    afterValue,
+    reason: context.reason || null
+  });
+
+  // Keep only last 100 edits to prevent unbounded growth
+  if (order.editHistory.length > 100) {
+    order.editHistory = order.editHistory.slice(-100);
+  }
+};
+
+/**
+ * Log order merge to mergeHistory
+ * @param {Object} order - Order document
+ * @param {Array} mergedOrderIds - IDs of merged orders
+ * @param {Object} context - { mergedBy, mergedByName, mergedByRole, reason }
+ */
+const recordOrderMerge = (order, mergedOrderIds, itemCountBefore, itemCountAfter, amountBefore, amountAfter, context) => {
+  if (!order.mergeHistory) {
+    order.mergeHistory = [];
+  }
+
+  order.mergeHistory.push({
+    mergedAt: new Date(),
+    mergedBy: context.mergedBy,
+    mergedByName: context.mergedByName,
+    mergedWithOrderIds: mergedOrderIds,
+    itemCountBefore,
+    itemCountAfter,
+    amountBefore,
+    amountAfter,
+    reason: context.reason || null
+  });
 };
 
 /**
@@ -104,7 +240,7 @@ const updateTableSessionStats = async (tableId) => {
 // @access  Manager
 const createOrder = async (req, res) => {
   try {
-    const { tableId, items, customerCount, chefNotes } = req.body;
+    const { tableId, items, customerCount, chefNotes, sessionPerson, orderType = 'pay_later' } = req.body;
 
     // Verify table belongs to manager's branch
     const table = await Table.findById(tableId).populate('branch');
@@ -116,39 +252,185 @@ const createOrder = async (req, res) => {
       return res.status(403).json({ message: 'Not authorized for this branch' });
     }
 
-    // Multiple orders per table are now allowed
-    // No check for existing orders
-
-    // Calculate totals
+    // Calculate totals for new items
     const calculation = await orderService.calculateOrderTotals(items);
 
-    const order = new Order({
-      branch: table.branch._id,
-      table: tableId,
-      items: calculation.items,
-      subtotal: calculation.subtotal,
-      tax: calculation.tax,
-      total: calculation.total,
-      status: 'created',
-      customerCount: customerCount || 1,
-      chefNotes: chefNotes || ''
-    });
+    let savedOrder;
+    let isMerge = false;
 
-    const savedOrder = await order.save();
+    // PAY_LATER: Always merge into active session order for same table
+    if (orderType === 'pay_later') {
+      // Check for existing unpaid order in active session (includes QR orders)
+      // Note: QR orders may not have orderType set, so we check for both
+      let existingOrder = await Order.findOne({
+        table: tableId,
+        status: { $nin: ['closed', 'cancelled'] },
+        paymentStatus: 'unpaid',
+        $or: [
+          { orderType: 'pay_later' },
+          { orderType: { $exists: false } },  // Old orders without orderType
+          { orderType: null }
+        ]
+      }).sort({ createdAt: -1 });  // Get most recent active order
 
-    // Add to currentOrders array
-    if (!table.currentOrders) {
-      table.currentOrders = [];
+      if (existingOrder) {
+        // MERGE into existing order
+        isMerge = true;
+
+        // Combine items
+        const newItems = [...existingOrder.items, ...calculation.items];
+
+        existingOrder.items = newItems;
+        existingOrder.subtotal += calculation.subtotal;
+        existingOrder.tax += calculation.tax;
+        existingOrder.total += calculation.total;
+        existingOrder.sessionPerson = sessionPerson || existingOrder.sessionPerson;
+
+        savedOrder = await existingOrder.save();
+
+        // Emit update event
+        emitToBranch(table.branch._id, 'order_updated', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          total: savedOrder.total,
+          items: savedOrder.items
+        });
+
+      } else {
+        // Create NEW Order for pay_later - first order in new session
+        const sessionId = `${tableId}-${Date.now()}`;
+        const order = new Order({
+          branch: table.branch._id,
+          table: tableId,
+          items: calculation.items,
+          subtotal: calculation.subtotal,
+          tax: calculation.tax,
+          total: calculation.total,
+          status: 'created',
+          customerCount: customerCount || 1,
+          chefNotes: chefNotes || '',
+          sessionId: sessionId,
+          sessionPerson: sessionPerson || 'Table Order',
+          orderType: 'pay_later'
+        });
+
+        savedOrder = await order.save();
+
+        // Add to currentOrders array
+        if (!table.currentOrders) {
+          table.currentOrders = [];
+        }
+        table.currentOrders.push(savedOrder._id);
+        table.status = 'occupied';
+
+        // Initialize session if needed
+        if (!table.sessionStart && table.currentOrders.length === 1) {
+          table.sessionStart = new Date();
+        }
+
+        await table.save();
+
+        // Real-time broadcast
+        emitToBranch(table.branch._id, 'new_order', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          status: savedOrder.status,
+          total: savedOrder.total,
+          createdAt: savedOrder.createdAt
+        });
+      }
+    } 
+    // PAY_NOW: Check if same session/person before merging
+    else if (orderType === 'pay_now') {
+      let existingOrder = null;
+
+      // Check for unpaid pay_now orders from same session/person
+      if (sessionPerson) {
+        existingOrder = await Order.findOne({
+          table: tableId,
+          sessionPerson: sessionPerson,
+          status: { $nin: ['closed', 'cancelled'] },
+          paymentStatus: 'unpaid',
+          orderType: 'pay_now'
+        });
+      }
+
+      if (existingOrder) {
+        // MERGE: Same session and same person
+        isMerge = true;
+
+        const newItems = [...existingOrder.items, ...calculation.items];
+
+        existingOrder.items = newItems;
+        existingOrder.subtotal += calculation.subtotal;
+        existingOrder.tax += calculation.tax;
+        existingOrder.total += calculation.total;
+
+        savedOrder = await existingOrder.save();
+
+        emitToBranch(table.branch._id, 'order_updated', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          total: savedOrder.total,
+          items: savedOrder.items
+        });
+
+      } else {
+        // CREATE separate order: Different person or first order
+        // Check if there's an active session on this table to inherit sessionId
+        const activeSession = await Order.findOne({
+          table: tableId,
+          status: { $nin: ['closed', 'cancelled'] },
+          paymentStatus: 'unpaid'
+        }).sort({ createdAt: -1 });
+        
+        const sessionId = activeSession?.sessionId || `${tableId}-${Date.now()}`;
+        
+        const order = new Order({
+          branch: table.branch._id,
+          table: tableId,
+          items: calculation.items,
+          subtotal: calculation.subtotal,
+          tax: calculation.tax,
+          total: calculation.total,
+          status: 'created',
+          customerCount: customerCount || 1,
+          chefNotes: chefNotes || '',
+          sessionId: sessionId,
+          sessionPerson: sessionPerson || 'Guest',
+          orderType: 'pay_now'
+        });
+
+        savedOrder = await order.save();
+
+        // Add to currentOrders array
+        if (!table.currentOrders) {
+          table.currentOrders = [];
+        }
+        table.currentOrders.push(savedOrder._id);
+        table.status = 'occupied';
+
+        // Initialize session if needed
+        if (!table.sessionStart && table.currentOrders.length === 1) {
+          table.sessionStart = new Date();
+        }
+
+        await table.save();
+
+        // Real-time broadcast
+        emitToBranch(table.branch._id, 'new_order', {
+          orderId: savedOrder._id,
+          orderNumber: savedOrder.orderNumber,
+          table: table.tableNumber,
+          status: savedOrder.status,
+          total: savedOrder.total,
+          createdAt: savedOrder.createdAt
+        });
+      }
     }
-    table.currentOrders.push(savedOrder._id);
-    table.status = 'occupied';
-
-    // Initialize session if needed
-    if (!table.sessionStart && table.currentOrders.length === 1) {
-      table.sessionStart = new Date();
-    }
-
-    await table.save();
 
     // Update session stats
     await updateTableSessionStats(table._id);
@@ -221,6 +503,8 @@ const addItemsToOrder = async (req, res) => {
       quantity: item.quantity,
       notes: item.notes
     }));
+
+    const prevTotal = order.total || 0;
 
     const allItems = [...currentItems, ...items];
 
@@ -314,12 +598,8 @@ const checkoutOrder = async (req, res) => {
       return res.status(400).json({ message: 'Insufficient payment amount' });
     }
 
-    // Validate status transition to PAID
-    if (order.status !== 'ready') {
-      return res.status(400).json({
-        message: `Order must be in READY status before payment. Current status: ${order.status}`
-      });
-    }
+    // Allow payment from any non-terminal state (billing-focused UI)
+    // Note: Previously required 'ready' status; managers can now process payment directly.
 
     // Update order with payment details
     order.paymentMethod = paymentMethod;
@@ -329,28 +609,51 @@ const checkoutOrder = async (req, res) => {
 
     await order.save();
 
-    // If payment is cash (Counter), free the table immediately
+    // COUNTER PAYMENT = SESSION CLOSURE (Most Important Rule)
+    // Counter payment (cash) represents end of dining - closes entire session
     if (paymentMethod === 'cash' && order.table) {
       const table = await Table.findById(order.table);
       if (table) {
-        // Remove from currentOrders
-        table.currentOrders = table.currentOrders.filter(
-          id => id.toString() !== order._id.toString()
-        );
-
-        // If no more orders, set to available
-        if (table.currentOrders.length === 0) {
-          table.status = 'available';
+        // Find ALL unpaid orders in the same session and mark them paid
+        const sessionOrders = await Order.find({
+          table: order.table._id || order.table,
+          paymentStatus: 'unpaid',
+          status: { $nin: ['closed', 'cancelled'] }
+        });
+        
+        for (const sessionOrder of sessionOrders) {
+          sessionOrder.paymentMethod = paymentMethod;
+          sessionOrder.paymentStatus = 'paid';
+          sessionOrder.paidAt = Date.now();
+          sessionOrder.status = 'paid';
+          await sessionOrder.save();
         }
+        
+        // Clear all orders from the table (session is closed)
+        table.currentOrders = [];
+        table.status = 'available';
+        table.sessionStart = null;  // Reset session
 
         await table.save();
 
-        // Update session stats (will clear if empty)
+        // Update session stats (will clear since empty)
         await updateTableSessionStats(table._id);
+        
+        console.log(`[Session Closed] Table ${table.tableNumber}: ${sessionOrders.length + 1} orders paid, table freed`);
       }
     } else if (order.table) {
-      // Just update stats for non-cash or if table not freed
-      await updateTableSessionStats(order.table);
+      // ONLINE PAYMENT: Does NOT close session, table remains occupied
+      const table = await Table.findById(order.table);
+      if (table) {
+        // Remove only this order from currentOrders
+        table.currentOrders = table.currentOrders.filter(
+          id => id.toString() !== order._id.toString()
+        );
+        await table.save();
+        
+        // Update session stats
+        await updateTableSessionStats(table._id);
+      }
     }
 
     // Apply incremental stats delta
@@ -374,6 +677,94 @@ const checkoutOrder = async (req, res) => {
 
     res.json(order);
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Checkout entire table session (all unpaid orders)
+// @route   POST /api/orders/session-checkout/:tableId
+// @access  Manager
+const sessionCheckout = async (req, res) => {
+  try {
+    const { tableId } = req.params;
+    const { paymentMethod } = req.body;
+    
+    const table = await Table.findById(tableId).populate('branch');
+    if (!table) {
+      return res.status(404).json({ message: 'Table not found' });
+    }
+    
+    // Verify authorization
+    if (table.branch.manager.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Not authorized for this branch' });
+    }
+    
+    // Find all unpaid orders for this table
+    const unpaidOrders = await Order.find({
+      table: tableId,
+      paymentStatus: 'unpaid',
+      status: { $nin: ['closed', 'cancelled'] }
+    });
+    
+    if (unpaidOrders.length === 0) {
+      return res.status(400).json({ message: 'No unpaid orders found for this table' });
+    }
+    
+    // Calculate total
+    const sessionTotal = unpaidOrders.reduce((sum, order) => sum + order.total, 0);
+    let totalItems = 0;
+    
+    // Mark all orders as paid
+    for (const order of unpaidOrders) {
+      order.paymentMethod = paymentMethod;
+      order.paymentStatus = 'paid';
+      order.paidAt = Date.now();
+      order.status = 'paid';
+      await order.save();
+      totalItems += order.items.reduce((sum, item) => sum + item.quantity, 0);
+    }
+    
+    // COUNTER PAYMENT = SESSION CLOSURE
+    if (paymentMethod === 'cash') {
+      table.currentOrders = [];
+      table.status = 'available';
+      table.sessionStart = null;
+      await table.save();
+    }
+    
+    // Update session stats
+    await updateTableSessionStats(tableId);
+    
+    // Apply incremental stats delta
+    await applyStatsDelta(table.branch._id, {
+      revenue: sessionTotal,
+      orders: unpaidOrders.length,
+      items: totalItems
+    });
+    
+    // Emit socket event
+    emitToBranch(table.branch._id, 'session_closed', {
+      tableId: table._id,
+      tableNumber: table.tableNumber,
+      ordersCount: unpaidOrders.length,
+      total: sessionTotal,
+      paymentMethod
+    });
+    
+    // Trigger stats update
+    triggerStatsUpdate(table.branch._id);
+    
+    console.log(`[Session Checkout] Table ${table.tableNumber}: ${unpaidOrders.length} orders, Total: ${sessionTotal}`);
+    
+    res.json({
+      success: true,
+      tableNumber: table.tableNumber,
+      ordersCount: unpaidOrders.length,
+      total: sessionTotal,
+      paymentMethod
+    });
+  } catch (error) {
+    console.error('[Session Checkout Error]', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -427,6 +818,9 @@ const removeItemFromOrder = async (req, res) => {
 
     // Filter out the item
     const initialLength = order.items.length;
+    const prevTotal = order.total || 0;
+    const prevItemsCount = order.items.reduce((s, it) => s + it.quantity, 0);
+
     order.items = order.items.filter(item => item._id.toString() !== itemId);
 
     if (order.items.length === initialLength) {
@@ -451,10 +845,122 @@ const removeItemFromOrder = async (req, res) => {
 
     await order.save();
 
+    // Apply incremental stats delta
+    const newTotalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const deltaItems = newTotalItems - prevItemsCount;
+    const deltaRevenue = order.total - prevTotal;
+
+    if (deltaItems !== 0 || deltaRevenue !== 0) {
+      await applyStatsDelta(order.branch, {
+        revenue: deltaRevenue,
+        orders: 0,
+        items: deltaItems
+      });
+    }
+
     // Update table session stats
     if (order.table) {
       await updateTableSessionStats(order.table);
     }
+
+    // Emit order items updated event and trigger immediate stats update
+    emitToBranch(order.branch, 'order_items_updated', {
+      orderId: order._id,
+      items: order.items,
+      total: order.total
+    });
+
+    triggerStatsUpdate(order.branch);
+
+    res.json(order);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update item quantity in order
+// @route   PUT /api/orders/:id/items/:itemId
+// @access  Manager
+const updateItemQuantity = async (req, res) => {
+  try {
+    const { itemId } = req.params;
+    const { quantity } = req.body;
+    const newQty = parseInt(quantity, 10);
+
+    if (isNaN(newQty) || newQty < 0) {
+      return res.status(400).json({ message: 'Invalid quantity' });
+    }
+
+    const order = await Order.findById(req.params.id);
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    if (['paid', 'closed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ message: 'Cannot modify closed order' });
+    }
+
+    const item = order.items.find(it => it._id.toString() === itemId);
+    if (!item) {
+      return res.status(404).json({ message: 'Item not found in order' });
+    }
+
+    const prevQty = item.quantity;
+    const prevTotal = order.total;
+    const prevItemsCount = order.items.reduce((s, it) => s + it.quantity, 0);
+
+    if (newQty === 0) {
+      // Remove the item
+      order.items = order.items.filter(it => it._id.toString() !== itemId);
+    } else {
+      // Update quantity
+      item.quantity = newQty;
+    }
+
+    // Reconstruct items for calculation
+    const currentItems = order.items.map(item => ({
+      menuItemId: item.menuItem,
+      quantity: item.quantity,
+      notes: item.specialInstructions
+    }));
+
+    // Recalculate
+    const calculation = await orderService.calculateOrderTotals(currentItems, order.coupon);
+
+    order.items = calculation.items;
+    order.subtotal = calculation.subtotal;
+    order.tax = calculation.tax;
+    order.discount = calculation.discount;
+    order.total = calculation.total;
+
+    await order.save();
+
+    // Update table session stats
+    if (order.table) {
+      await updateTableSessionStats(order.table);
+    }
+
+    // Apply incremental stats delta
+    const newTotalItems = order.items.reduce((sum, item) => sum + item.quantity, 0);
+    const deltaItems = newTotalItems - prevItemsCount;
+    const deltaRevenue = order.total - prevTotal;
+
+    if (deltaItems !== 0 || deltaRevenue !== 0) {
+      await applyStatsDelta(order.branch, {
+        revenue: deltaRevenue,
+        orders: 0,
+        items: deltaItems
+      });
+    }
+
+    // Emit order items updated event and trigger immediate stats update
+    emitToBranch(order.branch, 'order_items_updated', {
+      orderId: order._id,
+      items: order.items,
+      total: order.total
+    });
+
+    triggerStatsUpdate(order.branch);
 
     res.json(order);
   } catch (error) {
@@ -658,8 +1164,12 @@ const mergeOrders = async (req, res) => {
   try {
     await session.startTransaction();
 
-    const { orderIds } = req.body;
+    const { orderIds, reason } = req.body;
+    const userId = req.user?._id;
+    const userName = req.user?.name || 'System';
+    const userRole = req.user?.role || 'admin';
 
+    // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length < 2) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'At least 2 order IDs required for merge' });
@@ -675,34 +1185,11 @@ const mergeOrders = async (req, res) => {
       return res.status(404).json({ message: 'One or more orders not found' });
     }
 
-    // Validation: Same table
-    const tableIds = orders.map(o => o.table?._id?.toString()).filter(Boolean);
-    const uniqueTables = [...new Set(tableIds)];
-
-    // Allow merging from different tables
-    // if (uniqueTables.length > 1) {
-    //   await session.abortTransaction();
-    //   return res.status(400).json({ 
-    //     message: 'Cannot merge orders from different tables' 
-    //   });
-    // }
-
-    // Validation: All unpaid
-    const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
-    if (paidOrders.length > 0) {
+    // Validate all orders can be merged
+    const mergeValidation = validateOrdersForMerge(orders);
+    if (!mergeValidation.valid) {
       await session.abortTransaction();
-      return res.status(400).json({
-        message: 'Cannot merge paid orders. All orders must be unpaid.'
-      });
-    }
-
-    // Validation: Active/Pending only
-    const invalidStatus = orders.filter(o => !['active', 'pending'].includes(o.status));
-    if (invalidStatus.length > 0) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        message: 'Can only merge active or pending orders'
-      });
+      return res.status(400).json({ message: mergeValidation.message });
     }
 
     // Sort orders by creation date (oldest first will be the target)
@@ -710,6 +1197,17 @@ const mergeOrders = async (req, res) => {
 
     const targetOrder = orders[0];
     const sourceOrders = orders.slice(1);
+    const totalAmountMerged = sourceOrders.reduce((sum, o) => sum + o.total, 0);
+
+    // Store state before changes for audit
+    const beforeState = {
+      targetOrderId: targetOrder._id,
+      targetOrderTotal: targetOrder.total,
+      targetOrderItems: targetOrder.items.length,
+      sourceOrderIds: sourceOrders.map(o => o._id),
+      sourceOrderTotals: sourceOrders.map(o => o.total),
+      sourceOrderItemCounts: sourceOrders.map(o => o.items.length)
+    };
 
     // Combine items from all orders
     const combinedItems = {};
@@ -721,6 +1219,7 @@ const mergeOrders = async (req, res) => {
           combinedItems[itemId].quantity += item.quantity;
         } else {
           combinedItems[itemId] = {
+            _id: item._id,
             menuItem: item.menuItem,
             quantity: item.quantity,
             price: item.price,
@@ -732,13 +1231,32 @@ const mergeOrders = async (req, res) => {
     });
 
     // Recalculate totals
+    const itemCountBefore = targetOrder.items.length;
     targetOrder.items = Object.values(combinedItems);
+    const itemCountAfter = targetOrder.items.length;
+    
     targetOrder.subtotal = targetOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     targetOrder.tax = targetOrder.subtotal * 0.10;
-    targetOrder.total = targetOrder.subtotal + targetOrder.tax;
+    targetOrder.discount = targetOrder.discount || 0;
+    targetOrder.total = targetOrder.subtotal + targetOrder.tax - targetOrder.discount;
 
-    // Add merge metadata to target order
-    targetOrder.isMerged = true;
+    // Record merge in mergeHistory
+    recordOrderMerge(
+      targetOrder,
+      sourceOrders.map(o => o._id),
+      itemCountBefore,
+      itemCountAfter,
+      beforeState.targetOrderTotal,
+      targetOrder.total,
+      {
+        mergedBy: userId,
+        mergedByName: userName,
+        mergedByRole: userRole,
+        reason
+      }
+    );
+
+    // Add merge metadata
     targetOrder.mergedAt = new Date();
     targetOrder.originalOrderIds = orders.map(o => o.orderNumber || o._id.toString());
     targetOrder.mergeNote = `Merged ${orders.length} orders: ${targetOrder.originalOrderIds.join(', ')}`;
@@ -747,7 +1265,8 @@ const mergeOrders = async (req, res) => {
 
     // Mark source orders as merged
     for (const sourceOrder of sourceOrders) {
-      sourceOrder.status = 'merged';
+      sourceOrder.isMerged = true;
+      sourceOrder.mergedAt = new Date();
       sourceOrder.mergeNote = `Merged into order ${targetOrder.orderNumber || targetOrder._id}`;
       await sourceOrder.save({ session });
 
@@ -768,6 +1287,28 @@ const mergeOrders = async (req, res) => {
 
     // Commit transaction
     await session.commitTransaction();
+
+    // Log to audit service (after transaction succeeds)
+    await auditService.logOrderMerge({
+      resultingOrderId: targetOrder._id,
+      mergedOrderIds: sourceOrders.map(o => o._id),
+      branchId: targetOrder.branch,
+      performedBy: userId,
+      performedByName: userName,
+      performedByRole: userRole,
+      performedByEmail: req.user?.email,
+      totalAmountMerged,
+      reason
+    });
+
+    // Emit socket events
+    emitToBranch(targetOrder.branch, 'order_merged', {
+      resultingOrderId: targetOrder._id,
+      mergedOrderIds: sourceOrders.map(o => o._id),
+      resultingOrderTotal: targetOrder.total,
+      mergeCount: orders.length,
+      timestamp: new Date()
+    });
 
     // Populate and return merged order
     const mergedOrder = await Order.findById(targetOrder._id)
@@ -925,6 +1466,7 @@ module.exports = {
   createOrder,
   getOrder,
   addItemsToOrder,
+  updateItemQuantity,
   removeItemFromOrder,
   cancelOrder,
   updateOrderStatus,
@@ -933,6 +1475,7 @@ module.exports = {
   getMergePreview,
   applyCoupon,
   checkoutOrder,
+  sessionCheckout,
   sendWhatsappBill,
   downloadBill
 };

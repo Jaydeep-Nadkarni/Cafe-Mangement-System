@@ -1,8 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Bell, Check, Trash2, AlertCircle, DollarSign, Info, Plus, X, Edit2, CheckCircle } from 'lucide-react';
+import { 
+  Bell, Check, Trash2, AlertCircle, DollarSign, Info, Plus, X, Edit2, CheckCircle,
+  Zap, TrendingDown, AlertTriangle, Package, Repeat, XCircle, Gift, Eye, EyeOff
+} from 'lucide-react';
 import axios from 'axios';
 import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 import ConfirmationModal from './ConfirmationModal';
+import { formatDateTime } from '../../../utils/formatCurrency';
 
 export default function Alerts({ branch }) {
   const [alerts, setAlerts] = useState([]);
@@ -40,6 +44,13 @@ export default function Alerts({ branch }) {
   useBranchSocket(branch?._id, {
     onNewAlert: (newAlert) => {
       setAlerts(prev => [newAlert, ...prev]);
+    },
+    onMemoCreated: (data) => {
+      // When a memo is created, add its alert notification
+      const { alert } = data;
+      if (alert) {
+        setAlerts(prev => [alert, ...prev]);
+      }
     }
   });
 
@@ -230,6 +241,14 @@ export default function Alerts({ branch }) {
       case 'kitchen': return <AlertCircle className="w-5 h-5 text-red-500" />;
       case 'memo': return <AlertCircle className="w-5 h-5 text-purple-500" />;
       case 'task': return <CheckCircle className="w-5 h-5 text-indigo-500" />;
+      // System-generated alert types
+      case 'payment_failure': return <Zap className="w-5 h-5 text-red-600" />;
+      case 'revenue_drop': return <TrendingDown className="w-5 h-5 text-orange-600" />;
+      case 'unpaid_tables': return <AlertTriangle className="w-5 h-5 text-red-600" />;
+      case 'inventory_stockout': return <Package className="w-5 h-5 text-red-600" />;
+      case 'order_edit_abuse': return <Repeat className="w-5 h-5 text-orange-600" />;
+      case 'table_release_abuse': return <XCircle className="w-5 h-5 text-orange-600" />;
+      case 'coupon_abuse': return <Gift className="w-5 h-5 text-red-600" />;
       default: return <Bell className="w-5 h-5 text-gray-500" />;
     }
   };
@@ -241,6 +260,31 @@ export default function Alerts({ branch }) {
       case 'medium': return 'text-yellow-700 bg-yellow-50 border-yellow-200';
       default: return 'text-blue-700 bg-blue-50 border-blue-200';
     }
+  };
+
+  const getSeverityBadge = (severity) => {
+    switch (severity) {
+      case 'critical':
+        return 'bg-red-100 text-red-800 border border-red-300';
+      case 'warning':
+        return 'bg-yellow-100 text-yellow-800 border border-yellow-300';
+      case 'info':
+      default:
+        return 'bg-blue-100 text-blue-800 border border-blue-300';
+    }
+  };
+
+  const getAlertTypeLabel = (type) => {
+    const labels = {
+      'payment_failure': 'Payment Issue',
+      'revenue_drop': 'Revenue Alert',
+      'unpaid_tables': 'Unpaid Orders',
+      'inventory_stockout': 'Stock Alert',
+      'order_edit_abuse': 'Order Abuse',
+      'table_release_abuse': 'Table Release',
+      'coupon_abuse': 'Coupon Abuse'
+    };
+    return labels[type] || type;
   };
 
   const isAdminOnly = userRole === 'admin' || userRole === 'superadmin';
@@ -333,17 +377,36 @@ export default function Alerts({ branch }) {
                   {getIcon(alert.type)}
                 </div>
                 <div className="flex-1">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <h3 className={`font-semibold ${alert.isRead ? 'text-gray-700' : 'text-gray-900'}`}>
                       {alert.title}
                     </h3>
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getPriorityColor(alert.priority)}`}>
-                      {alert.priority}
-                    </span>
+                    {alert.severity && (
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getSeverityBadge(alert.severity)}`}>
+                        {alert.severity}
+                      </span>
+                    )}
+                    {alert.isSystemGenerated && (
+                      <span className="text-xs px-2 py-1 rounded-full font-medium bg-purple-100 text-purple-800 border border-purple-300">
+                        System
+                      </span>
+                    )}
+                    {alert.priority && !alert.severity && (
+                      <span className={`text-xs px-2 py-1 rounded-full font-medium capitalize ${getPriorityColor(alert.priority)}`}>
+                        {alert.priority}
+                      </span>
+                    )}
                   </div>
                   <p className="text-gray-600 mt-1">{alert.message}</p>
+                  {alert.metadata && alert.metadata.metric && (
+                    <div className="mt-2 text-xs text-gray-500 bg-gray-50 p-2 rounded">
+                      <span className="font-medium">Metric:</span> {alert.metadata.metric}
+                      {alert.metadata.value && ` (${alert.metadata.value})`}
+                      {alert.metadata.threshold && ` / Threshold: ${alert.metadata.threshold}`}
+                    </div>
+                  )}
                   <span className="text-xs text-gray-400 mt-2 block">
-                    {new Date(alert.createdAt).toLocaleString()}
+                    {formatDateTime(alert.createdAt)}
                   </span>
                 </div>
               </div>

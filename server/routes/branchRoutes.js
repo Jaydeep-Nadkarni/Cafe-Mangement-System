@@ -24,6 +24,8 @@ const {
   createMemo,
   updateMemo,
   deleteMemo,
+  markMemoAsRead,
+  acknowledgeMemo,
   getRevenueByPayment,
   getTableHeatmap,
   getItemVelocity,
@@ -70,6 +72,8 @@ router.delete('/alerts/:id', deleteAlert);
 router.get('/memos', getMemos);
 router.post('/memos', createMemo);
 router.put('/memos/:id', updateMemo);
+router.put('/memos/:id/read', markMemoAsRead);
+router.put('/memos/:id/acknowledge', acknowledgeMemo);
 router.delete('/memos/:id', deleteMemo);
 
 router.get('/details', getBranchDetails);

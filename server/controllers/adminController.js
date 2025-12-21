@@ -149,6 +149,7 @@ const getMemos = async (req, res) => {
 
     const memos = await Memo.find(query)
       .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email')
       .sort({ createdAt: -1 });
 
     res.json(memos);
@@ -176,6 +177,27 @@ const createMemo = async (req, res) => {
     });
 
     const populatedMemo = await memo.populate('createdBy', 'username email');
+
+    // Create an alert notification for this memo
+    const alert = await Alert.create({
+      branch,
+      type: 'memo',
+      title: `New Memo: ${title}`,
+      message: content,
+      priority: priority === 'high' ? 'high' : 'medium',
+      createdBy: adminId,
+      onModel: 'Memo',
+      relatedId: memo._id
+    });
+
+    // Emit real-time event to branch
+    if (global.io) {
+      const room = `branch_${branch}`;
+      global.io.to(room).emit('memo_created', {
+        memo: populatedMemo,
+        alert: alert
+      });
+    }
 
     res.status(201).json(populatedMemo);
   } catch (error) {
@@ -429,6 +451,376 @@ const updateAlert = async (req, res) => {
   }
 };
 
+// ============================================
+// CUSTOMER BROADCAST ENDPOINTS
+// ============================================
+
+/**
+ * Send a broadcast to customers
+ * POST /api/admin/broadcast/send
+ */
+const sendBroadcast = async (req, res) => {
+  try {
+    const adminId = req.user?.id;
+    const {
+      title,
+      content,
+      broadcastType,
+      targetAudience,
+      branches,
+      channels = ['whatsapp'],
+      subscriptionType = null,
+      minOrderValue = 0,
+      maxOrderValue = null,
+      lastOrderWithinDays = null,
+      excludePhones = [],
+      scheduleTime = null
+    } = req.body;
+
+    // Validate required fields
+    if (!title || !content || !broadcastType || !targetAudience) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required fields: title, content, broadcastType, targetAudience'
+      });
+    }
+
+    // Validate broadcast type
+    const validBroadcastTypes = ['offer', 'announcement', 'event', 'menu_launch'];
+    if (!validBroadcastTypes.includes(broadcastType)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid broadcast type. Allowed: ${validBroadcastTypes.join(', ')}`
+      });
+    }
+
+    // Validate target audience
+    const validAudiences = ['all_customers', 'opt_in_only', 'vip_customers', 'recent_customers'];
+    if (!validAudiences.includes(targetAudience)) {
+      return res.status(400).json({
+        success: false,
+        error: `Invalid target audience. Allowed: ${validAudiences.join(', ')}`
+      });
+    }
+
+    // Create broadcast log
+    const BroadcastLog = require('../models/BroadcastLog');
+    const broadcastLog = new BroadcastLog({
+      title,
+      content,
+      broadcastType,
+      targetAudience,
+      branches: branches || [],
+      channels,
+      filters: {
+        minOrderValue,
+        maxOrderValue,
+        lastOrderWithinDays,
+        excludePhones
+      },
+      createdBy: adminId,
+      status: scheduleTime ? 'scheduled' : 'draft'
+    });
+
+    await broadcastLog.save();
+
+    // If scheduled for later, queue it
+    if (scheduleTime) {
+      const scheduledTime = new Date(scheduleTime);
+      const now = new Date();
+      const delay = scheduledTime.getTime() - now.getTime();
+
+      if (delay > 0) {
+        // Queue the broadcast (could use Bull or similar)
+        setTimeout(async () => {
+          try {
+            const whatsappService = require('../services/whatsappService');
+            await whatsappService.sendBroadcast({
+              broadcastLogId: broadcastLog._id,
+              title,
+              content,
+              broadcastType,
+              targetAudience,
+              branches,
+              channels,
+              filters: {
+                minOrderValue,
+                maxOrderValue,
+                lastOrderWithinDays,
+                excludePhones
+              },
+              subscriptionType
+            });
+          } catch (error) {
+            console.error('Scheduled broadcast error:', error);
+            broadcastLog.status = 'failed';
+            broadcastLog.errors = [{
+              phone: 'system',
+              error: error.message
+            }];
+            await broadcastLog.save();
+          }
+        }, delay);
+
+        return res.status(200).json({
+          success: true,
+          message: 'Broadcast scheduled successfully',
+          broadcastId: broadcastLog._id,
+          scheduledTime
+        });
+      }
+    }
+
+    // Send immediately
+    const whatsappService = require('../services/whatsappService');
+    const result = await whatsappService.sendBroadcast({
+      broadcastLogId: broadcastLog._id,
+      title,
+      content,
+      broadcastType,
+      targetAudience,
+      branches,
+      channels,
+      filters: {
+        minOrderValue,
+        maxOrderValue,
+        lastOrderWithinDays,
+        excludePhones
+      },
+      subscriptionType
+    });
+
+    res.status(200).json({
+      success: result.success,
+      broadcastId: broadcastLog._id,
+      stats: result.stats,
+      errors: result.errors
+    });
+  } catch (error) {
+    console.error('Send broadcast error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get broadcast logs with pagination
+ * GET /api/admin/broadcast/logs
+ */
+const getBroadcastLogs = async (req, res) => {
+  try {
+    const { page = 1, limit = 10, status = null, broadcastType = null } = req.query;
+    const BroadcastLog = require('../models/BroadcastLog');
+
+    const query = {};
+    if (status) query.status = status;
+    if (broadcastType) query.broadcastType = broadcastType;
+
+    const logs = await BroadcastLog.find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit * 1)
+      .skip((page - 1) * limit)
+      .populate('createdBy', 'name email');
+
+    const total = await BroadcastLog.countDocuments(query);
+
+    res.status(200).json({
+      success: true,
+      data: logs,
+      pagination: {
+        page: parseInt(page),
+        limit: parseInt(limit),
+        total,
+        pages: Math.ceil(total / limit)
+      }
+    });
+  } catch (error) {
+    console.error('Get logs error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get broadcast details with tracking stats
+ * GET /api/admin/broadcast/logs/:id
+ */
+const getBroadcastDetails = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BroadcastLog = require('../models/BroadcastLog');
+
+    const broadcast = await BroadcastLog.findById(id)
+      .populate('createdBy', 'name email');
+
+    if (!broadcast) {
+      return res.status(404).json({
+        success: false,
+        error: 'Broadcast not found'
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      data: broadcast
+    });
+  } catch (error) {
+    console.error('Get details error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Cancel a scheduled broadcast
+ * PUT /api/admin/broadcast/:id/cancel
+ */
+const cancelBroadcast = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const BroadcastLog = require('../models/BroadcastLog');
+
+    const broadcast = await BroadcastLog.findById(id);
+
+    if (!broadcast) {
+      return res.status(404).json({
+        success: false,
+        error: 'Broadcast not found'
+      });
+    }
+
+    if (broadcast.status !== 'scheduled' && broadcast.status !== 'draft') {
+      return res.status(400).json({
+        success: false,
+        error: `Cannot cancel broadcast with status: ${broadcast.status}`
+      });
+    }
+
+    broadcast.status = 'cancelled';
+    await broadcast.save();
+
+    res.status(200).json({
+      success: true,
+      message: 'Broadcast cancelled successfully',
+      data: broadcast
+    });
+  } catch (error) {
+    console.error('Cancel broadcast error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Handle customer opt-out request
+ * POST /api/admin/broadcast/opt-out
+ */
+const handleCustomerOptOut = async (req, res) => {
+  try {
+    const { phone, channels = ['whatsapp'], reason = null } = req.body;
+
+    if (!phone) {
+      return res.status(400).json({
+        success: false,
+        error: 'Phone number is required'
+      });
+    }
+
+    const whatsappService = require('../services/whatsappService');
+    const result = await whatsappService.handleOptOut(phone, channels, reason);
+
+    res.status(result.success ? 200 : 400).json(result);
+  } catch (error) {
+    console.error('Opt-out error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Get broadcast statistics
+ * GET /api/admin/broadcast/stats
+ */
+const getBroadcastStats = async (req, res) => {
+  try {
+    const { days = 30 } = req.query;
+    const BroadcastLog = require('../models/BroadcastLog');
+
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - days);
+
+    const stats = await BroadcastLog.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: cutoffDate },
+          status: { $in: ['sent', 'failed'] }
+        }
+      },
+      {
+        $group: {
+          _id: '$broadcastType',
+          count: { $sum: 1 },
+          totalSent: { $sum: '$stats.sent' },
+          totalFailed: { $sum: '$stats.failed' },
+          totalDelivered: { $sum: '$stats.delivered' }
+        }
+      },
+      {
+        $sort: { count: -1 }
+      }
+    ]);
+
+    // Overall stats
+    const overallStats = await BroadcastLog.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: cutoffDate },
+          status: { $in: ['sent', 'failed'] }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalBroadcasts: { $sum: 1 },
+          totalRecipients: { $sum: '$stats.totalRecipients' },
+          totalSent: { $sum: '$stats.sent' },
+          totalFailed: { $sum: '$stats.failed' }
+        }
+      }
+    ]);
+
+    res.status(200).json({
+      success: true,
+      data: {
+        byType: stats,
+        overall: overallStats[0] || {
+          totalBroadcasts: 0,
+          totalRecipients: 0,
+          totalSent: 0,
+          totalFailed: 0
+        },
+        period: { days }
+      }
+    });
+  } catch (error) {
+    console.error('Get stats error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAnalytics,
   createBranch,
@@ -447,5 +839,12 @@ module.exports = {
   updateAlert,
   markAlertAsRead,
   dismissAlert,
-  deleteAlert
+  deleteAlert,
+  // Broadcasting endpoints
+  sendBroadcast,
+  getBroadcastLogs,
+  getBroadcastDetails,
+  cancelBroadcast,
+  handleCustomerOptOut,
+  getBroadcastStats
 };

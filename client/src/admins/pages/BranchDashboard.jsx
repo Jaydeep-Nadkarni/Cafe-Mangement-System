@@ -153,6 +153,7 @@ export default function BranchDashboard() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         branchName={branch?.name}
+        branchId={branch?._id}
         onLogout={logout}
       />
 

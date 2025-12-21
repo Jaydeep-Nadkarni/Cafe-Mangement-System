@@ -703,7 +703,13 @@ app.post('/api/orders/send-whatsapp-bill', async (req, res) => {
     
     doc.fontSize(10);
     doc.text(`Order ID: ${orderId}`, { align: 'left' });
-    doc.text(`Date: ${new Date().toLocaleString()}`, { align: 'left' });
+    const now = new Date();
+    const day = String(now.getDate()).padStart(2, '0');
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const year = now.getFullYear();
+    const hours = String(now.getHours()).padStart(2, '0');
+    const minutes = String(now.getMinutes()).padStart(2, '0');
+    doc.text(`Date: ${day}-${month}-${year} ${hours}:${minutes}`, { align: 'left' });
     doc.text(`Customer: ${customerName || 'Guest'}`, { align: 'left' });
     doc.text(`Phone: ${customerPhone}`, { align: 'left' });
     doc.text(`Payment Method: ${method === 'online' ? 'Online Payment' : 'Cash at Counter'}`, { align: 'left' });

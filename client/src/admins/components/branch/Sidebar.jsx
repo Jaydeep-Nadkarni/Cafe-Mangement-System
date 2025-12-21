@@ -14,8 +14,9 @@ import {
   Store
 } from 'lucide-react';
 import axios from 'axios';
+import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 
-export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout }) {
+export default function Sidebar({ activeTab, setActiveTab, branchName, branchId, onLogout }) {
   const [unreadAlerts, setUnreadAlerts] = useState(0);
   const [unreadMemos, setUnreadMemos] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -26,6 +27,22 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout 
   useEffect(() => {
     fetchUnreadCounts();
   }, []);
+
+  // Socket integration for real-time badge updates
+  useBranchSocket(branchId, {
+    onNewAlert: (alert) => {
+      if (!alert.isRead && !alert.isDismissed) {
+        setUnreadAlerts(prev => prev + 1);
+      }
+    },
+    onMemoCreated: () => {
+      // When a memo is created, increase unread count for managers
+      const role = localStorage.getItem('userRole');
+      if (role !== 'admin' && role !== 'superadmin') {
+        setUnreadMemos(prev => prev + 1);
+      }
+    }
+  });
 
   const fetchUnreadCounts = async () => {
     try {
@@ -99,20 +116,20 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout 
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative ${activeTab === item.id
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative group ${activeTab === item.id
                   ? 'bg-green-50 text-green-700 shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
                 }`}
             >
-              <div className="relative">
-                <Icon className={`w-5 h-5 ${activeTab === item.id ? 'text-green-600' : 'text-gray-400'}`} />
+              <Icon className={`w-5 h-5 shrink-0 ${activeTab === item.id ? 'text-green-600' : 'text-gray-400'}`} />
+              <span className="flex-1 text-left flex items-center gap-2">
+                {item.label}
                 {hasBadge && (
-                  <span className="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-600 rounded-full">
-                    {item.badge > 9 ? '9+' : item.badge}
+                  <span className="inline-flex items-center justify-center px-2 py-0.5 text-xs font-bold leading-none text-white bg-red-600 rounded-full whitespace-nowrap">
+                    {item.badge}
                   </span>
                 )}
-              </div>
-              {item.label}
+              </span>
             </button>
           );
         })}

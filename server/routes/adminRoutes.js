@@ -16,7 +16,13 @@ const {
   updateAlert,
   markAlertAsRead,
   dismissAlert,
-  deleteAlert
+  deleteAlert,
+  sendBroadcast,
+  getBroadcastLogs,
+  getBroadcastDetails,
+  cancelBroadcast,
+  handleCustomerOptOut,
+  getBroadcastStats
 } = require('../controllers/adminController');
 const { protect, requireAdmin } = require('../middleware/auth');
 
@@ -55,5 +61,24 @@ router.put('/alerts/:id/read', markAlertAsRead);
 router.put('/alerts/:id/dismiss', dismissAlert);
 router.put('/alerts/:id', updateAlert);
 router.delete('/alerts/:id', deleteAlert);
+
+// Customer Broadcast Routes
+router.route('/broadcast/send')
+  .post(sendBroadcast);
+
+router.route('/broadcast/logs')
+  .get(getBroadcastLogs);
+
+router.route('/broadcast/logs/:id')
+  .get(getBroadcastDetails);
+
+router.route('/broadcast/:id/cancel')
+  .put(cancelBroadcast);
+
+router.route('/broadcast/opt-out')
+  .post(handleCustomerOptOut);
+
+router.route('/broadcast/stats')
+  .get(getBroadcastStats);
 
 module.exports = router;

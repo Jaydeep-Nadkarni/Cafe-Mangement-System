@@ -1,6 +1,10 @@
+const mongoose = require('mongoose');
 const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Table = require('../models/Table');
+const Branch = require('../models/Branch');
+const Payment = require('../models/Payment');
+const Coupon = require('../models/Coupon');
 const { getRealTimeStats } = require('./analyticsService');
 
 /**
@@ -487,8 +491,668 @@ const triggerStatsUpdate = (branchId) => {
   sendStatsUpdate(branchId, global.io, true);
 };
 
+// ============================================
+// SYSTEM ALERT GENERATION FUNCTIONS
+// ============================================
+
+/**
+ * Create and emit a system-generated alert
+ * @param {Object} alertConfig - Alert configuration
+ * @returns {Promise<Object>} - Created alert
+ */
+const createSystemAlert = async (alertConfig) => {
+  try {
+    const {
+      branch,
+      type,
+      severity = 'warning',
+      title,
+      message,
+      metadata = {},
+      relatedId = null,
+      onModel = null,
+      actionUrl = null
+    } = alertConfig;
+
+    const alert = await Alert.create({
+      branch,
+      type,
+      category: 'system',
+      severity,
+      title,
+      message,
+      priority: severity === 'critical' ? 'critical' : 'high',
+      isSystemGenerated: true,
+      metadata,
+      relatedId,
+      onModel,
+      actionUrl
+    });
+
+    // Emit to branch room
+    emitToBranch(branch.toString(), 'new_alert', alert);
+
+    console.log(`System alert created: ${type} (${severity}) for branch ${branch}`);
+    return alert;
+  } catch (error) {
+    console.error('Error creating system alert:', error);
+    return null;
+  }
+};
+
+/**
+ * Check for payment gateway failures
+ * @param {String} branchId - Branch ID
+ */
+const checkPaymentFailures = async (branchId) => {
+  try {
+    // Find failed payments in last hour
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    
+    const failedPayments = await Payment.countDocuments({
+      branch: branchId,
+      status: 'failed',
+      createdAt: { $gte: oneHourAgo }
+    });
+
+    // Check if there's an active alert for this
+    const existingAlert = await Alert.findOne({
+      branch: branchId,
+      type: 'payment_failure',
+      isResolved: false,
+      createdAt: { $gte: oneHourAgo }
+    });
+
+    if (failedPayments >= 3 && !existingAlert) {
+      await createSystemAlert({
+        branch: branchId,
+        type: 'payment_failure',
+        severity: 'critical',
+        title: 'Payment Gateway Issues',
+        message: `${failedPayments} payment failures detected in the last hour. Check payment gateway connection.`,
+        metadata: {
+          metric: 'failed_payments',
+          value: failedPayments,
+          threshold: 3,
+          timeWindow: '1 hour'
+        }
+      });
+    } else if (failedPayments === 0 && existingAlert) {
+      // Resolve alert if payments are succeeding again
+      existingAlert.isResolved = true;
+      existingAlert.resolvedAt = new Date();
+      await existingAlert.save();
+    }
+  } catch (error) {
+    console.error('Error checking payment failures:', error);
+  }
+};
+
+/**
+ * Check for unusual revenue drop
+ * @param {String} branchId - Branch ID
+ */
+const checkRevenueAnomaly = async (branchId) => {
+  try {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const lastWeek = new Date(today);
+    lastWeek.setDate(lastWeek.getDate() - 7);
+
+    // Get today's revenue
+    const todayRevenue = await Order.aggregate([
+      {
+        $match: {
+          branch: mongoose.Types.ObjectId(branchId),
+          paymentStatus: 'paid',
+          createdAt: { $gte: today }
+        }
+      },
+      {
+        $group: { _id: null, total: { $sum: '$total' } }
+      }
+    ]);
+
+    const todayTotal = todayRevenue[0]?.total || 0;
+
+    // Get average daily revenue for last 7 days (excluding today)
+    const weekRevenue = await Order.aggregate([
+      {
+        $match: {
+          branch: mongoose.Types.ObjectId(branchId),
+          paymentStatus: 'paid',
+          createdAt: { $gte: lastWeek, $lt: today }
+        }
+      },
+      {
+        $group: { _id: null, total: { $sum: '$total' } }
+      }
+    ]);
+
+    const weekTotal = weekRevenue[0]?.total || 0;
+    const avgDailyRevenue = weekTotal / 7;
+    const revenueDropPercent = ((avgDailyRevenue - todayTotal) / avgDailyRevenue) * 100;
+
+    // Alert if revenue drop > 30%
+    if (revenueDropPercent > 30) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'revenue_drop',
+        isResolved: false,
+        createdAt: { $gte: new Date(Date.now() - 6 * 60 * 60 * 1000) }
+      });
+
+      if (!existingAlert) {
+        await createSystemAlert({
+          branch: branchId,
+          type: 'revenue_drop',
+          severity: 'warning',
+          title: 'Unusual Revenue Drop Detected',
+          message: `Today's revenue (₹${todayTotal.toFixed(0)}) is ${revenueDropPercent.toFixed(1)}% below weekly average (₹${avgDailyRevenue.toFixed(0)}).`,
+          metadata: {
+            metric: 'daily_revenue',
+            value: todayTotal,
+            threshold: avgDailyRevenue,
+            dropPercent: revenueDropPercent,
+            weeklyAverage: avgDailyRevenue
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking revenue anomaly:', error);
+  }
+};
+
+/**
+ * Check for too many unpaid tables
+ * @param {String} branchId - Branch ID
+ */
+const checkUnpaidTables = async (branchId) => {
+  try {
+    // Count tables with pending payments
+    const unpaidTablesCount = await Table.countDocuments({
+      branch: branchId,
+      status: 'occupied',
+      currentOrder: { $exists: true, $ne: null }
+    });
+
+    // Get total table count
+    const totalTables = await Table.countDocuments({ branch: branchId });
+
+    // Check for unpaid orders
+    const unpaidOrders = await Order.countDocuments({
+      branch: branchId,
+      paymentStatus: 'pending',
+      createdAt: { $gte: new Date(Date.now() - 4 * 60 * 60 * 1000) } // Last 4 hours
+    });
+
+    // Alert if >50% tables occupied with pending payment
+    const occupancyRatio = unpaidTablesCount / totalTables;
+
+    if (unpaidOrders >= 5 && !existingAlert) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'unpaid_tables',
+        isResolved: false
+      });
+
+      if (!existingAlert) {
+        await createSystemAlert({
+          branch: branchId,
+          type: 'unpaid_tables',
+          severity: occupancyRatio > 0.7 ? 'critical' : 'warning',
+          title: unpaidOrders >= 10 ? 'Critical: Many Unpaid Orders' : 'Multiple Unpaid Tables',
+          message: `${unpaidOrders} orders with pending payment. ${unpaidTablesCount} of ${totalTables} tables occupied.`,
+          metadata: {
+            metric: 'unpaid_orders',
+            value: unpaidOrders,
+            occupiedTables: unpaidTablesCount,
+            totalTables: totalTables,
+            occupancyRatio: occupancyRatio,
+            threshold: 5
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking unpaid tables:', error);
+  }
+};
+
+/**
+ * Check for inventory stock-out risk
+ * @param {String} branchId - Branch ID
+ */
+const checkInventoryStockOut = async (branchId) => {
+  try {
+    const MenuItem = require('../models/MenuItem');
+
+    // Find items with low or zero stock
+    const lowStockItems = await MenuItem.find({
+      branch: branchId,
+      stock: { $lte: 5 },
+      isAvailable: true
+    }).select('name stock');
+
+    const outOfStockItems = await MenuItem.find({
+      branch: branchId,
+      stock: 0,
+      isAvailable: true
+    }).select('name');
+
+    if (outOfStockItems.length > 0) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'inventory_stockout',
+        isResolved: false
+      });
+
+      if (!existingAlert) {
+        const itemNames = outOfStockItems.map(i => i.name).join(', ');
+        await createSystemAlert({
+          branch: branchId,
+          type: 'inventory_stockout',
+          severity: 'critical',
+          title: 'Out of Stock Items',
+          message: `Items out of stock: ${itemNames}. Please reorder immediately.`,
+          metadata: {
+            metric: 'out_of_stock',
+            value: outOfStockItems.length,
+            affectedItems: outOfStockItems.map(i => i._id)
+          }
+        });
+      }
+    } else if (lowStockItems.length > 0) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'inventory_stockout',
+        isResolved: false
+      });
+
+      if (!existingAlert) {
+        const itemNames = lowStockItems.map(i => `${i.name} (${i.stock})`).join(', ');
+        await createSystemAlert({
+          branch: branchId,
+          type: 'inventory_stockout',
+          severity: 'warning',
+          title: 'Low Stock Warning',
+          message: `Items running low: ${itemNames}. Consider reordering soon.`,
+          metadata: {
+            metric: 'low_stock',
+            value: lowStockItems.length,
+            affectedItems: lowStockItems.map(i => i._id)
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking inventory stock:', error);
+  }
+};
+
+/**
+ * Check for repeated order edits (abuse detection)
+ * @param {String} branchId - Branch ID
+ * @param {String} orderId - Order ID
+ */
+const checkOrderEditAbuse = async (branchId, orderId) => {
+  try {
+    const ONE_HOUR = 60 * 60 * 1000;
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR);
+
+    const order = await Order.findById(orderId);
+    if (!order) return;
+
+    // Count edit operations in last hour
+    const editCount = order.editHistory?.filter(edit => 
+      new Date(edit.timestamp) > oneHourAgo
+    ).length || 0;
+
+    // Alert if more than 5 edits in 1 hour
+    if (editCount > 5) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'order_edit_abuse',
+        isResolved: false,
+        'metadata.affectedRecords': orderId
+      });
+
+      if (!existingAlert) {
+        await createSystemAlert({
+          branch: branchId,
+          type: 'order_edit_abuse',
+          severity: 'warning',
+          title: 'Repeated Order Edits Detected',
+          message: `Order #${order.orderNumber || orderId.toString().slice(-4)} has been edited ${editCount} times in the last hour.`,
+          metadata: {
+            metric: 'order_edits',
+            value: editCount,
+            threshold: 5,
+            affectedRecords: [orderId],
+            timeWindow: '1 hour'
+          },
+          relatedId: orderId,
+          onModel: 'Order',
+          actionUrl: `/orders/${orderId}`
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking order edit abuse:', error);
+  }
+};
+
+/**
+ * Check for excessive manual table releases
+ * @param {String} branchId - Branch ID
+ */
+const checkTableReleaseAbuse = async (branchId) => {
+  try {
+    const ONE_HOUR = 60 * 60 * 1000;
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR);
+
+    const Table = require('../models/Table');
+    
+    // Get tables with multiple manual releases
+    const tables = await Table.find({
+      branch: branchId
+    }).select('tableNumber releaseHistory');
+
+    let abusiveReleases = 0;
+    let affectedTables = [];
+
+    tables.forEach(table => {
+      const recentReleases = table.releaseHistory?.filter(release =>
+        release.isManual && new Date(release.timestamp) > oneHourAgo
+      ).length || 0;
+
+      if (recentReleases > 3) {
+        abusiveReleases += recentReleases;
+        affectedTables.push(table.tableNumber);
+      }
+    });
+
+    if (abusiveReleases > 5) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'table_release_abuse',
+        isResolved: false,
+        createdAt: { $gte: oneHourAgo }
+      });
+
+      if (!existingAlert) {
+        await createSystemAlert({
+          branch: branchId,
+          type: 'table_release_abuse',
+          severity: 'warning',
+          title: 'Excessive Manual Table Releases',
+          message: `Tables ${affectedTables.join(', ')} have been manually released ${abusiveReleases} times in the last hour.`,
+          metadata: {
+            metric: 'manual_releases',
+            value: abusiveReleases,
+            threshold: 5,
+            affectedTables: affectedTables,
+            timeWindow: '1 hour'
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking table release abuse:', error);
+  }
+};
+
+/**
+ * Check for coupon abuse detection
+ * @param {String} branchId - Branch ID
+ */
+const checkCouponAbuse = async (branchId) => {
+  try {
+    const ONE_HOUR = 60 * 60 * 1000;
+    const ONE_DAY = 24 * 60 * 60 * 1000;
+    const oneHourAgo = new Date(Date.now() - ONE_HOUR);
+    const oneDayAgo = new Date(Date.now() - ONE_DAY);
+
+    // Check for excessive coupon usage in last hour
+    const couponOrders = await Order.aggregate([
+      {
+        $match: {
+          branch: mongoose.Types.ObjectId(branchId),
+          couponApplied: true,
+          createdAt: { $gte: oneHourAgo }
+        }
+      },
+      {
+        $group: {
+          _id: '$appliedCoupon',
+          count: { $sum: 1 },
+          totalDiscount: { $sum: '$couponDiscount' }
+        }
+      },
+      {
+        $match: { count: { $gte: 10 } }
+      }
+    ]);
+
+    if (couponOrders.length > 0) {
+      const existingAlert = await Alert.findOne({
+        branch: branchId,
+        type: 'coupon_abuse',
+        isResolved: false,
+        createdAt: { $gte: oneHourAgo }
+      });
+
+      if (!existingAlert) {
+        const totalDiscounts = couponOrders.reduce((sum, c) => sum + c.totalDiscount, 0);
+        const totalUsage = couponOrders.reduce((sum, c) => sum + c.count, 0);
+
+        await createSystemAlert({
+          branch: branchId,
+          type: 'coupon_abuse',
+          severity: totalUsage > 20 ? 'critical' : 'warning',
+          title: totalUsage > 20 ? 'Critical: Coupon Abuse Detected' : 'Unusual Coupon Usage Pattern',
+          message: `${totalUsage} coupon applications in the last hour with ₹${totalDiscounts.toFixed(0)} total discount. Possible abuse detected.`,
+          metadata: {
+            metric: 'coupon_usage',
+            value: totalUsage,
+            totalDiscount: totalDiscounts,
+            threshold: 10,
+            affectedCoupons: couponOrders.map(c => c._id),
+            timeWindow: '1 hour'
+          }
+        });
+      }
+    }
+  } catch (error) {
+    console.error('Error checking coupon abuse:', error);
+  }
+};
+
+/**
+ * Run all system alert checks for a branch
+ * @param {String} branchId - Branch ID
+ */
+const runAllSystemChecks = async (branchId) => {
+  try {
+    await Promise.all([
+      checkPaymentFailures(branchId),
+      checkRevenueAnomaly(branchId),
+      checkUnpaidTables(branchId),
+      checkInventoryStockOut(branchId),
+      checkTableReleaseAbuse(branchId),
+      checkCouponAbuse(branchId)
+    ]);
+  } catch (error) {
+    console.error('Error running system checks:', error);
+  }
+};
+
+/**
+ * Schedule periodic system alert checks
+ * @param {String} branchId - Branch ID
+ */
+const scheduleSystemChecks = (branchId) => {
+  // Run checks every 5 minutes
+  setInterval(() => {
+    runAllSystemChecks(branchId);
+  }, 5 * 60 * 1000);
+};
+
+/**
+ * Emit order change event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} eventType - Type of change (edit, merge, delete, etc.)
+ * @param {Object} orderData - Order data
+ * @param {Object} metadata - Additional metadata
+ */
+const emitOrderChangeEvent = (branchId, eventType, orderData, metadata = {}) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    eventType,
+    orderId: orderData._id,
+    orderNumber: orderData.orderNumber,
+    total: orderData.total,
+    status: orderData.status,
+    paymentStatus: orderData.paymentStatus,
+    ...metadata,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('order_change', payload);
+  console.log(`Emitted order_change (${eventType}) to ${room}`);
+};
+
+/**
+ * Emit table change event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} eventType - Type of change (occupied, released, etc.)
+ * @param {Object} tableData - Table data
+ * @param {Object} metadata - Additional metadata
+ */
+const emitTableChangeEvent = (branchId, eventType, tableData, metadata = {}) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    eventType,
+    tableId: tableData._id,
+    tableNumber: tableData.tableNumber,
+    status: tableData.status,
+    ordersCount: tableData.currentOrders?.length || 0,
+    ...metadata,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('table_change', payload);
+  console.log(`Emitted table_change (${eventType}) to ${room}`);
+};
+
+/**
+ * Emit alert event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} alertType - Type of alert
+ * @param {Object} alertData - Alert data
+ */
+const emitAlertEvent = (branchId, alertType, alertData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    alertType,
+    ...alertData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('alert', payload);
+  console.log(`Emitted alert (${alertType}) to ${room}`);
+};
+
+/**
+ * Emit memo/note event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} memoType - Type of memo (created, updated, deleted)
+ * @param {Object} memoData - Memo data
+ */
+const emitMemoEvent = (branchId, memoType, memoData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    memoType,
+    memoId: memoData._id,
+    relatedId: memoData.relatedId,
+    content: memoData.content,
+    priority: memoData.priority,
+    ...memoData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('memo_update', payload);
+  console.log(`Emitted memo_update (${memoType}) to ${room}`);
+};
+
+/**
+ * Broadcast audit event (high-priority operations)
+ * @param {String} branchId - Branch ID
+ * @param {String} operationType - Type of operation
+ * @param {Object} auditData - Audit data
+ */
+const emitAuditEvent = (branchId, operationType, auditData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    operationType,
+    performedBy: auditData.performedByName,
+    performedByRole: auditData.performedByRole,
+    resource: auditData.resource || null,
+    severity: auditData.severity || 'info',
+    ...auditData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('audit_event', payload);
+  console.log(`Emitted audit_event (${operationType}) to ${room}`);
+};
+
 module.exports = {
   initRealtime,
   emitToBranch,
-  triggerStatsUpdate
+  triggerStatsUpdate,
+  emitOrderChangeEvent,
+  emitTableChangeEvent,
+  emitAlertEvent,
+  emitMemoEvent,
+  emitAuditEvent,
+  // Alert generation functions
+  createSystemAlert,
+  checkPaymentFailures,
+  checkRevenueAnomaly,
+  checkUnpaidTables,
+  checkInventoryStockOut,
+  checkOrderEditAbuse,
+  checkTableReleaseAbuse,
+  checkCouponAbuse,
+  runAllSystemChecks,
+  scheduleSystemChecks
 };
