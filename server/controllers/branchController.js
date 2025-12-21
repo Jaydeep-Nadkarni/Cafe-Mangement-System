@@ -899,9 +899,15 @@ const getItemVelocity = async (req, res) => {
     const branch = await getManagerBranch(req.user._id);
     const timeRange = req.query.range || 'today';
     
-    const data = await getMenuItemVelocity(branch._id, timeRange);
-    res.json(data);
+    console.log(`[getItemVelocity] Branch: ${branch._id}, TimeRange: ${timeRange}`);
+    const items = await getMenuItemVelocity(branch._id, timeRange);
+    console.log(`[getItemVelocity] Returning ${items.length} items`);
+    
+    res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+    res.json({ items: items || [] });
   } catch (error) {
+    console.error('[getItemVelocity] Error:', error.message);
+    console.error(error.stack);
     res.status(500).json({ message: error.message });
   }
 };

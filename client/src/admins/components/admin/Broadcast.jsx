@@ -684,14 +684,3 @@ export default function Broadcast() {
         </div>
     );
 }
-                            ) : (
-                                <Send className="w-5 h-5" />
-                            )}
-                            Send Broadcast
-                        </button>
-                    </div>
-                </form>
-            </div>
-        </div>
-    );
-}

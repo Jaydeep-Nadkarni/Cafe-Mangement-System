@@ -451,34 +451,6 @@ const updateAlert = async (req, res) => {
   }
 };
 
-module.exports = {
-  getAnalytics,
-  createBranch,
-  getBranches,
-  updateBranchStatus,
-  updateBranch,
-  // Memo endpoints
-  getMemos,
-  createMemo,
-  acknowledgeMemo,
-  markMemoAsRead,
-  deleteMemo,
-  // Alert endpoints
-  getAlerts,
-  createAlert,
-  updateAlert,
-  markAlertAsRead,
-  dismissAlert,
-  deleteAlert,
-  // Broadcasting endpoints
-  sendBroadcast,
-  getBroadcastLogs,
-  getBroadcastDetails,
-  cancelBroadcast,
-  handleCustomerOptOut,
-  getBroadcastStats
-};
-
 // ============================================
 // CUSTOMER BROADCAST ENDPOINTS
 // ============================================
@@ -847,4 +819,32 @@ const getBroadcastStats = async (req, res) => {
       error: error.message
     });
   }
+};
+
+module.exports = {
+  getAnalytics,
+  createBranch,
+  getBranches,
+  updateBranchStatus,
+  updateBranch,
+  // Memo endpoints
+  getMemos,
+  createMemo,
+  acknowledgeMemo,
+  markMemoAsRead,
+  deleteMemo,
+  // Alert endpoints
+  getAlerts,
+  createAlert,
+  updateAlert,
+  markAlertAsRead,
+  dismissAlert,
+  deleteAlert,
+  // Broadcasting endpoints
+  sendBroadcast,
+  getBroadcastLogs,
+  getBroadcastDetails,
+  cancelBroadcast,
+  handleCustomerOptOut,
+  getBroadcastStats
 };
