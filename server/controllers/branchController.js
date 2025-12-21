@@ -5,9 +5,15 @@ const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
 const Category = require('../models/Category');
+const auditService = require('../services/auditService');
 const { 
   emitToBranch, 
   triggerStatsUpdate,
+  emitOrderChangeEvent,
+  emitTableChangeEvent,
+  emitAlertEvent,
+  emitMemoEvent,
+  emitAuditEvent,
   checkOrderEditAbuse,
   checkTableReleaseAbuse,
   checkCouponAbuse

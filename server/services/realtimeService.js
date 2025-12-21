@@ -1001,10 +1001,149 @@ const scheduleSystemChecks = (branchId) => {
   }, 5 * 60 * 1000);
 };
 
+/**
+ * Emit order change event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} eventType - Type of change (edit, merge, delete, etc.)
+ * @param {Object} orderData - Order data
+ * @param {Object} metadata - Additional metadata
+ */
+const emitOrderChangeEvent = (branchId, eventType, orderData, metadata = {}) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    eventType,
+    orderId: orderData._id,
+    orderNumber: orderData.orderNumber,
+    total: orderData.total,
+    status: orderData.status,
+    paymentStatus: orderData.paymentStatus,
+    ...metadata,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('order_change', payload);
+  console.log(`Emitted order_change (${eventType}) to ${room}`);
+};
+
+/**
+ * Emit table change event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} eventType - Type of change (occupied, released, etc.)
+ * @param {Object} tableData - Table data
+ * @param {Object} metadata - Additional metadata
+ */
+const emitTableChangeEvent = (branchId, eventType, tableData, metadata = {}) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    eventType,
+    tableId: tableData._id,
+    tableNumber: tableData.tableNumber,
+    status: tableData.status,
+    ordersCount: tableData.currentOrders?.length || 0,
+    ...metadata,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('table_change', payload);
+  console.log(`Emitted table_change (${eventType}) to ${room}`);
+};
+
+/**
+ * Emit alert event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} alertType - Type of alert
+ * @param {Object} alertData - Alert data
+ */
+const emitAlertEvent = (branchId, alertType, alertData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    alertType,
+    ...alertData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('alert', payload);
+  console.log(`Emitted alert (${alertType}) to ${room}`);
+};
+
+/**
+ * Emit memo/note event to branch
+ * @param {String} branchId - Branch ID
+ * @param {String} memoType - Type of memo (created, updated, deleted)
+ * @param {Object} memoData - Memo data
+ */
+const emitMemoEvent = (branchId, memoType, memoData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    memoType,
+    memoId: memoData._id,
+    relatedId: memoData.relatedId,
+    content: memoData.content,
+    priority: memoData.priority,
+    ...memoData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('memo_update', payload);
+  console.log(`Emitted memo_update (${memoType}) to ${room}`);
+};
+
+/**
+ * Broadcast audit event (high-priority operations)
+ * @param {String} branchId - Branch ID
+ * @param {String} operationType - Type of operation
+ * @param {Object} auditData - Audit data
+ */
+const emitAuditEvent = (branchId, operationType, auditData) => {
+  if (!global.io) {
+    console.warn('Socket.io not initialized');
+    return;
+  }
+
+  const room = `branch_${branchId}`;
+  const payload = {
+    operationType,
+    performedBy: auditData.performedByName,
+    performedByRole: auditData.performedByRole,
+    resource: auditData.resource || null,
+    severity: auditData.severity || 'info',
+    ...auditData,
+    timestamp: new Date()
+  };
+
+  global.io.to(room).emit('audit_event', payload);
+  console.log(`Emitted audit_event (${operationType}) to ${room}`);
+};
+
 module.exports = {
   initRealtime,
   emitToBranch,
   triggerStatsUpdate,
+  emitOrderChangeEvent,
+  emitTableChangeEvent,
+  emitAlertEvent,
+  emitMemoEvent,
+  emitAuditEvent,
   // Alert generation functions
   createSystemAlert,
   checkPaymentFailures,

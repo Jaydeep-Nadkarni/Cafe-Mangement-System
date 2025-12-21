@@ -161,6 +161,48 @@ const orderSchema = new mongoose.Schema(
       enum: ['pay_later', 'pay_now'],
       default: 'pay_later',
       comment: 'pay_later: auto-merge orders; pay_now: check session before merging'
+    },
+    // Edit history for audit trail
+    editHistory: {
+      type: [{
+        editedAt: Date,
+        editedBy: mongoose.Schema.Types.ObjectId,
+        editedByName: String,
+        editedByRole: String,
+        changeType: {
+          type: String,
+          enum: ['item_added', 'item_removed', 'item_modified', 'price_adjusted', 'discount_applied', 'status_changed', 'note_added'],
+          required: true
+        },
+        fieldChanged: String,
+        beforeValue: mongoose.Schema.Types.Mixed,
+        afterValue: mongoose.Schema.Types.Mixed,
+        reason: String
+      }],
+      default: []
+    },
+    // Merge history for tracking order merges
+    mergeHistory: {
+      type: [{
+        mergedAt: Date,
+        mergedBy: mongoose.Schema.Types.ObjectId,
+        mergedByName: String,
+        mergedWithOrderIds: [mongoose.Schema.Types.ObjectId],
+        itemCountBefore: Number,
+        itemCountAfter: Number,
+        amountBefore: Number,
+        amountAfter: Number,
+        reason: String
+      }],
+      default: []
+    },
+    // Manual completion/closure tracking
+    manualCompletionLog: {
+      completedAt: Date,
+      completedBy: mongoose.Schema.Types.ObjectId,
+      completedByName: String,
+      completedByRole: String,
+      reason: String
     }
   },
   { timestamps: true }
@@ -217,6 +259,8 @@ orderSchema.index({ table: 1, createdAt: -1 });
 orderSchema.index({ createdAt: -1 });
 orderSchema.index({ paymentStatus: 1 });
 orderSchema.index({ customerPhone: 1, branch: 1 });
+orderSchema.index({ 'editHistory.editedAt': 1 }); // Edit history queries
+orderSchema.index({ 'mergeHistory.mergedAt': 1 }); // Merge history queries
 
 // Analytics optimization indexes
 orderSchema.index({ branch: 1, createdAt: -1, status: 1 }); // Revenue pattern queries

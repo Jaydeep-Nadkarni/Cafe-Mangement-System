@@ -2,9 +2,12 @@ const Order = require('../models/Order');
 const Table = require('../models/Table');
 const MenuItem = require('../models/MenuItem');
 const Branch = require('../models/Branch');
+const Alert = require('../models/Alert');
+const Memo = require('../models/Memo');
 const orderService = require('../services/orderService');
 const billService = require('../services/billService');
 const whatsappService = require('../services/whatsappService');
+const auditService = require('../services/auditService');
 const { triggerStatsUpdate, emitToBranch } = require('../services/realtimeService');
 const { applyStatsDelta } = require('../services/analyticsService');
 
@@ -48,6 +51,139 @@ const validateStatusTransition = (currentStatus, newStatus) => {
   }
 
   return { valid: true };
+};
+
+/**
+ * Validate order for modifications (items, prices, etc.)
+ * @param {Object} order - Order document
+ * @returns {Object} { valid: Boolean, message: String }
+ */
+const validateOrderForModification = (order) => {
+  if (!order) {
+    return { valid: false, message: 'Order not found' };
+  }
+
+  if (['paid', 'closed', 'cancelled'].includes(order.status)) {
+    return {
+      valid: false,
+      message: `Cannot modify ${order.status} order`
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Validate orders can be merged
+ * @param {Array} orders - Array of order documents
+ * @returns {Object} { valid: Boolean, message: String }
+ */
+const validateOrdersForMerge = (orders) => {
+  if (!orders || orders.length < 2) {
+    return { valid: false, message: 'At least 2 orders required to merge' };
+  }
+
+  // All orders must be unpaid
+  const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
+  if (paidOrders.length > 0) {
+    return {
+      valid: false,
+      message: 'Cannot merge paid orders. All orders must be unpaid.'
+    };
+  }
+
+  // All orders must have valid statuses
+  const validStatuses = ['created', 'confirmed', 'preparing', 'ready'];
+  const invalidOrders = orders.filter(o => !validStatuses.includes(o.status));
+  if (invalidOrders.length > 0) {
+    return {
+      valid: false,
+      message: `Can only merge orders with status: ${validStatuses.join(', ')}`
+    };
+  }
+
+  return { valid: true };
+};
+
+/**
+ * Validate order for deletion
+ * @param {Object} order - Order document
+ * @returns {Object} { valid: Boolean, message: String, requiresApproval: Boolean }
+ */
+const validateOrderForDeletion = (order) => {
+  if (!order) {
+    return { valid: false, message: 'Order not found' };
+  }
+
+  // Cannot delete closed/paid orders without refund setup
+  if (order.status === 'paid' && order.paymentStatus === 'paid') {
+    return {
+      valid: false,
+      message: 'Cannot delete paid orders. Issue refund first.',
+      requiresApproval: true
+    };
+  }
+
+  // Flag for approval if high-value order
+  const requiresApproval = order.total > 5000;
+
+  return { valid: true, requiresApproval };
+};
+
+/**
+ * Log order edit to editHistory
+ * @param {Object} order - Order document
+ * @param {String} changeType - Type of change
+ * @param {String} fieldChanged - Field that was changed
+ * @param {*} beforeValue - Previous value
+ * @param {*} afterValue - New value
+ * @param {Object} context - { editedBy, editedByName, editedByRole, reason }
+ */
+const recordOrderEdit = (order, changeType, fieldChanged, beforeValue, afterValue, context) => {
+  if (!order.editHistory) {
+    order.editHistory = [];
+  }
+
+  order.editHistory.push({
+    editedAt: new Date(),
+    editedBy: context.editedBy,
+    editedByName: context.editedByName,
+    editedByRole: context.editedByRole,
+    changeType,
+    fieldChanged,
+    beforeValue,
+    afterValue,
+    reason: context.reason || null
+  });
+
+  // Keep only last 100 edits to prevent unbounded growth
+  if (order.editHistory.length > 100) {
+    order.editHistory = order.editHistory.slice(-100);
+  }
+};
+
+/**
+ * Log order merge to mergeHistory
+ * @param {Object} order - Order document
+ * @param {Array} mergedOrderIds - IDs of merged orders
+ * @param {Object} context - { mergedBy, mergedByName, mergedByRole, reason }
+ */
+const recordOrderMerge = (order, mergedOrderIds, itemCountBefore, itemCountAfter, amountBefore, amountAfter, context) => {
+  if (!order.mergeHistory) {
+    order.mergeHistory = [];
+  }
+
+  order.mergeHistory.push({
+    mergedAt: new Date(),
+    mergedBy: context.mergedBy,
+    mergedByName: context.mergedByName,
+    mergedWithOrderIds: mergedOrderIds,
+    itemCountBefore,
+    itemCountAfter,
+    amountBefore,
+    amountAfter,
+    reason: context.reason || null
+  });
 };
 
 /**
@@ -904,8 +1040,12 @@ const mergeOrders = async (req, res) => {
   try {
     await session.startTransaction();
 
-    const { orderIds } = req.body;
+    const { orderIds, reason } = req.body;
+    const userId = req.user?._id;
+    const userName = req.user?.name || 'System';
+    const userRole = req.user?.role || 'admin';
 
+    // Validate input
     if (!orderIds || !Array.isArray(orderIds) || orderIds.length < 2) {
       await session.abortTransaction();
       return res.status(400).json({ message: 'At least 2 order IDs required for merge' });
@@ -921,35 +1061,11 @@ const mergeOrders = async (req, res) => {
       return res.status(404).json({ message: 'One or more orders not found' });
     }
 
-    // Validation: Same table
-    const tableIds = orders.map(o => o.table?._id?.toString()).filter(Boolean);
-    const uniqueTables = [...new Set(tableIds)];
-
-    // Allow merging from different tables
-    // if (uniqueTables.length > 1) {
-    //   await session.abortTransaction();
-    //   return res.status(400).json({ 
-    //     message: 'Cannot merge orders from different tables' 
-    //   });
-    // }
-
-    // Validation: All unpaid
-    const paidOrders = orders.filter(o => o.paymentStatus === 'paid');
-    if (paidOrders.length > 0) {
+    // Validate all orders can be merged
+    const mergeValidation = validateOrdersForMerge(orders);
+    if (!mergeValidation.valid) {
       await session.abortTransaction();
-      return res.status(400).json({
-        message: 'Cannot merge paid orders. All orders must be unpaid.'
-      });
-    }
-
-    // Validation: Active/Pending only (corrected to match actual statuses)
-    const validStatuses = ['created', 'confirmed', 'preparing', 'ready'];
-    const invalidStatus = orders.filter(o => !validStatuses.includes(o.status));
-    if (invalidStatus.length > 0) {
-      await session.abortTransaction();
-      return res.status(400).json({
-        message: `Can only merge orders with status: ${validStatuses.join(', ')}`
-      });
+      return res.status(400).json({ message: mergeValidation.message });
     }
 
     // Sort orders by creation date (oldest first will be the target)
@@ -957,6 +1073,17 @@ const mergeOrders = async (req, res) => {
 
     const targetOrder = orders[0];
     const sourceOrders = orders.slice(1);
+    const totalAmountMerged = sourceOrders.reduce((sum, o) => sum + o.total, 0);
+
+    // Store state before changes for audit
+    const beforeState = {
+      targetOrderId: targetOrder._id,
+      targetOrderTotal: targetOrder.total,
+      targetOrderItems: targetOrder.items.length,
+      sourceOrderIds: sourceOrders.map(o => o._id),
+      sourceOrderTotals: sourceOrders.map(o => o.total),
+      sourceOrderItemCounts: sourceOrders.map(o => o.items.length)
+    };
 
     // Combine items from all orders
     const combinedItems = {};
@@ -980,21 +1107,39 @@ const mergeOrders = async (req, res) => {
     });
 
     // Recalculate totals
+    const itemCountBefore = targetOrder.items.length;
     targetOrder.items = Object.values(combinedItems);
+    const itemCountAfter = targetOrder.items.length;
+    
     targetOrder.subtotal = targetOrder.items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
     targetOrder.tax = targetOrder.subtotal * 0.10;
-    // Preserve the discount from target order (or clear it)
     targetOrder.discount = targetOrder.discount || 0;
     targetOrder.total = targetOrder.subtotal + targetOrder.tax - targetOrder.discount;
 
-    // Add merge metadata to target order (but DON'T mark as isMerged - only source orders are marked merged)
+    // Record merge in mergeHistory
+    recordOrderMerge(
+      targetOrder,
+      sourceOrders.map(o => o._id),
+      itemCountBefore,
+      itemCountAfter,
+      beforeState.targetOrderTotal,
+      targetOrder.total,
+      {
+        mergedBy: userId,
+        mergedByName: userName,
+        mergedByRole: userRole,
+        reason
+      }
+    );
+
+    // Add merge metadata
     targetOrder.mergedAt = new Date();
     targetOrder.originalOrderIds = orders.map(o => o.orderNumber || o._id.toString());
     targetOrder.mergeNote = `Merged ${orders.length} orders: ${targetOrder.originalOrderIds.join(', ')}`;
 
     await targetOrder.save({ session });
 
-    // Mark source orders as merged (keep original status, just add isMerged flag)
+    // Mark source orders as merged
     for (const sourceOrder of sourceOrders) {
       sourceOrder.isMerged = true;
       sourceOrder.mergedAt = new Date();
@@ -1018,6 +1163,28 @@ const mergeOrders = async (req, res) => {
 
     // Commit transaction
     await session.commitTransaction();
+
+    // Log to audit service (after transaction succeeds)
+    await auditService.logOrderMerge({
+      resultingOrderId: targetOrder._id,
+      mergedOrderIds: sourceOrders.map(o => o._id),
+      branchId: targetOrder.branch,
+      performedBy: userId,
+      performedByName: userName,
+      performedByRole: userRole,
+      performedByEmail: req.user?.email,
+      totalAmountMerged,
+      reason
+    });
+
+    // Emit socket events
+    emitToBranch(targetOrder.branch, 'order_merged', {
+      resultingOrderId: targetOrder._id,
+      mergedOrderIds: sourceOrders.map(o => o._id),
+      resultingOrderTotal: targetOrder.total,
+      mergeCount: orders.length,
+      timestamp: new Date()
+    });
 
     // Populate and return merged order
     const mergedOrder = await Order.findById(targetOrder._id)
