@@ -1,14 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  LayoutDashboard, 
-  ClipboardList, 
-  Utensils, 
-  LayoutGrid, 
-  BarChart2, 
+import {
+  LayoutDashboard,
+  ClipboardList,
+  Utensils,
+  LayoutGrid,
+  BarChart2,
   Brain,
-  FileText, 
-  Settings, 
-  Bell, 
+  FileText,
+  Settings,
+  Bell,
   StickyNote,
   LogOut,
   Store
@@ -30,10 +30,10 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout 
   const fetchUnreadCounts = async () => {
     try {
       const [alertsRes, memosRes] = await Promise.all([
-        axios.get(`${API_URL}/api/admin/alerts?branch=${localStorage.getItem('branchId')}`, {
+        axios.get(`${API_URL}/api/branch/alerts?branch=${localStorage.getItem('branchId')}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         }),
-        axios.get(`${API_URL}/api/admin/memos?branch=${localStorage.getItem('branchId')}`, {
+        axios.get(`${API_URL}/api/branch/memos?branch=${localStorage.getItem('branchId')}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
@@ -99,11 +99,10 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, onLogout 
             <button
               key={item.id}
               onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative ${
-                activeTab === item.id
+              className={`w-full flex items-center gap-3 px-3 py-3 rounded-xl text-sm font-medium transition-all duration-200 relative ${activeTab === item.id
                   ? 'bg-green-50 text-green-700 shadow-sm'
                   : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
-              }`}
+                }`}
             >
               <div className="relative">
                 <Icon className={`w-5 h-5 ${activeTab === item.id ? 'text-green-600' : 'text-gray-400'}`} />

@@ -29,6 +29,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
   const [cashReceived, setCashReceived] = useState('');
   const [showMergeModal, setShowMergeModal] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState(null);
   const [selectedOrdersForMerge, setSelectedOrdersForMerge] = useState([]);
   const [mergePreview, setMergePreview] = useState(null);
   const [showMergePreview, setShowMergePreview] = useState(false);
@@ -236,6 +237,34 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   };
 
   // New merge functions with preview
+  const handleMergeOrder = async () => {
+    if (!mergeTargetId || !selectedOrder) return;
+
+    try {
+      setLoading(true);
+      const token = localStorage.getItem('token');
+      // Merge selectedOrder INTO mergeTargetId
+      await axios.post(
+        `${API_URL}/api/orders/merge`,
+        { orderIds: [mergeTargetId, selectedOrder._id] },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+
+      setShowMergeModal(false);
+      setMergeTargetId(null);
+      setSelectedOrder(null);
+      fetchOrders(true);
+      onRefresh();
+
+      showSuccess('Order merged successfully!');
+    } catch (error) {
+      console.error('Failed to merge order:', error);
+      showError('Failed to merge order. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleStartMerge = () => {
     setSelectedOrdersForMerge([]);
     setMergePreview(null);
@@ -1156,8 +1185,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         </div>
       )}
 
-      {/* Merge Modal */}
-      {showMergeModal && (
+      {/* Merge Modal (Single Order) */}
+      {showMergeModal && selectedOrder && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
             <h3 className="text-lg font-bold mb-4">Merge Order</h3>
@@ -1263,8 +1292,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         isLoading={modalState.isLoading}
       />
 
-      {/* Merge Selection Modal */}
-      {showMergeModal && (
+      {/* Merge Selection Modal (Bulk) */}
+      {showMergeModal && !selectedOrder && (
         <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
             <div className="p-6 border-b border-gray-200">
