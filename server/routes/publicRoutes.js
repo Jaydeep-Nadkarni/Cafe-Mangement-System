@@ -87,25 +87,7 @@ const createQROrder = async (req, res) => {
     }
     console.log('Table found:', table._id);
 
-    // TABLE SESSION LOGIC: Check for active session (unpaid orders on this table)
-    // If active session exists, attach order to it. Otherwise, create new session.
-    const existingActiveOrder = await Order.findOne({
-      table: table._id,
-      paymentStatus: 'unpaid',
-      status: { $nin: ['closed', 'cancelled'] }
-    }).sort({ createdAt: -1 });  // Get most recent active order
-    
-    // Determine sessionId - reuse existing or create new
-    let sessionId;
-    if (existingActiveOrder && existingActiveOrder.sessionId) {
-      sessionId = existingActiveOrder.sessionId;
-      console.log('Attaching to existing session:', sessionId);
-    } else {
-      sessionId = `${table._id}-${Date.now()}`;
-      console.log('Creating new session:', sessionId);
-    }
-    
-    // Process items - convert local IDs to MongoDB ObjectIds and validate
+    // Process items first to calculate totals
     const processedItems = [];
     let subtotal = 0;
 
@@ -153,7 +135,53 @@ const createQROrder = async (req, res) => {
     const tax = subtotal * taxRate;
     const total = subtotal + tax;
 
-    // Create order with session ID for grouping
+    // TABLE SESSION LOGIC: Check for active session (unpaid orders on this table)
+    const existingActiveOrder = await Order.findOne({
+      table: table._id,
+      paymentStatus: 'unpaid',
+      status: { $nin: ['closed', 'cancelled'] }
+    }).sort({ createdAt: -1 });
+
+    if (existingActiveOrder) {
+      console.log('Merging into existing session:', existingActiveOrder.sessionId);
+      
+      // Merge items
+      existingActiveOrder.items.push(...processedItems);
+      existingActiveOrder.subtotal += subtotal;
+      existingActiveOrder.tax += tax;
+      existingActiveOrder.total += total;
+      
+      // Update customer info if provided
+      if (customerName) existingActiveOrder.customerName = customerName;
+      if (customerPhone) existingActiveOrder.customerPhone = customerPhone;
+      if (chefNotes) existingActiveOrder.chefNotes = (existingActiveOrder.chefNotes ? existingActiveOrder.chefNotes + '\n' : '') + chefNotes;
+
+      const savedOrder = await existingActiveOrder.save();
+      console.log('Order merged:', savedOrder._id);
+
+      const populatedOrder = await Order.findById(savedOrder._id)
+        .populate('branch')
+        .populate('table')
+        .populate('items.menuItem');
+
+      // Emit update event
+      const branchRoom = `branch_${branch._id}`;
+      req.io.to(branchRoom).emit('order_updated', {
+        orderId: populatedOrder._id,
+        orderNumber: populatedOrder.orderNumber,
+        table: table.tableNumber,
+        total: populatedOrder.total,
+        items: populatedOrder.items,
+        timestamp: new Date()
+      });
+
+      return res.status(200).json(populatedOrder);
+    }
+
+    // Create NEW Session
+    const sessionId = `${table._id}-${Date.now()}`;
+    console.log('Creating new session:', sessionId);
+
     const order = new Order({
       branch: branch._id,
       table: table._id,

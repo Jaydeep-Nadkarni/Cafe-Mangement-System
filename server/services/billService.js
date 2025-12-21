@@ -60,12 +60,24 @@ const generateThermalBill = (order) => {
       // Item Name x Qty   Price
       
       doc.font('Helvetica').fontSize(8);
+
+      // Group items for cleaner bill
+      const groupedItems = {};
       order.items.forEach(item => {
-        const itemName = item.menuItem.name || 'Unknown Item';
-        const qty = item.quantity;
-        const price = formatCurrency(item.price * qty);
-        
-        doc.text(`${itemName} x ${qty}`, { continued: true });
+        const key = `${item.menuItem._id}-${item.price}`; // Group by ID and Price
+        if (!groupedItems[key]) {
+          groupedItems[key] = {
+            name: item.menuItem.name || 'Unknown Item',
+            quantity: 0,
+            price: item.price
+          };
+        }
+        groupedItems[key].quantity += item.quantity;
+      });
+
+      Object.values(groupedItems).forEach(item => {
+        const price = formatCurrency(item.price * item.quantity);
+        doc.text(`${item.name} x ${item.quantity}`, { continued: true });
         doc.text(price, { align: 'right' });
       });
 

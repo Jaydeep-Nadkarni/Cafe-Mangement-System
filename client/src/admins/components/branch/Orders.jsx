@@ -11,6 +11,20 @@ import { formatCurrency, formatTime, formatDateTime } from '../../../utils/forma
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
 
+// Helper to group items for display
+const groupOrderItems = (items) => {
+  if (!items) return [];
+  const groups = {};
+  items.forEach(item => {
+    const key = `${item.menuItem?._id}-${item.specialInstructions || ''}-${item.price}`;
+    if (!groups[key]) {
+      groups[key] = { ...item, quantity: 0 };
+    }
+    groups[key].quantity += item.quantity;
+  });
+  return Object.values(groups);
+};
+
 const getTimeSince = (dateString) => {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -187,6 +201,51 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     ),
     [menu, itemSearch]
   );
+
+  // Group items for display
+  const groupedItems = useMemo(() => {
+    if (!selectedOrder) return [];
+    const groups = {};
+    selectedOrder.items.forEach(item => {
+      // Group by MenuItem ID + Special Instructions + Price
+      const key = `${item.menuItem?._id}-${item.specialInstructions || ''}-${item.price}`;
+      
+      if (!groups[key]) {
+        groups[key] = {
+          ...item,
+          quantity: 0,
+          originalItems: [] // Keep track of original items for updates
+        };
+      }
+      groups[key].quantity += item.quantity;
+      groups[key].originalItems.push(item);
+    });
+    return Object.values(groups);
+  }, [selectedOrder]);
+
+  const handleUpdateGroupQuantity = async (group, newTotalQuantity) => {
+    const diff = newTotalQuantity - group.quantity;
+    if (diff === 0) return;
+
+    // We operate on the last item in the group (most recent)
+    const lastItem = group.originalItems[group.originalItems.length - 1];
+    
+    if (diff > 0) {
+      // Increase quantity of the last item
+      await handleUpdateItemQuantity(lastItem._id, lastItem.quantity + diff);
+    } else {
+      // Decrease quantity
+      // If the decrease is less than the last item's quantity, just reduce it
+      if (lastItem.quantity > Math.abs(diff)) {
+        await handleUpdateItemQuantity(lastItem._id, lastItem.quantity + diff);
+      } else {
+        // If we need to remove the item entirely or more
+        // For simplicity, we just remove the last item if it goes to 0 or below
+        // The user can click '-' again to reduce the next item
+        await handleRemoveItem(lastItem._id);
+      }
+    }
+  };
 
   // Actions
   const handleAddItem = async (menuItem) => {
@@ -780,7 +839,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
                 <div className="p-4">
                   <div className="space-y-2 mb-4 min-h-20">
-                    {order.items.slice(0, 3).map((item, idx) => (
+                    {groupOrderItems(order.items).slice(0, 3).map((item, idx) => (
                       <div key={idx} className="flex justify-between text-sm">
                         <span className="text-gray-600 flex items-center gap-2">
                           <span className="font-bold text-gray-900">{item.quantity}x</span>
@@ -788,9 +847,9 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                         </span>
                       </div>
                     ))}
-                    {order.items.length > 3 && (
+                    {groupOrderItems(order.items).length > 3 && (
                       <div className="text-xs text-gray-400 italic pl-6">
-                        + {order.items.length - 3} more items...
+                        + {groupOrderItems(order.items).length - 3} more items...
                       </div>
                     )}
                   </div>
@@ -908,8 +967,8 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                             <button onClick={() => handleCancelOrder(order._id)} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">Cancel</button>
                           </div>
                           <div className="text-xs text-gray-600">
-                            {order.items.map((item, idx) => (
-                              <span key={idx}>{item.quantity}x {item.menuItem?.name}{idx < order.items.length - 1 ? ', ' : ''}</span>
+                            {groupOrderItems(order.items).map((item, idx, arr) => (
+                              <span key={idx}>{item.quantity}x {item.menuItem?.name}{idx < arr.length - 1 ? ', ' : ''}</span>
                             ))}
                           </div>
                         </div>
@@ -964,23 +1023,23 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
               {/* Items List */}
               <div className="flex-1 overflow-y-auto p-4 space-y-2">
-                {selectedOrder.items.map((item, idx) => (
-                  <div key={item._id || idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm transition-all group">
+                {groupedItems.map((group, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm transition-all group">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
-                        <span className="font-bold text-gray-900">{item.quantity}x</span>
-                        <span className="text-sm text-gray-700 truncate">{item.menuItem?.name || 'Unknown Item'}</span>
+                        <span className="font-bold text-gray-900">{group.quantity}x</span>
+                        <span className="text-sm text-gray-700 truncate">{group.menuItem?.name || 'Unknown Item'}</span>
                       </div>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => handleUpdateItemQuantity(item._id, Math.max(1, item.quantity - 1))}
+                          onClick={() => handleUpdateGroupQuantity(group, Math.max(0, group.quantity - 1))}
                           className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
                         >
                           −
                         </button>
-                        <span className="text-xs text-gray-500">{item.quantity}</span>
+                        <span className="text-xs text-gray-500">{group.quantity}</span>
                         <button
-                          onClick={() => handleUpdateItemQuantity(item._id, item.quantity + 1)}
+                          onClick={() => handleUpdateGroupQuantity(group, group.quantity + 1)}
                           className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
                         >
                           +
@@ -988,9 +1047,9 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className="font-medium text-gray-900 whitespace-nowrap">{formatCurrency(item.price * item.quantity)}</span>
+                      <span className="font-medium text-gray-900 whitespace-nowrap">{formatCurrency(group.price * group.quantity)}</span>
                       <button
-                        onClick={() => handleRemoveItem(item._id)}
+                        onClick={() => handleRemoveItem(group.originalItems[group.originalItems.length - 1]._id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
                       >
                         <XCircle className="w-5 h-5" />
