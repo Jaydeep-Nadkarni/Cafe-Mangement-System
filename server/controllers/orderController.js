@@ -162,7 +162,7 @@ const createOrder = async (req, res) => {
     });
 
     // Emit socket event for new order
-    emitToBranch(table.branch._id, 'order_created', {
+    emitToBranch(table.branch._id, 'new_order', {
       orderId: savedOrder._id,
       orderNumber: savedOrder.orderNumber,
       table: tableId,
@@ -361,7 +361,7 @@ const checkoutOrder = async (req, res) => {
     });
 
     // Emit socket event for payment
-    emitToBranch(order.branch, 'order_paid', {
+    emitToBranch(order.branch, 'payment_confirmation', {
       orderId: order._id,
       orderNumber: order.orderNumber,
       table: order.table?.tableNumber,
@@ -528,10 +528,11 @@ const cancelOrder = async (req, res) => {
       });
     }
 
-    emitToBranch(order.branch, 'order_cancelled', {
+    emitToBranch(order.branch, 'order_status_change', {
       orderId: order._id,
       orderNumber: order.orderNumber,
       table: order.table?.tableNumber,
+      status: 'cancelled',
       previousStatus,
       timestamp: new Date()
     });

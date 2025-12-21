@@ -100,14 +100,14 @@ const initRealtime = (io) => {
           if (menuItem && menuItem.branch) {
             const branchId = menuItem.branch.toString();
             const room = `branch_${branchId}`;
-            
+
             io.to(room).emit('menu_item_availability_changed', {
               itemId: menuItem._id,
               name: menuItem.name,
               isAvailable: updatedFields.isAvailable,
               timestamp: new Date()
             });
-            
+
             // Trigger stats update
             triggerStatsUpdate(branchId);
           }
@@ -149,7 +149,7 @@ const initRealtime = (io) => {
  */
 const startPeriodicStatsUpdates = (branchId, io) => {
   const room = `branch_${branchId}`;
-  
+
   // Check if already running
   if (updateQueues.has(branchId) && updateQueues.get(branchId).interval) {
     return;
@@ -169,7 +169,7 @@ const startPeriodicStatsUpdates = (branchId, io) => {
   const interval = setInterval(async () => {
     // Check if room has any connected clients
     const roomSockets = await io.in(room).fetchSockets();
-    
+
     if (roomSockets.length === 0) {
       // No clients in room, stop updates
       clearInterval(interval);
@@ -222,7 +222,7 @@ const sendStatsUpdate = async (branchId, io, immediate = false) => {
     };
 
     io.to(room).emit('stats_update', payload);
-    
+
     if (queue) {
       queue.lastUpdate = now;
     }
@@ -238,13 +238,13 @@ const sendStatsUpdate = async (branchId, io, immediate = false) => {
  */
 const processOrderChange = async (change, io) => {
   const order = change.fullDocument;
-  
+
   // Ensure we have an order and a branch ID to route the event
   if (!order || !order.branch) return;
 
   const branchId = order.branch.toString();
   const room = `branch_${branchId}`;
-  
+
   let eventType = null;
   let isCritical = false;
   let payload = {
@@ -266,15 +266,15 @@ const processOrderChange = async (change, io) => {
         relatedId: order._id
       };
       break;
-      
+
     case 'update':
       const updatedFields = change.updateDescription.updatedFields;
-      
+
       // Determine specific update type
       if (updatedFields.status) {
         eventType = 'order_status_change';
         payload.status = updatedFields.status;
-        
+
         if (['ready', 'completed', 'cancelled'].includes(updatedFields.status)) {
           isCritical = true; // Critical status changes
           alertData = {
@@ -285,11 +285,11 @@ const processOrderChange = async (change, io) => {
           };
         }
       } else if (updatedFields.paymentMethod || updatedFields.paymentStatus === 'paid') {
-        eventType = 'order_paid';
+        eventType = 'payment_confirmation';
         isCritical = true;
         payload.paymentMethod = updatedFields.paymentMethod || order.paymentMethod;
         payload.amount = order.total;
-        
+
         alertData = {
           type: 'success',
           title: 'Payment Received',
@@ -300,7 +300,7 @@ const processOrderChange = async (change, io) => {
         eventType = 'order_refunded';
         isCritical = true;
         payload.amount = order.total;
-        
+
         alertData = {
           type: 'warning',
           title: 'Refund Processed',
@@ -318,7 +318,7 @@ const processOrderChange = async (change, io) => {
         eventType = 'order_updated';
       }
       break;
-      
+
     case 'delete':
       eventType = 'order_deleted';
       break;
@@ -353,7 +353,7 @@ const processOrderChange = async (change, io) => {
         branch: branchId,
         ...alertData
       });
-      
+
       io.to(room).emit('new_alert', alert);
       console.log(`Emitted new_alert to ${room}`);
     } catch (error) {
@@ -369,12 +369,12 @@ const processOrderChange = async (change, io) => {
  */
 const processTableChange = async (change, io) => {
   const table = change.fullDocument;
-  
+
   if (!table || !table.branch) return;
 
   const branchId = table.branch.toString();
   const room = `branch_${branchId}`;
-  
+
   let eventType = null;
   let payload = {
     tableId: table._id,
@@ -385,13 +385,13 @@ const processTableChange = async (change, io) => {
   switch (change.operationType) {
     case 'update':
       const updatedFields = change.updateDescription?.updatedFields;
-      
+
       if (updatedFields && updatedFields.status) {
         eventType = 'table_occupancy_change';
         payload.previousStatus = change.updateDescription?.updatedFields?.status;
         payload.newStatus = table.status;
         payload.data = table;
-        
+
         // Emit table status change
         io.to(room).emit(eventType, payload);
         console.log(`Emitted ${eventType} to ${room} (Table ${table.tableNumber}: ${table.status})`);
@@ -407,14 +407,14 @@ const processTableChange = async (change, io) => {
         sendStatsUpdate(branchId, io, true);
       }
       break;
-      
+
     case 'insert':
       eventType = 'table_added';
       payload.data = table;
       io.to(room).emit(eventType, payload);
       debouncedStatsUpdate(branchId, io);
       break;
-      
+
     case 'delete':
       eventType = 'table_removed';
       io.to(room).emit(eventType, payload);
@@ -430,7 +430,7 @@ const processTableChange = async (change, io) => {
  */
 const debouncedStatsUpdate = (branchId, io) => {
   const queue = updateQueues.get(branchId);
-  
+
   if (!queue) {
     updateQueues.set(branchId, {
       lastUpdate: 0,
@@ -487,8 +487,8 @@ const triggerStatsUpdate = (branchId) => {
   sendStatsUpdate(branchId, global.io, true);
 };
 
-module.exports = { 
-  initRealtime, 
-  emitToBranch, 
-  triggerStatsUpdate 
+module.exports = {
+  initRealtime,
+  emitToBranch,
+  triggerStatsUpdate
 };

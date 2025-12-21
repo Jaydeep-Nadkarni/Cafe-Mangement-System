@@ -34,7 +34,7 @@ export default function BranchDashboard() {
     try {
       setError(null);
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      
+
       // 1. Get Branch Details
       const branchRes = await axios.get(`${API_URL}/api/branch/details`);
       setBranch(branchRes.data);
@@ -50,7 +50,7 @@ export default function BranchDashboard() {
       setLoading(false);
     } catch (error) {
       console.error('Error fetching branch data:', error);
-      
+
       if (error.response?.status === 404) {
         setError('Your account needs configuration. Contact admin.');
       } else if (error.response?.status === 401) {
@@ -59,7 +59,7 @@ export default function BranchDashboard() {
       } else {
         setError('Unable to load dashboard. Please try again later.');
       }
-      
+
       setLoading(false);
     }
   };
@@ -76,6 +76,9 @@ export default function BranchDashboard() {
       fetchData();
     },
     onTableMerge: (data) => {
+      fetchData();
+    },
+    onTableOccupancyChange: (data) => {
       fetchData();
     }
   });
@@ -106,7 +109,7 @@ export default function BranchDashboard() {
           </div>
           <h3 className="text-lg font-bold text-gray-900 mb-2">Dashboard Unavailable</h3>
           <p className="text-gray-600 mb-6">{error}</p>
-          <button 
+          <button
             onClick={fetchData}
             className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
           >
@@ -143,9 +146,9 @@ export default function BranchDashboard() {
   return (
     <div className="min-h-screen bg-white flex">
       {/* Sidebar */}
-      <Sidebar 
-        activeTab={activeTab} 
-        setActiveTab={setActiveTab} 
+      <Sidebar
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
         branchName={branch?.name}
         onLogout={logout}
       />
