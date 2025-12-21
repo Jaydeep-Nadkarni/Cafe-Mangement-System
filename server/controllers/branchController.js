@@ -5,7 +5,13 @@ const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
 const Category = require('../models/Category');
-const { emitToBranch, triggerStatsUpdate } = require('../services/realtimeService');
+const { 
+  emitToBranch, 
+  triggerStatsUpdate,
+  checkOrderEditAbuse,
+  checkTableReleaseAbuse,
+  checkCouponAbuse
+} = require('../services/realtimeService');
 const { 
   getBranchStats,
   getRevenueByPaymentMethod,
