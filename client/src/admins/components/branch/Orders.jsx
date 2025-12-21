@@ -563,7 +563,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   // Get next valid status for transition
   const getNextStatus = (currentStatus) => {
     const flow = {
-      created: 'confirmed',
+      created: 'preparing',
       confirmed: 'preparing',
       preparing: 'ready',
       ready: 'paid',
@@ -1146,7 +1146,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
               {/* Footer Actions */}
               <div className="p-4 border-t border-gray-200 bg-gray-50 shrink-0">
-                {selectedOrder.status === 'ready' && selectedOrder.paymentStatus === 'unpaid' ? (
+                {selectedOrder.paymentStatus === 'unpaid' && !['cancelled', 'closed'].includes(selectedOrder.status) ? (
                   <button
                     onClick={handleCheckout}
                     disabled={loading}

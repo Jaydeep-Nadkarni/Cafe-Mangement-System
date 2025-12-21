@@ -39,11 +39,12 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
     if (onPaymentConfirmation) socket.on('payment_confirmation', onPaymentConfirmation);
     if (onTableMerge) socket.on('table_merge', onTableMerge);
     if (onNewAlert) socket.on('new_alert', onNewAlert);
-    
+
     // Stats-specific events
     if (onStatsUpdate) socket.on('stats_update', onStatsUpdate);
     if (onCriticalMetric) socket.on('critical_metric_update', onCriticalMetric);
     if (onTableOccupancyChange) socket.on('table_occupancy_change', onTableOccupancyChange);
+    if (callbacks.onOrderUpdate) socket.on('order_updated', callbacks.onOrderUpdate);
 
     // Cleanup
     return () => {
@@ -52,12 +53,13 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
       if (onPaymentConfirmation) socket.off('payment_confirmation', onPaymentConfirmation);
       if (onTableMerge) socket.off('table_merge', onTableMerge);
       if (onNewAlert) socket.off('new_alert', onNewAlert);
-      
+
       // Remove stats listeners
       if (onStatsUpdate) socket.off('stats_update', onStatsUpdate);
       if (onCriticalMetric) socket.off('critical_metric_update', onCriticalMetric);
       if (onTableOccupancyChange) socket.off('table_occupancy_change', onTableOccupancyChange);
-      
+      if (callbacks.onOrderUpdate) socket.off('order_updated', callbacks.onOrderUpdate);
+
       leaveBranchRoom(branchId);
     };
   }, [socket, branchId]); // Re-run if socket or branchId changes
