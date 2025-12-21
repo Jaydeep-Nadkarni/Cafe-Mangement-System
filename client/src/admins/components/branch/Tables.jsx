@@ -245,7 +245,7 @@ export default function Tables({ tables, onRefresh }) {
             <div
               key={table._id}
               onClick={() => setSelectedTable(table)}
-              className={`relative p-3 rounded-lg border-l-4 transition-all duration-200 cursor-pointer group flex flex-col justify-between min-h-[140px] ${getCardColor(table.status)}`}
+              className={`relative p-3 rounded-lg border-l-4 transition-all duration-200 cursor-pointer group flex flex-col justify-between min-h-35 ${getCardColor(table.status)}`}
             >
               <div className="flex justify-between items-start mb-2">
                 <span className="text-2xl font-bold text-gray-800">

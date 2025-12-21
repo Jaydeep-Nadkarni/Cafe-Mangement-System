@@ -40,6 +40,13 @@ export default function Alerts({ branch }) {
   useBranchSocket(branch?._id, {
     onNewAlert: (newAlert) => {
       setAlerts(prev => [newAlert, ...prev]);
+    },
+    onMemoCreated: (data) => {
+      // When a memo is created, add its alert notification
+      const { alert } = data;
+      if (alert) {
+        setAlerts(prev => [alert, ...prev]);
+      }
     }
   });
 

@@ -684,7 +684,10 @@ const deleteAlert = async (req, res) => {
 const getMemos = async (req, res) => {
   try {
     const branch = await getManagerBranch(req.user._id);
-    const memos = await Memo.find({ branch: branch._id }).sort({ createdAt: -1 });
+    const memos = await Memo.find({ branch: branch._id })
+      .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email')
+      .sort({ createdAt: -1 });
     res.json(memos);
   } catch (error) {
     res.status(500).json({ message: error.message });
@@ -706,8 +709,34 @@ const createMemo = async (req, res) => {
       priority,
       createdBy: req.user._id
     });
+
+    // Populate for response
+    const populatedMemo = await Memo.findById(memo._id)
+      .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email');
     
-    res.status(201).json(memo);
+    // Create an alert notification for this memo
+    const alert = await Alert.create({
+      branch: branch._id,
+      type: 'memo',
+      title: `New Memo: ${title}`,
+      message: content,
+      priority: priority === 'high' ? 'high' : 'medium',
+      createdBy: req.user._id,
+      onModel: 'Memo',
+      relatedId: memo._id
+    });
+
+    // Emit real-time event to branch
+    if (global.io) {
+      const room = `branch_${branch._id}`;
+      global.io.to(room).emit('memo_created', {
+        memo: populatedMemo,
+        alert: alert
+      });
+    }
+    
+    res.status(201).json(populatedMemo);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -743,6 +772,76 @@ const deleteMemo = async (req, res) => {
     const result = await Memo.deleteOne({ _id: req.params.id, branch: branch._id });
     if (result.deletedCount === 0) return res.status(404).json({ message: 'Memo not found' });
     res.json({ message: 'Memo deleted' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Mark memo as read by manager
+// @route   PUT /api/branch/memos/:id/read
+// @access  Manager
+const markMemoAsRead = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    const memo = await Memo.findById(req.params.id);
+    if (!memo) return res.status(404).json({ message: 'Memo not found' });
+    
+    // Check if already in readByManagers
+    const existingRead = memo.readByManagers.find(r => r.manager?.toString() === userId.toString());
+    
+    if (!existingRead) {
+      memo.readByManagers.push({
+        manager: userId,
+        readAt: new Date(),
+        acknowledged: false
+      });
+      await memo.save();
+    }
+    
+    const updatedMemo = await Memo.findById(memo._id)
+      .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email');
+    
+    res.json({ memo: updatedMemo });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Acknowledge memo (mark as read and acknowledged)
+// @route   PUT /api/branch/memos/:id/acknowledge
+// @access  Manager
+const acknowledgeMemo = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    
+    const memo = await Memo.findById(req.params.id);
+    if (!memo) return res.status(404).json({ message: 'Memo not found' });
+    
+    // Find or create read entry
+    let readEntry = memo.readByManagers.find(r => r.manager?.toString() === userId.toString());
+    
+    if (!readEntry) {
+      readEntry = {
+        manager: userId,
+        readAt: new Date(),
+        acknowledged: true,
+        acknowledgedAt: new Date()
+      };
+      memo.readByManagers.push(readEntry);
+    } else {
+      readEntry.acknowledged = true;
+      readEntry.acknowledgedAt = new Date();
+    }
+    
+    await memo.save();
+    
+    const updatedMemo = await Memo.findById(memo._id)
+      .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email');
+    
+    res.json({ memo: updatedMemo });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1297,6 +1396,8 @@ module.exports = {
   createMemo,
   updateMemo,
   deleteMemo,
+  markMemoAsRead,
+  acknowledgeMemo,
   getRevenueByPayment,
   getTableHeatmap,
   getItemVelocity,

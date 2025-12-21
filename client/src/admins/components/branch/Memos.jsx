@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { StickyNote, Plus, X, Trash2, Check, Eye, AlertCircle, Users } from 'lucide-react';
 import axios from 'axios';
 import ConfirmationModal from './ConfirmationModal';
+import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 
 export default function Memos({ branch }) {
   const [memos, setMemos] = useState([]);
@@ -28,6 +29,16 @@ export default function Memos({ branch }) {
     setUserId(id);
     fetchMemos();
   }, [branch]);
+
+  // Socket integration for real-time memo updates
+  useBranchSocket(branch?._id, {
+    onMemoCreated: (data) => {
+      const { memo } = data;
+      if (memo) {
+        setMemos(prev => [memo, ...prev]);
+      }
+    }
+  });
 
   const fetchMemos = async () => {
     try {
@@ -274,7 +285,7 @@ export default function Memos({ branch }) {
                     </div>
                   )}
 
-                  <div className="text-xs opacity-75 flex justify-between items-center mt-auto pt-2 mt-2">
+                  <div className="text-xs opacity-75 flex justify-between items-center mt-auto pt-2">
                     <span>{new Date(memo.createdAt).toLocaleString('en-GB', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
                     <span className="uppercase font-bold text-[10px] tracking-wider border px-1 rounded">
                       {memo.priority}

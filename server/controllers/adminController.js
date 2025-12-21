@@ -149,6 +149,7 @@ const getMemos = async (req, res) => {
 
     const memos = await Memo.find(query)
       .populate('createdBy', 'username email')
+      .populate('readByManagers.manager', 'username email')
       .sort({ createdAt: -1 });
 
     res.json(memos);
@@ -176,6 +177,27 @@ const createMemo = async (req, res) => {
     });
 
     const populatedMemo = await memo.populate('createdBy', 'username email');
+
+    // Create an alert notification for this memo
+    const alert = await Alert.create({
+      branch,
+      type: 'memo',
+      title: `New Memo: ${title}`,
+      message: content,
+      priority: priority === 'high' ? 'high' : 'medium',
+      createdBy: adminId,
+      onModel: 'Memo',
+      relatedId: memo._id
+    });
+
+    // Emit real-time event to branch
+    if (global.io) {
+      const room = `branch_${branch}`;
+      global.io.to(room).emit('memo_created', {
+        memo: populatedMemo,
+        alert: alert
+      });
+    }
 
     res.status(201).json(populatedMemo);
   } catch (error) {

@@ -25,6 +25,9 @@ const getTimeSince = (dateString) => {
 };
 
 export default function Orders({ tables, menu = [], onRefresh }) {
+    // State for By Table modal
+    const [selectedTableForModal, setSelectedTableForModal] = useState(null);
+
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
@@ -677,15 +680,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             <div className="bg-gray-100 p-1 rounded-lg flex h-fit">
               <button
                 onClick={() => setViewMode('list')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'list' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 List
               </button>
               <button
                 onClick={() => setViewMode('table')}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'
-                  }`}
+                className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table' ? 'bg-white shadow text-gray-900' : 'text-gray-500 hover:text-gray-700'}`}
               >
                 By Table
               </button>
@@ -753,9 +754,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         {viewMode === 'list' ? (
           orders.filter(o => !o.isMerged).map(order => {
             const colors = getOrderColorClass(order.paymentStatus);
-            // const statusBadge = getStatusBadge(order.status); // Removed
-            // const StatusIcon = statusBadge.icon; 
-
             return (
               <div
                 key={order._id}
@@ -767,7 +765,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     <span className="font-bold text-lg text-gray-900">
                       {order.table ? `Table ${order.table.tableNumber}` : 'No Table'}
                     </span>
-
                     <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${colors.badge}`}>
                       {order.paymentStatus}
                     </span>
@@ -797,7 +794,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       </div>
                     )}
                   </div>
-
                   <div className="flex justify-between items-center pt-3 border-t border-gray-100">
                     <span className="font-bold text-lg text-gray-900">{formatCurrency(order.total)}</span>
                     <span className="text-xs text-gray-400">
@@ -809,177 +805,81 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             );
           })
         ) : (
-          Object.values(orders.filter(o => !o.isMerged).reduce((acc, order) => {
-            const sessionId = order.sessionId || `table-${order.table?._id}`;
-            const groupKey = `${order.table?._id}-${sessionId}`;
-            if (!acc[groupKey]) {
-              acc[groupKey] = {
-                table: order.table,
-                sessionId: sessionId,
-                sessionPerson: order.sessionPerson || 'Table Order',
-                orderType: order.orderType || 'pay_later',
-                orders: [],
-                totalAmount: 0,
-                lastActivity: new Date(0),
-                paidAmount: 0,
-                unpaidAmount: 0,
-                mainOrder: null // First/primary order of the session
-              };
-            }
-            acc[groupKey].orders.push(order);
-            acc[groupKey].totalAmount += order.total;
-            
-            // Track paid vs unpaid amounts
-            if (order.paymentStatus === 'paid') {
-              acc[groupKey].paidAmount += order.total;
-            } else {
-              acc[groupKey].unpaidAmount += order.total;
-            }
-            
-            // Set main order as the first one created in this session
-            if (!acc[groupKey].mainOrder || new Date(order.createdAt) < new Date(acc[groupKey].mainOrder.createdAt)) {
-              acc[groupKey].mainOrder = order;
-            }
-            
-            const orderDate = new Date(order.updatedAt || order.createdAt);
-            if (orderDate > acc[groupKey].lastActivity) {
-              acc[groupKey].lastActivity = orderDate;
-            }
-            return acc;
-          }, {})).map(group => (
-            <div key={group.sessionId || 'unknown'} className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all">
-              <div className="flex justify-between items-center mb-3 pb-3 border-b border-gray-100">
-                <div className="flex items-center gap-2">
-                  <div className="bg-blue-100 p-2 rounded-lg text-blue-600">
-                    <Coffee className="w-5 h-5" />
+          <>
+            {tables.map(table => {
+              const relatedOrders = orders.filter(o => o.table?._id === table._id && !o.isMerged);
+              const total = relatedOrders.reduce((sum, o) => sum + (o.total || 0), 0);
+              const unpaid = relatedOrders.filter(o => o.paymentStatus !== 'paid').reduce((sum, o) => sum + (o.total || 0), 0);
+              return (
+                <div
+                  key={table._id}
+                  className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 hover:shadow-md transition-all cursor-pointer flex flex-col`}
+                  onClick={() => setSelectedTableForModal(table)}
+                >
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-lg text-gray-900">Table {table.tableNumber}</span>
+                    <span className={`w-3 h-3 rounded-full ${table.status === 'occupied' ? 'bg-red-500' : 'bg-green-500'}`}></span>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-gray-900">Table {group.table?.tableNumber || 'Unknown'}</h3>
-                    <div className="flex items-center gap-2 text-xs text-gray-500">
-                      <span>{group.orders.length} {group.orders.length === 1 ? 'Order' : 'Orders'} ({group.sessionPerson})</span>
-                      <span>•</span>
-                      <span>{group.orderType === 'pay_now' ? 'Pay Now' : 'Pay Later'}</span>
-                      <span>•</span>
-                      <span>{getTimeSince(group.lastActivity)}</span>
+                  <div className="flex-1 flex flex-col gap-1">
+                    <span className="text-xs text-gray-500">{relatedOrders.length} Active Order{relatedOrders.length !== 1 ? 's' : ''}</span>
+                    <span className="text-xs text-gray-500">Total: <span className="font-bold text-gray-900">{formatCurrency(total)}</span></span>
+                    {unpaid > 0 && <span className="text-xs text-red-600">Unpaid: {formatCurrency(unpaid)}</span>}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* By Table Modal: Show all orders for selected table */}
+            {selectedTableForModal && (
+              <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4" onClick={() => setSelectedTableForModal(null)}>
+                <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full overflow-hidden flex flex-col" onClick={e => e.stopPropagation()}>
+                  <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-xl font-bold text-gray-900">Table {selectedTableForModal.tableNumber}</h2>
+                      <span className={`w-3 h-3 rounded-full ${selectedTableForModal.status === 'occupied' ? 'bg-red-500' : 'bg-green-500'}`}></span>
+                      <span className="text-sm text-gray-500 capitalize">{selectedTableForModal.status}</span>
                     </div>
+                    <button onClick={() => setSelectedTableForModal(null)}><X className="w-6 h-6 text-gray-400" /></button>
                   </div>
-                </div>
-                <div className="flex flex-col items-end text-xs">
-                  <span className="text-gray-500">Session Total: <span className="font-bold text-gray-900">{formatCurrency(group.totalAmount || 0)}</span></span>
-                  <div className="flex gap-2 mt-0.5">
-                    {group.paidAmount > 0 && <span className="text-green-600 font-medium">Pd: {formatCurrency(group.paidAmount || 0)}</span>}
-                    {group.unpaidAmount > 0 && <span className="text-red-500 font-medium">Un: {formatCurrency(group.unpaidAmount || 0)}</span>}
+                  <div className="p-6 overflow-y-auto max-h-[70vh]">
+                    {/* List all orders for this table */}
+                    {orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged).length === 0 ? (
+                      <div className="text-gray-500 text-center py-8">No active orders for this table.</div>
+                    ) : (
+                      orders.filter(o => o.table?._id === selectedTableForModal._id && !o.isMerged).map(order => (
+                        <div key={order._id} className="mb-4 p-4 rounded-lg border border-gray-200 bg-gray-50">
+                          <div className="flex justify-between items-center mb-2">
+                            <span className="font-bold text-gray-900">Order #{order.orderNumber}</span>
+                            <span className={`px-2 py-0.5 text-xs rounded-full capitalize ${order.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>{order.paymentStatus}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 text-xs text-gray-500 mb-2">
+                            <span>{order.items.length} items</span>
+                            <span>•</span>
+                            <span>{getTimeSince(order.createdAt)}</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2 mb-2">
+                            <button onClick={() => { setSelectedOrder(order); setSelectedTableForModal(null); }} className="px-3 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">View Bill</button>
+                            <button onClick={() => handlePrintBill(order._id)} className="px-3 py-1 bg-gray-100 text-gray-700 rounded text-xs font-medium">Print</button>
+                            {order.paymentStatus !== 'paid' && (
+                              <button onClick={() => handleMarkAsPaid(order._id)} className="px-3 py-1 bg-green-100 text-green-700 rounded text-xs font-medium">Mark Paid</button>
+                            )}
+                            <button onClick={() => handleCancelOrder(order._id)} className="px-3 py-1 bg-red-100 text-red-700 rounded text-xs font-medium">Cancel</button>
+                          </div>
+                          <div className="text-xs text-gray-600">
+                            {order.items.map((item, idx) => (
+                              <span key={idx}>{item.quantity}x {item.menuItem?.name}{idx < order.items.length - 1 ? ', ' : ''}</span>
+                            ))}
+                          </div>
+                        </div>
+                      ))
+                    )}
                   </div>
                 </div>
               </div>
-
-              {/* Show individual orders if multiple, otherwise show main order */}
-              {group.orders.length > 1 && (
-                <div className="space-y-2 mb-4 max-h-40 overflow-y-auto text-xs text-gray-600">
-                  <p className="font-semibold text-gray-700">Orders in this session:</p>
-                  {group.orders.map(o => (
-                    <div key={o._id} className="flex justify-between p-2 bg-gray-50 rounded">
-                      <span>#{o.orderNumber}</span>
-                      <span>{formatCurrency(o.total)} - {o.paymentStatus === 'paid' ? '✓ Paid' : 'Unpaid'}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Click on combined session/bill */}
-              <div
-                onClick={() => setSelectedOrder(group.mainOrder)}
-                className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                  group.mainOrder?.paymentStatus === 'paid' 
-                    ? 'bg-green-50 border-green-100 hover:bg-green-100' 
-                    : 'bg-blue-50 border-blue-100 hover:bg-blue-100'
-                }`}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-gray-700">Combined Session Bill</span>
-                    <span className="text-[10px] text-gray-500">Click to view details</span>
-                  </div>
-                  <span className={`font-bold text-lg ${
-                    group.mainOrder?.paymentStatus === 'paid' 
-                      ? 'text-green-700' 
-                      : 'text-blue-900'
-                  }`}>
-                    {formatCurrency(group.totalAmount)}
-                  </span>
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-dashed border-gray-200 mt-3">
-                <div className="flex justify-between items-end">
-                  <span className="text-sm font-medium text-gray-500">Total Bill</span>
-                  <span className="text-xl font-bold text-gray-900">{formatCurrency(group.totalAmount)}</span>
-                </div>
-              </div>
-            </div>
-          ))
-        )}
-
-        {orders.length === 0 && !loading && (
-          <div className="col-span-full flex flex-col items-center justify-center py-20 text-gray-500 bg-white rounded-xl border border-dashed border-gray-300">
-            <div className="bg-gray-50 p-4 rounded-full mb-4">
-              <Coffee className="h-8 w-8 text-gray-400" />
-            </div>
-            <p className="text-lg font-medium text-gray-900">No orders found</p>
-            <p className="text-sm">Orders for the selected time period will appear here</p>
-          </div>
+            )}
+          </>
         )}
       </div>
-
-      {/* Custom Date Modal */}
-      {showCustomDateModal && (
-        <div className="fixed inset-0 bg-black/50 z-60 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl max-w-md w-full p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Custom Date Range</h3>
-              <button onClick={() => setShowCustomDateModal(false)}>
-                <X className="w-6 h-6 text-gray-400" />
-              </button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Start Date</label>
-                <input
-                  type="datetime-local"
-                  value={customStartDate}
-                  onChange={(e) => setCustomStartDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">End Date (Optional)</label>
-                <input
-                  type="datetime-local"
-                  value={customEndDate}
-                  onChange={(e) => setCustomEndDate(e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                onClick={() => setShowCustomDateModal(false)}
-                className="flex-1 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={applyCustomFilter}
-                className="flex-1 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-              >
-                Apply
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Order Details Modal */}
       {selectedOrder && (
@@ -1013,94 +913,39 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Cancel Order"
                     >
-                      <Trash2 className="w-5 h-5" />
+                      <XCircle className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
-
-                {/* Billing Actions (Print / Mark Paid / Close) - removed kitchen status controls */}
-                <div className="flex items-center gap-3">
-                  {/* Print Bill Button */}
-                  <button
-                    onClick={() => handlePrintBill(selectedOrder._id)}
-                    disabled={loading}
-                    className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors text-sm font-medium disabled:opacity-50"
-                    title="Print Bill"
-                  >
-                    <Printer className="w-4 h-4" />
-                    Print
-                  </button>
-
-                  {/* Mark as Paid (Cash) - quick payment for admins */}
-                  {selectedOrder.paymentStatus !== 'paid' && (
-                    <button
-                      onClick={() => handleMarkAsPaid(selectedOrder._id)}
-                      disabled={loading}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium disabled:opacity-50"
-                      title="Mark as Paid (Cash)"
-                    >
-                      <DollarSign className="w-4 h-4" />
-                      Mark Paid
-                    </button>
-                  )}
-
-                  {/* Close button for already paid orders */}
-                  {selectedOrder.paymentStatus === 'paid' && (
-                    <button
-                      onClick={() => handleCloseOrder(selectedOrder._id)}
-                      disabled={loading}
-                      className="flex items-center gap-2 px-3 py-1.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm font-medium disabled:opacity-50"
-                      title="Close Order"
-                    >
-                      <Archive className="w-4 h-4" />
-                      Close
-                    </button>
-                  )}
                 </div>
               </div>
 
               {/* Items List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              <div className="flex-1 overflow-y-auto p-4 space-y-2">
                 {selectedOrder.items.map((item, idx) => (
-                  <div key={idx} className="bg-white p-3 rounded-lg border border-gray-200 shadow-sm flex justify-between group">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3">
-                        <div className="inline-flex items-center border rounded-md overflow-hidden">
-                          <button
-                            onClick={() => handleUpdateItemQuantity(item._id, Math.max(0, item.quantity - 1))}
-                            disabled={loading}
-                            className="px-3 py-1 bg-gray-50 hover:bg-gray-100"
-                            title="Decrease quantity"
-                          >
-                            -
-                          </button>
-                          <input
-                            type="number"
-                            min="0"
-                            value={item.quantity}
-                            onChange={(e) => {
-                              const val = parseInt(e.target.value, 10);
-                              if (!isNaN(val)) handleUpdateItemQuantity(item._id, val);
-                            }}
-                            className="w-14 px-2 text-center outline-none"
-                          />
-                          <button
-                            onClick={() => handleUpdateItemQuantity(item._id, item.quantity + 1)}
-                            disabled={loading}
-                            className="px-3 py-1 bg-gray-50 hover:bg-gray-100"
-                            title="Increase quantity"
-                          >
-                            +
-                          </button>
-                        </div>
-                        <span className="font-medium text-gray-900">{item.menuItem?.name}</span>
+                  <div key={item._id || idx} className="flex items-center gap-3 p-3 bg-white rounded-lg border border-gray-100 hover:shadow-sm transition-all group">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="font-bold text-gray-900">{item.quantity}x</span>
+                        <span className="text-sm text-gray-700 truncate">{item.menuItem?.name || 'Unknown Item'}</span>
                       </div>
-                      {item.specialInstructions && (
-                        <p className="text-xs text-gray-500 mt-1 ml-3 italic">"{item.specialInstructions}"</p>
-                      )}
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item._id, Math.max(1, item.quantity - 1))}
+                          className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
+                        >
+                          −
+                        </button>
+                        <span className="text-xs text-gray-500">{item.quantity}</span>
+                        <button
+                          onClick={() => handleUpdateItemQuantity(item._id, item.quantity + 1)}
+                          className="px-2 py-0.5 text-xs bg-gray-100 hover:bg-gray-200 rounded text-gray-700"
+                        >
+                          +
+                        </button>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <span className="font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-gray-900 whitespace-nowrap">{formatCurrency(item.price * item.quantity)}</span>
                       <button
                         onClick={() => handleRemoveItem(item._id)}
                         className="text-gray-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all"
@@ -1110,8 +955,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                     </div>
                   </div>
                 ))}
+              </div>
 
-                {/* Add Item Button */}
+              {/* Add Item Button */}
+              <div className="p-4 border-t border-gray-200 bg-white">
                 <button
                   onClick={() => setShowAddItem(true)}
                   className="w-full py-3 border-2 border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-green-500 hover:text-green-600 transition-colors flex items-center justify-center gap-2 font-medium"
@@ -1120,7 +967,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   Add Item
                 </button>
               </div>
-
             </div>
 
             {/* RIGHT COLUMN: Payment & Summary */}
