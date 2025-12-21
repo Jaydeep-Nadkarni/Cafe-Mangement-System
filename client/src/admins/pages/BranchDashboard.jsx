@@ -80,6 +80,9 @@ export default function BranchDashboard() {
     },
     onTableOccupancyChange: (data) => {
       fetchData();
+    },
+    onOrderUpdate: (data) => {
+      fetchData();
     }
   });
 
