@@ -28,6 +28,16 @@ import {
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+// Simple Card Wrapper Component for Charts
+function ChartCard({ title, children, className = '' }) {
+  return (
+    <div className={`rounded-lg p-4 border border-gray-300 bg-white shadow-sm ${className}`}>
+      {title && <h3 className="text-lg font-semibold text-gray-900 mb-4">{title}</h3>}
+      {children}
+    </div>
+  );
+}
+
 // Neutral colors for charts
 const CHART_COLORS = ['#424242', '#616161', '#757575', '#9e9e9e', '#bdbdbd'];
 
@@ -35,6 +45,7 @@ export default function Stats({ branch }) {
   const [timeRange, setTimeRange] = useState('today');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
   
   // Real-time stats
   const [realtimeStats, setRealtimeStats] = useState(null);
@@ -60,6 +71,10 @@ export default function Stats({ branch }) {
       
       console.log('[Stats] Fetching analytics with timeRange:', timeRange);
       
+      // Get auth token from localStorage
+      const token = localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
       const [
         realtimeRes,
         revenueByPaymentRes,
@@ -69,13 +84,13 @@ export default function Stats({ branch }) {
         peakHoursRes,
         revenuePatternRes
       ] = await Promise.all([
-        axios.get(`${API_URL}/api/branch/analytics/realtime?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/revenue-by-payment?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/payment-stats?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/peak-hours?range=${timeRange}`),
-        axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`)
+        axios.get(`${API_URL}/api/branch/analytics/realtime?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/revenue-by-payment?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/payment-stats?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/peak-hours?range=${timeRange}`, { headers }),
+        axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`, { headers })
       ]);
 
       console.log('[Stats] Revenue Pattern Response:', revenuePatternRes.data);
@@ -119,6 +134,10 @@ export default function Stats({ branch }) {
       setRefreshing(false);
     } catch (error) {
       console.error('Error fetching analytics:', error);
+      const errorMessage = error.response?.status === 401 
+        ? 'Authentication failed. Please log in again.'
+        : error.response?.data?.message || 'Failed to load analytics data';
+      setError(errorMessage);
       setLoading(false);
       setRefreshing(false);
     }
@@ -134,23 +153,6 @@ export default function Stats({ branch }) {
     fetchAnalytics();
   };
 
-    // Listen for order created - INCREMENT counters
-    socket.on('order_created', (data) => {
-      console.log('[Stats] Order created:', data);
-      setRealtimeStats(prev => ({
-        ...prev,
-        totalOrders: (prev?.totalOrders || 0) + 1,
-        activeOrders: (prev?.activeOrders || 0) + 1
-      }));
-    });
-
-    // Listen for order status changes - UPDATE stats incrementally
-    socket.on('order_status_changed', (data) => {
-      console.log('[Stats] Order status changed:', data);
-      // Handle status change updates
-    });
-  } [timeRange];
-
   if (!branch) {
     return (
       <div className="h-full flex items-center justify-center">
@@ -162,12 +164,73 @@ export default function Stats({ branch }) {
     );
   }
 
+  if (error) {
+    return (
+      <div className="h-full flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-600 font-semibold mb-2">{error}</p>
+          <button
+            onClick={() => {
+              setError(null);
+              fetchAnalytics();
+            }}
+            className="mt-4 px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="h-full flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-orange-500 mx-auto mb-4"></div>
           <p className="text-gray-500">Loading analytics...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Section Component
+  function Section({ title, icon, children }) {
+    return (
+      <div className="mb-8">
+        <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-300">
+          <div className="text-orange-600">{icon}</div>
+          <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
+        </div>
+        {children}
+      </div>
+    );
+  }
+
+  // KPI Card Component
+  function KPICard({ label, value, trend, icon, realtime, valueClassName = '' }) {
+    return (
+      <div className="rounded-lg p-4 border border-gray-300">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1">
+              <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
+              {realtime && (
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                  <span className="text-[10px] text-green-600">LIVE</span>
+                </span>
+              )}
+            </div>
+            <p className={`text-2xl font-bold ${valueClassName || 'text-gray-900'}`}>{value}</p>
+            {trend !== undefined && (
+              <p className={`text-xs mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}% vs previous period
+              </p>
+            )}
+          </div>
+          <div className="ml-2">{icon}</div>
         </div>
       </div>
     );
@@ -631,46 +694,6 @@ export default function Stats({ branch }) {
             type="csv"
           />
         </div>
-      </div>
-    </div>
-  );
-
-// Section Component
-function Section({ title, icon, children }) {
-  return (
-    <div className="mb-8">
-      <div className="flex items-center gap-2 mb-4 pb-2 border-b border-gray-300">
-        <div className="text-orange-600">{icon}</div>
-        <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-// KPI Card Component
-function KPICard({ label, value, trend, icon, realtime, valueClassName = '' }) {
-  return (
-    <div className="rounded-lg p-4 border border-gray-300">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-1">
-            <p className="text-xs font-medium text-gray-500 uppercase">{label}</p>
-            {realtime && (
-              <span className="flex items-center gap-1">
-                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
-                <span className="text-[10px] text-green-600">LIVE</span>
-              </span>
-            )}
-          </div>
-          <p className={`text-2xl font-bold ${valueClassName || 'text-gray-900'}`}>{value}</p>
-          {trend !== undefined && (
-            <p className={`text-xs mt-1 ${trend >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {trend >= 0 ? '↑' : '↓'} {Math.abs(trend).toFixed(1)}% vs previous period
-            </p>
-          )}
-        </div>
-        <div className="ml-2">{icon}</div>
       </div>
     </div>
   );

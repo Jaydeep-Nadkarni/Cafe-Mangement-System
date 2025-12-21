@@ -514,7 +514,7 @@ const getTableOccupancy = async (branchId, timeRange = 'today') => {
           avgOrderValue: 1,
           utilizationRate: {
             $multiply: [
-              { $divide: ['$orders', { $size: tables }] },
+              { $divide: ['$orders', '$tableInfo.capacity'] },
               100
             ]
           }
@@ -587,54 +587,58 @@ const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
  * Get payment success/failure rates
  */
 const getPaymentReliability = async (branchId, timeRange = '7d') => {
-  const { start, end } = getTimeRange(timeRange);
-  const branchObjectId = toObjectId(branchId);
+  const cacheKey = `payment_reliability_${branchId}_${timeRange}`;
+  
+  return getCachedData(cacheKey, async () => {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
 
-  const stats = await Order.aggregate([
-    {
-      $match: {
-        branch: branchObjectId,
-        createdAt: { $gte: start, $lte: end }
-      }
-    },
-    {
-      $group: {
-        _id: {
-          method: '$paymentMethod',
-          status: '$paymentStatus'
-        },
-        count: { $sum: 1 },
-        totalAmount: { $sum: '$total' }
-      }
-    },
-    {
-      $group: {
-        _id: '$_id.method',
-        statuses: {
-          $push: {
-            status: '$_id.status',
-            count: '$count',
-            amount: '$totalAmount'
+    const stats = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            method: '$paymentMethod',
+            status: '$paymentStatus'
+          },
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$total' }
+        }
+      },
+      {
+        $group: {
+          _id: '$_id.method',
+          statuses: {
+            $push: {
+              status: '$_id.status',
+              count: '$count',
+              amount: '$totalAmount'
+            }
           }
         }
       }
-    }
-  ]);
+    ]);
 
-  return stats.map(stat => {
-    const paid = stat.statuses.find(s => s.status === 'paid') || { count: 0, amount: 0 };
-    const unpaid = stat.statuses.find(s => s.status === 'unpaid') || { count: 0, amount: 0 };
-    const total = paid.count + unpaid.count;
+    return stats.map(stat => {
+      const paid = stat.statuses.find(s => s.status === 'paid') || { count: 0, amount: 0 };
+      const unpaid = stat.statuses.find(s => s.status === 'unpaid') || { count: 0, amount: 0 };
+      const total = paid.count + unpaid.count;
 
-    return {
-      method: stat._id || 'cash',
-      successRate: total > 0 ? (paid.count / total) * 100 : 0,
-      successCount: paid.count,
-      failureCount: unpaid.count,
-      totalAttempts: total,
-      successAmount: paid.amount,
-      failureAmount: unpaid.amount
-    };
+      return {
+        method: stat._id || 'cash',
+        successRate: total > 0 ? (paid.count / total) * 100 : 0,
+        successCount: paid.count,
+        failureCount: unpaid.count,
+        totalAttempts: total,
+        successAmount: paid.amount,
+        failureAmount: unpaid.amount
+      };
+    });
   });
 };
 
@@ -642,85 +646,89 @@ const getPaymentReliability = async (branchId, timeRange = '7d') => {
  * Detect peak hours and patterns
  */
 const getPeakDetection = async (branchId, timeRange = '7d') => {
-  const { start, end } = getTimeRange(timeRange);
-  const branchObjectId = toObjectId(branchId);
+  const cacheKey = `peak_detection_${branchId}_${timeRange}`;
+  
+  return getCachedData(cacheKey, async () => {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
 
-  const hourlyData = await Order.aggregate([
-    {
-      $match: {
-        branch: branchObjectId,
-        paymentStatus: 'paid',
-        paidAt: { $gte: start, $lte: end }
-      }
-    },
-    {
-      $project: {
-        hour: { $hour: '$paidAt' },
-        dayOfWeek: { $dayOfWeek: '$paidAt' },
-        total: 1
-      }
-    },
-    {
-      $group: {
-        _id: { hour: '$hour', day: '$dayOfWeek' },
-        orders: { $sum: 1 },
-        revenue: { $sum: '$total' }
-      }
-    },
-    { $sort: { '_id.hour': 1 } }
-  ]);
+    const hourlyData = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          paymentStatus: 'paid',
+          paidAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $project: {
+          hour: { $hour: '$paidAt' },
+          dayOfWeek: { $dayOfWeek: '$paidAt' },
+          total: 1
+        }
+      },
+      {
+        $group: {
+          _id: { hour: '$hour', day: '$dayOfWeek' },
+          orders: { $sum: 1 },
+          revenue: { $sum: '$total' }
+        }
+      },
+      { $sort: { '_id.hour': 1 } }
+    ]);
 
-  // Calculate hourly averages
-  const hourlyAvg = await Order.aggregate([
-    {
-      $match: {
-        branch: branchObjectId,
-        paymentStatus: 'paid',
-        paidAt: { $gte: start, $lte: end }
-      }
-    },
-    {
-      $project: {
-        hour: { $hour: '$paidAt' },
-        total: 1
-      }
-    },
-    {
-      $group: {
-        _id: '$hour',
-        avgRevenue: { $avg: '$total' },
-        totalOrders: { $sum: 1 },
-        totalRevenue: { $sum: '$total' }
-      }
-    },
-    { $sort: { _id: 1 } }  // Sort by hour ascending for chart display
-  ]);
+    // Calculate hourly averages
+    const hourlyAvg = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          paymentStatus: 'paid',
+          paidAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $project: {
+          hour: { $hour: '$paidAt' },
+          total: 1
+        }
+      },
+      {
+        $group: {
+          _id: '$hour',
+          avgRevenue: { $avg: '$total' },
+          totalOrders: { $sum: 1 },
+          totalRevenue: { $sum: '$total' }
+        }
+      },
+      { $sort: { _id: 1 } }  // Sort by hour ascending for chart display
+    ]);
 
-  const peakHours = [...hourlyAvg]
-    .sort((a, b) => b.totalOrders - a.totalOrders)
-    .slice(0, 5)
-    .map(h => ({
-      hour: h._id,
-      orders: h.totalOrders,
-      avgRevenue: h.avgRevenue
-    }));
+    const peakHours = [...hourlyAvg]
+      .sort((a, b) => b.totalOrders - a.totalOrders)
+      .slice(0, 5)
+      .map(h => ({
+        hour: h._id,
+        orders: h.totalOrders,
+        avgRevenue: h.avgRevenue
+      }));
 
-  // Fill in all 24 hours for complete chart display
-  const hourlyPattern = [];
-  for (let h = 0; h < 24; h++) {
-    const existing = hourlyAvg.find(d => d._id === h);
-    hourlyPattern.push({
-      hour: `${h}:00`,
-      orders: existing?.totalOrders || 0,
-      revenue: existing?.totalRevenue || 0
-    });
-  }
+    // Fill in all 24 hours for complete chart display
+    const hourlyPattern = [];
+    for (let h = 0; h < 24; h++) {
+      const existing = hourlyAvg.find(d => d._id === h);
+      hourlyPattern.push({
+        hour: `${h}:00`,
+        orders: existing?.totalOrders || 0,
+        revenue: existing?.totalRevenue || 0
+      });
+    }
 
-  return {
-    hourlyPattern,
-    peakHours,
-    detailedPattern: hourlyData
-  };
+    return {
+      hourlyPattern,
+      peakHours,
+      detailedPattern: hourlyData
+    };
+  });
 };
 
 /**
@@ -880,34 +888,38 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
  * Get daily revenue pattern (for charts)
  */
 const getDailyRevenuePattern = async (branchId, timeRange = '30d') => {
-  const { start, end } = getTimeRange(timeRange);
+  const cacheKey = `daily_pattern_${branchId}_${timeRange}`;
   
-  // Ensure branchId is an ObjectId
-  const branchObjectId = toObjectId(branchId);
+  return getCachedData(cacheKey, async () => {
+    const { start, end } = getTimeRange(timeRange);
+    
+    // Ensure branchId is an ObjectId
+    const branchObjectId = toObjectId(branchId);
 
-  const data = await Order.aggregate([
-    {
-      $match: {
-        branch: branchObjectId,
-        paymentStatus: 'paid',
-        paidAt: { $gte: start, $lte: end }
-      }
-    },
-    {
-      $group: {
-        _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
-        revenue: { $sum: '$total' },
-        orders: { $sum: 1 }
-      }
-    },
-    { $sort: { _id: 1 } }
-  ]);
+    const data = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          paymentStatus: 'paid',
+          paidAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$paidAt" } },
+          revenue: { $sum: '$total' },
+          orders: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
 
-  return data.map(d => ({
-    date: d._id,
-    revenue: d.revenue,
-    orders: d.orders
-  }));
+    return data.map(d => ({
+      date: d._id,
+      revenue: d.revenue,
+      orders: d.orders
+    }));
+  });
 };
 
 /**

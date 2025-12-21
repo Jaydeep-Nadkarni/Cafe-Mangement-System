@@ -5,7 +5,18 @@ const {
   createBranch, 
   getBranches, 
   updateBranchStatus,
-  updateBranch
+  updateBranch,
+  getMemos,
+  createMemo,
+  acknowledgeMemo,
+  markMemoAsRead,
+  deleteMemo,
+  getAlerts,
+  createAlert,
+  updateAlert,
+  markAlertAsRead,
+  dismissAlert,
+  deleteAlert
 } = require('../controllers/adminController');
 const { protect, requireAdmin } = require('../middleware/auth');
 
@@ -25,5 +36,24 @@ router.route('/branches/:id')
   .put(updateBranch);
 
 router.put('/branches/:id/status', updateBranchStatus);
+
+// Memo Routes
+router.route('/memos')
+  .get(getMemos)
+  .post(createMemo);
+
+router.put('/memos/:id/acknowledge', acknowledgeMemo);
+router.put('/memos/:id/read', markMemoAsRead);
+router.delete('/memos/:id', deleteMemo);
+
+// Alert Routes
+router.route('/alerts')
+  .get(getAlerts)
+  .post(createAlert);
+
+router.put('/alerts/:id/read', markAlertAsRead);
+router.put('/alerts/:id/dismiss', dismissAlert);
+router.put('/alerts/:id', updateAlert);
+router.delete('/alerts/:id', deleteAlert);
 
 module.exports = router;

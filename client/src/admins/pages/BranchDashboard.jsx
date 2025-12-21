@@ -80,6 +80,13 @@ export default function BranchDashboard() {
     }
   });
 
+  // Store branch info in localStorage for Sidebar
+  useEffect(() => {
+    if (branch?._id) {
+      localStorage.setItem('branchId', branch._id);
+    }
+  }, [branch]);
+
   const renderContent = () => {
     if (loading) {
       return (

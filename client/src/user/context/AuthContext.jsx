@@ -3,6 +3,9 @@ import axios from 'axios';
 
 const AuthContext = createContext();
 
+// Configure axios to always send credentials
+axios.defaults.withCredentials = true;
+
 export const useAuth = () => {
   return useContext(AuthContext);
 };
@@ -12,6 +15,8 @@ export const AuthProvider = ({ children }) => {
   const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const refreshSubscribersRef = React.useRef([]);
 
   // Setup Axios Interceptors for Token Refresh
   useEffect(() => {
@@ -28,27 +33,63 @@ export const AuthProvider = ({ children }) => {
       },
       async (error) => {
         const originalRequest = error.config;
+        const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+        
+        // Don't retry refresh endpoint itself to prevent infinite loops
+        if (originalRequest.url?.includes('/api/auth/refresh')) {
+          return Promise.reject(error);
+        }
         
         // If 401 and we haven't retried yet
         if (error.response?.status === 401 && !originalRequest._retry) {
           originalRequest._retry = true;
           
+          // If already refreshing, queue this request to retry after refresh
+          if (isRefreshing) {
+            return new Promise((resolve) => {
+              refreshSubscribersRef.current.push(() => {
+                const newToken = localStorage.getItem('token');
+                if (newToken) {
+                  originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+                  resolve(axios(originalRequest));
+                } else {
+                  resolve(Promise.reject(error));
+                }
+              });
+            });
+          }
+          
+          setIsRefreshing(true);
+          
           try {
-            const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
+            console.log('[AuthContext] Attempting token refresh...');
             // Try to refresh using cookie
-            const res = await axios.post(`${API_URL}/api/auth/refresh`);
+            const res = await axios.post(`${API_URL}/api/auth/refresh`, {}, { withCredentials: true });
             const { token: newToken } = res.data;
             
+            console.log('[AuthContext] Token refreshed successfully');
             setToken(newToken);
             localStorage.setItem('token', newToken);
             axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
             
             originalRequest.headers['Authorization'] = `Bearer ${newToken}`;
+            
+            // Notify all queued requests
+            refreshSubscribersRef.current.forEach(callback => callback());
+            refreshSubscribersRef.current = [];
+            
             return axios(originalRequest);
           } catch (refreshError) {
-            // Refresh failed, logout
-            logout();
+            console.error('[AuthContext] Refresh failed:', refreshError.response?.status, refreshError.response?.data?.message);
+            // Refresh failed, clear auth state
+            setUser(null);
+            setToken(null);
+            localStorage.removeItem('token');
+            delete axios.defaults.headers.common['Authorization'];
+            refreshSubscribersRef.current = [];
             return Promise.reject(refreshError);
+          } finally {
+            setIsRefreshing(false);
           }
         }
         return Promise.reject(error);
@@ -77,26 +118,16 @@ export const AuthProvider = ({ children }) => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       
       try {
-        // If no token in storage, try to get one via refresh cookie first
-        if (!token) {
-           try {
-             const refreshRes = await axios.post(`${API_URL}/api/auth/refresh`);
-             const newToken = refreshRes.data.token;
-             setToken(newToken);
-             axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
-           } catch (e) {
-             // No refresh token or invalid
-             throw new Error('No session');
-           }
+        // If we have a token, verify it's still valid
+        if (token) {
+          const res = await axios.get(`${API_URL}/api/auth/me`);
+          setUser(res.data);
+        } else {
+          // No token and not logged in - just finish loading
+          setUser(null);
         }
-        
-        // Now fetch user details
-        const res = await axios.get(`${API_URL}/api/auth/me`);
-        setUser(res.data);
       } catch (err) {
-        console.log('Session verification failed:', err.message);
-        // Don't call logout() here to avoid infinite loops or unnecessary API calls
-        // Just clear state
+        console.log('[AuthContext] Session verification failed:', err.message);
         setUser(null);
         setToken(null);
         localStorage.removeItem('token');
@@ -115,7 +146,7 @@ export const AuthProvider = ({ children }) => {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
       const endpoint = type === 'admin' ? '/api/auth/admin/login' : '/api/auth/branch/login';
       
-      const res = await axios.post(`${API_URL}${endpoint}`, credentials);
+      const res = await axios.post(`${API_URL}${endpoint}`, credentials, { withCredentials: true });
       
       const { token: newToken, ...userData } = res.data;
       
@@ -134,7 +165,7 @@ export const AuthProvider = ({ children }) => {
   const logout = async () => {
     try {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
-      await axios.post(`${API_URL}/api/auth/logout`);
+      await axios.post(`${API_URL}/api/auth/logout`, {}, { withCredentials: true });
     } catch (e) {
       console.error('Logout error', e);
     }

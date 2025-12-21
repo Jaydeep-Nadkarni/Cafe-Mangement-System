@@ -1,5 +1,7 @@
 const Branch = require('../models/Branch');
 const Admin = require('../models/Admin');
+const Memo = require('../models/Memo');
+const Alert = require('../models/Alert');
 const analyticsService = require('../services/analyticsService');
 
 // @desc    Get global analytics
@@ -126,7 +128,302 @@ const updateBranch = async (req, res) => {
       return res.status(404).json({ message: 'Branch not found' });
     }
 
-    res.json(branch);
+  res.json(branch);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * MEMO ENDPOINTS
+ */
+
+// @desc    Get all memos for a branch (admin view)
+// @route   GET /api/admin/memos?branch=id
+// @access  Admin
+const getMemos = async (req, res) => {
+  try {
+    const { branch } = req.query;
+    const query = { status: 'active' };
+    if (branch) query.branch = branch;
+
+    const memos = await Memo.find(query)
+      .populate('createdBy', 'username email')
+      .sort({ createdAt: -1 });
+
+    res.json(memos);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create a new memo
+// @route   POST /api/admin/memos
+// @access  Admin/SuperAdmin
+const createMemo = async (req, res) => {
+  try {
+    const { branch, title, content, priority, expiresAt } = req.body;
+    const adminId = req.user._id;
+
+    const memo = await Memo.create({
+      branch,
+      title,
+      content,
+      priority,
+      createdBy: adminId,
+      expiresAt,
+      status: 'active'
+    });
+
+    const populatedMemo = await memo.populate('createdBy', 'username email');
+
+    res.status(201).json(populatedMemo);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Acknowledge memo by manager
+// @route   PUT /api/admin/memos/:id/acknowledge
+// @access  Manager/Admin
+const acknowledgeMemo = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const managerId = req.user._id;
+
+    const memo = await Memo.findById(id);
+    if (!memo) {
+      return res.status(404).json({ message: 'Memo not found' });
+    }
+
+    // Check if manager already read this memo
+    const existingRead = memo.readByManagers.find(
+      r => r.manager.toString() === managerId.toString()
+    );
+
+    if (existingRead) {
+      // Update acknowledgement status
+      existingRead.acknowledged = true;
+      existingRead.acknowledgedAt = new Date();
+    } else {
+      // Add new read entry
+      memo.readByManagers.push({
+        manager: managerId,
+        readAt: new Date(),
+        acknowledged: true,
+        acknowledgedAt: new Date()
+      });
+    }
+
+    await memo.save();
+    res.json({ message: 'Memo acknowledged', memo });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete/archive memo
+// @route   DELETE /api/admin/memos/:id
+// @access  Admin/SuperAdmin
+const deleteMemo = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const memo = await Memo.findByIdAndUpdate(
+      id,
+      { status: 'archived' },
+      { new: true }
+    );
+
+    if (!memo) {
+      return res.status(404).json({ message: 'Memo not found' });
+    }
+
+    res.json({ message: 'Memo archived', memo });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Mark memo as read by manager
+// @route   PUT /api/admin/memos/:id/read
+// @access  Manager/Admin
+const markMemoAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const managerId = req.user._id;
+
+    const memo = await Memo.findById(id);
+    if (!memo) {
+      return res.status(404).json({ message: 'Memo not found' });
+    }
+
+    // Check if manager already read this memo
+    const existingRead = memo.readByManagers.find(
+      r => r.manager.toString() === managerId.toString()
+    );
+
+    if (!existingRead) {
+      // Add new read entry
+      memo.readByManagers.push({
+        manager: managerId,
+        readAt: new Date(),
+        acknowledged: false
+      });
+
+      await memo.save();
+    }
+
+    const populatedMemo = await memo.populate('readByManagers.manager', 'username email');
+    res.json({ message: 'Memo marked as read', memo: populatedMemo });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+/**
+ * ALERT ENDPOINTS
+ */
+
+// @desc    Get all alerts for a branch
+// @route   GET /api/admin/alerts?branch=id&dismissed=false
+// @access  Admin/Manager
+const getAlerts = async (req, res) => {
+  try {
+    const { branch, dismissed } = req.query;
+    const query = {};
+    
+    if (branch) query.branch = branch;
+    if (dismissed === 'false') query.isDismissed = false;
+    else if (dismissed === 'true') query.isDismissed = true;
+
+    const alerts = await Alert.find(query)
+      .populate('createdBy', 'username email')
+      .sort({ createdAt: -1 })
+      .limit(100);
+
+    res.json(alerts);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Create new alert
+// @route   POST /api/admin/alerts
+// @access  Admin
+const createAlert = async (req, res) => {
+  try {
+    const { branch, type, title, message, priority, relatedId, onModel, actionUrl } = req.body;
+    const adminId = req.user._id;
+
+    const alert = await Alert.create({
+      branch,
+      type,
+      title,
+      message,
+      priority: priority || 'medium',
+      createdBy: adminId,
+      relatedId,
+      onModel,
+      actionUrl
+    });
+
+    res.status(201).json(alert);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Mark alert as read
+// @route   PUT /api/admin/alerts/:id/read
+// @access  Admin/Manager
+const markAlertAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const alert = await Alert.findByIdAndUpdate(
+      id,
+      { 
+        isRead: true,
+        readAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    res.json(alert);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Dismiss alert
+// @route   PUT /api/admin/alerts/:id/dismiss
+// @access  Admin/Manager
+const dismissAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const alert = await Alert.findByIdAndUpdate(
+      id,
+      { 
+        isDismissed: true,
+        dismissedAt: new Date()
+      },
+      { new: true }
+    );
+
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    res.json(alert);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Delete alert
+// @route   DELETE /api/admin/alerts/:id
+// @access  Admin
+const deleteAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const alert = await Alert.findByIdAndDelete(id);
+
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    res.json({ message: 'Alert deleted', alert });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update alert
+// @route   PUT /api/admin/alerts/:id
+// @access  Admin
+const updateAlert = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { type, title, message, priority, actionUrl } = req.body;
+
+    const alert = await Alert.findByIdAndUpdate(
+      id,
+      { type, title, message, priority, actionUrl },
+      { new: true }
+    );
+
+    if (!alert) {
+      return res.status(404).json({ message: 'Alert not found' });
+    }
+
+    res.json(alert);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -137,5 +434,18 @@ module.exports = {
   createBranch,
   getBranches,
   updateBranchStatus,
-  updateBranch
+  updateBranch,
+  // Memo endpoints
+  getMemos,
+  createMemo,
+  acknowledgeMemo,
+  markMemoAsRead,
+  deleteMemo,
+  // Alert endpoints
+  getAlerts,
+  createAlert,
+  updateAlert,
+  markAlertAsRead,
+  dismissAlert,
+  deleteAlert
 };
