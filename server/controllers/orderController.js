@@ -741,12 +741,13 @@ const mergeOrders = async (req, res) => {
       });
     }
 
-    // Validation: Active/Pending only
-    const invalidStatus = orders.filter(o => !['active', 'pending'].includes(o.status));
+    // Validation: Active/Pending only (corrected to match actual statuses)
+    const validStatuses = ['created', 'confirmed', 'preparing', 'ready'];
+    const invalidStatus = orders.filter(o => !validStatuses.includes(o.status));
     if (invalidStatus.length > 0) {
       await session.abortTransaction();
       return res.status(400).json({
-        message: 'Can only merge active or pending orders'
+        message: `Can only merge orders with status: ${validStatuses.join(', ')}`
       });
     }
 
