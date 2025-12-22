@@ -41,10 +41,10 @@ const protect = async (req, res, next) => {
         if (user && user.isActive) {
           // Generate new access token
           const newAccessToken = generateToken(user._id, user.role);
-          
+
           // Set header so client can update its local token
           res.setHeader('x-access-token', newAccessToken);
-          
+
           req.user = user;
           return next();
         }
@@ -53,13 +53,13 @@ const protect = async (req, res, next) => {
         // Fall through to 401
       }
     }
-    
+
     res.status(401).json({ message: 'Not authorized, token failed' });
   }
 };
 
 const requireAdmin = (req, res, next) => {
-  if (req.user && (req.user.role === 'admin' || req.user.role === 'super_admin')) {
+  if (req.user && (req.user.role === 'admin' || req.user.role === 'super_admin' || req.user.role === 'manager')) {
     next();
   } else {
     res.status(403).json({ message: 'Not authorized as an admin' });
