@@ -10,11 +10,11 @@
         let themeColor = '#16a34a'; // default green
 
         // Detect dashboard type
-        if (path.startsWith('/branch-dashboard')) {
+        if (path.startsWith('/branch/dashboard') || path.startsWith('/branch')) {
             manifestPath = '/manifest-manager.json';
             themeColor = '#16a34a'; // green for manager
             console.log('[PWA] Loading Manager Dashboard manifest');
-        } else if (path.startsWith('/admin-dashboard')) {
+        } else if (path.startsWith('/admin/dashboard') || path.startsWith('/admin')) {
             manifestPath = '/manifest-admin.json';
             themeColor = '#7c3aed'; // purple for admin
             console.log('[PWA] Loading Admin Dashboard manifest');
@@ -33,7 +33,8 @@
         }
 
         // Update apple mobile web app capable for dashboards
-        if (path.startsWith('/branch-dashboard') || path.startsWith('/admin-dashboard')) {
+        if (path.startsWith('/branch/dashboard') || path.startsWith('/admin/dashboard') ||
+            path.startsWith('/branch') || path.startsWith('/admin')) {
             let appleMeta = document.querySelector('meta[name="apple-mobile-web-app-capable"]');
             if (!appleMeta) {
                 appleMeta = document.createElement('meta');

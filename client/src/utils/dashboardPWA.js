@@ -5,54 +5,54 @@ let deferredPrompt = null;
 let installButton = null;
 
 export function setupDashboardInstallPrompt() {
-    // Only show on dashboards
-    const path = window.location.pathname;
-    const isDashboard = path.startsWith('/branch-dashboard') || path.startsWith('/admin-dashboard');
+  // Only show on dashboards
+  const path = window.location.pathname;
+  const isDashboard = path.startsWith('/branch/dashboard') || path.startsWith('/admin/dashboard');
 
-    if (!isDashboard) {
-        console.log('[PWA] Not on dashboard, skipping install prompt');
-        return;
-    }
+  if (!isDashboard) {
+    console.log('[PWA] Not on dashboard, skipping install prompt');
+    return;
+  }
 
-    // Listen for install prompt
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault();
-        deferredPrompt = e;
+  // Listen for install prompt
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
 
-        console.log('[PWA] Install prompt available for dashboard');
-        showDashboardInstallButton();
-    });
+    console.log('[PWA] Install prompt available for dashboard');
+    showDashboardInstallButton();
+  });
 
-    // Detect when app was installed
-    window.addEventListener('appinstalled', () => {
-        console.log('[PWA] Dashboard app installed successfully!');
-        deferredPrompt = null;
-        hideDashboardInstallButton();
+  // Detect when app was installed
+  window.addEventListener('appinstalled', () => {
+    console.log('[PWA] Dashboard app installed successfully!');
+    deferredPrompt = null;
+    hideDashboardInstallButton();
 
-        // Show success message
-        showInstallSuccessMessage();
-    });
+    // Show success message
+    showInstallSuccessMessage();
+  });
 
-    // Check if already installed
-    if (window.matchMedia('(display-mode: standalone)').matches) {
-        console.log('[PWA] App is running in standalone mode');
-    }
+  // Check if already installed
+  if (window.matchMedia('(display-mode: standalone)').matches) {
+    console.log('[PWA] App is running in standalone mode');
+  }
 }
 
 function showDashboardInstallButton() {
-    // Check if button already exists
-    if (document.getElementById('dashboard-install-btn')) return;
+  // Check if button already exists
+  if (document.getElementById('dashboard-install-btn')) return;
 
-    const path = window.location.pathname;
-    const isManager = path.startsWith('/branch-dashboard');
-    const isAdmin = path.startsWith('/admin-dashboard');
+  const path = window.location.pathname;
+  const isManager = path.startsWith('/branch/dashboard') || path.startsWith('/branch');
+  const isAdmin = path.startsWith('/admin/dashboard') || path.startsWith('/admin');
 
-    const appName = isManager ? 'Manager POS' : isAdmin ? 'Admin Panel' : 'Dashboard';
-    const themeColor = isManager ? '#16a34a' : '#7c3aed';
+  const appName = isManager ? 'Manager POS' : isAdmin ? 'Admin Panel' : 'Dashboard';
+  const themeColor = isManager ? '#16a34a' : '#7c3aed';
 
-    installButton = document.createElement('div');
-    installButton.id = 'dashboard-install-btn';
-    installButton.innerHTML = `
+  installButton = document.createElement('div');
+  installButton.id = 'dashboard-install-btn';
+  installButton.innerHTML = `
     <div style="
       position: fixed;
       top: 20px;
@@ -121,38 +121,38 @@ function showDashboardInstallButton() {
     </div>
   `;
 
-    document.body.appendChild(installButton);
+  document.body.appendChild(installButton);
 
-    // Install button click
-    document.getElementById('install-now-btn').addEventListener('click', async () => {
-        if (!deferredPrompt) return;
+  // Install button click
+  document.getElementById('install-now-btn').addEventListener('click', async () => {
+    if (!deferredPrompt) return;
 
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
 
-        console.log('[PWA] Install prompt outcome:', outcome);
+    console.log('[PWA] Install prompt outcome:', outcome);
 
-        if (outcome === 'accepted') {
-            console.log('[PWA] User accepted install');
-        } else {
-            console.log('[PWA] User dismissed install');
-        }
+    if (outcome === 'accepted') {
+      console.log('[PWA] User accepted install');
+    } else {
+      console.log('[PWA] User dismissed install');
+    }
 
-        deferredPrompt = null;
-        hideDashboardInstallButton();
-    });
+    deferredPrompt = null;
+    hideDashboardInstallButton();
+  });
 
-    // Dismiss button click
-    document.getElementById('install-dismiss-btn').addEventListener('click', () => {
-        hideDashboardInstallButton();
+  // Dismiss button click
+  document.getElementById('install-dismiss-btn').addEventListener('click', () => {
+    hideDashboardInstallButton();
 
-        // Show again in 24 hours
-        localStorage.setItem('pwa-install-dismissed', Date.now().toString());
-    });
+    // Show again in 24 hours
+    localStorage.setItem('pwa-install-dismissed', Date.now().toString());
+  });
 
-    // Add animation
-    const style = document.createElement('style');
-    style.textContent = `
+  // Add animation
+  const style = document.createElement('style');
+  style.textContent = `
     @keyframes slideInRight {
       from {
         transform: translateX(400px);
@@ -164,26 +164,26 @@ function showDashboardInstallButton() {
       }
     }
   `;
-    document.head.appendChild(style);
+  document.head.appendChild(style);
 }
 
 function hideDashboardInstallButton() {
-    if (installButton) {
-        installButton.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => {
-            installButton?.remove();
-            installButton = null;
-        }, 300);
-    }
+  if (installButton) {
+    installButton.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => {
+      installButton?.remove();
+      installButton = null;
+    }, 300);
+  }
 }
 
 function showInstallSuccessMessage() {
-    const path = window.location.pathname;
-    const isManager = path.startsWith('/branch-dashboard');
-    const appName = isManager ? 'Manager POS' : 'Admin Panel';
+  const path = window.location.pathname;
+  const isManager = path.startsWith('/branch/dashboard') || path.startsWith('/branch');
+  const appName = isManager ? 'Manager POS' : 'Admin Panel';
 
-    const message = document.createElement('div');
-    message.style.cssText = `
+  const message = document.createElement('div');
+  message.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
@@ -197,7 +197,7 @@ function showInstallSuccessMessage() {
     animation: slideInRight 0.3s ease;
   `;
 
-    message.innerHTML = `
+  message.innerHTML = `
     <div style="font-weight: 600; margin-bottom: 4px;">
       ✅ ${appName} Installed!
     </div>
@@ -206,21 +206,21 @@ function showInstallSuccessMessage() {
     </div>
   `;
 
-    document.body.appendChild(message);
+  document.body.appendChild(message);
 
-    setTimeout(() => {
-        message.style.animation = 'slideOutRight 0.3s ease';
-        setTimeout(() => message.remove(), 300);
-    }, 5000);
+  setTimeout(() => {
+    message.style.animation = 'slideOutRight 0.3s ease';
+    setTimeout(() => message.remove(), 300);
+  }, 5000);
 }
 
 // Check if user dismissed install recently
 export function shouldShowInstallPrompt() {
-    const dismissed = localStorage.getItem('pwa-install-dismissed');
-    if (!dismissed) return true;
+  const dismissed = localStorage.getItem('pwa-install-dismissed');
+  if (!dismissed) return true;
 
-    const dismissedTime = parseInt(dismissed);
-    const hoursSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60);
+  const dismissedTime = parseInt(dismissed);
+  const hoursSinceDismissed = (Date.now() - dismissedTime) / (1000 * 60 * 60);
 
-    return hoursSinceDismissed > 24; // Show again after 24 hours
+  return hoursSinceDismissed > 24; // Show again after 24 hours
 }
