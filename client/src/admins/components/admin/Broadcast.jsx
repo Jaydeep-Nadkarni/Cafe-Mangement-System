@@ -70,7 +70,10 @@ export default function Broadcast() {
     const fetchBroadcasts = async () => {
         try {
             setLoading(true);
-            const res = await axios.get(`${API_URL}/api/admin/broadcast/logs?limit=20`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/broadcast/logs?limit=20`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setBroadcasts(res.data.data);
         } catch (error) {
             console.error('Error fetching broadcasts:', error);
@@ -82,7 +85,10 @@ export default function Broadcast() {
 
     const fetchBranches = async () => {
         try {
-            const res = await axios.get(`${API_URL}/api/admin/branches`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/branches`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setBranches(res.data);
         } catch (error) {
             console.error('Error fetching branches:', error);
@@ -91,7 +97,10 @@ export default function Broadcast() {
 
     const fetchStats = async () => {
         try {
-            const res = await axios.get(`${API_URL}/api/admin/broadcast/stats?days=30`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/broadcast/stats?days=30`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setStats(res.data.data);
         } catch (error) {
             console.error('Error fetching stats:', error);
@@ -139,14 +148,17 @@ export default function Broadcast() {
 
         try {
             setLoading(true);
-            const res = await axios.post(`${API_URL}/api/admin/broadcast/send`, formData);
+            const token = localStorage.getItem('token');
+            const res = await axios.post(`${API_URL}/api/admin/broadcast/send`, formData, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
 
             if (res.data.success) {
                 setStatus({
                     type: 'success',
                     text: `Broadcast ${formData.scheduleTime ? 'scheduled' : 'sent'} successfully!`
                 });
-                
+
                 // Reset form
                 setFormData({
                     title: '',
@@ -160,7 +172,7 @@ export default function Broadcast() {
                     lastOrderWithinDays: 30,
                     branches: []
                 });
-                
+
                 // Refresh broadcasts list
                 setTimeout(() => {
                     fetchBroadcasts();
@@ -185,7 +197,10 @@ export default function Broadcast() {
 
     const handleViewDetails = async (broadcastId) => {
         try {
-            const res = await axios.get(`${API_URL}/api/admin/broadcast/logs/${broadcastId}`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/broadcast/logs/${broadcastId}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setSelectedBroadcast(res.data.data);
         } catch (error) {
             console.error('Error fetching broadcast details:', error);
@@ -197,7 +212,10 @@ export default function Broadcast() {
 
         try {
             setLoading(true);
-            const res = await axios.put(`${API_URL}/api/admin/broadcast/${broadcastId}/cancel`);
+            const token = localStorage.getItem('token');
+            const res = await axios.put(`${API_URL}/api/admin/broadcast/${broadcastId}/cancel`, {}, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             if (res.data.success) {
                 setStatus({ type: 'success', text: 'Broadcast cancelled successfully' });
                 fetchBroadcasts();
@@ -277,7 +295,7 @@ export default function Broadcast() {
                         <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                             <p className="text-xs text-purple-600 font-semibold mb-1">DELIVERY RATE</p>
                             <p className="text-2xl font-bold text-purple-900">
-                                {selectedBroadcast.stats?.totalRecipients ? 
+                                {selectedBroadcast.stats?.totalRecipients ?
                                     Math.round((selectedBroadcast.stats.sent / selectedBroadcast.stats.totalRecipients) * 100) : 0}%
                             </p>
                         </div>
@@ -335,11 +353,10 @@ export default function Broadcast() {
 
             {/* Status Messages */}
             {status && (
-                <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${
-                    status.type === 'success' 
-                        ? 'bg-green-50 border border-green-200' 
+                <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${status.type === 'success'
+                        ? 'bg-green-50 border border-green-200'
                         : 'bg-red-50 border border-red-200'
-                }`}>
+                    }`}>
                     {status.type === 'success' ? (
                         <CheckCircle className={`w-5 h-5 ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`} />
                     ) : (
@@ -386,11 +403,10 @@ export default function Broadcast() {
                                                 key={type.value}
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, broadcastType: type.value }))}
-                                                className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${
-                                                    formData.broadcastType === type.value
+                                                className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${formData.broadcastType === type.value
                                                         ? 'border-blue-500 bg-blue-50'
                                                         : 'border-gray-200 hover:border-gray-300'
-                                                }`}
+                                                    }`}
                                             >
                                                 <IconComponent className="w-4 h-4" />
                                                 <span className="text-xs font-medium">{type.label}</span>
@@ -432,11 +448,10 @@ export default function Broadcast() {
                                         key={option.value}
                                         type="button"
                                         onClick={() => setFormData(prev => ({ ...prev, targetAudience: option.value }))}
-                                        className={`p-4 rounded-lg border-2 text-left transition-all ${
-                                            formData.targetAudience === option.value
+                                        className={`p-4 rounded-lg border-2 text-left transition-all ${formData.targetAudience === option.value
                                                 ? 'border-blue-500 bg-blue-50'
                                                 : 'border-gray-200 hover:border-gray-300'
-                                        }`}
+                                            }`}
                                     >
                                         <p className="font-semibold text-sm text-gray-900">{option.label}</p>
                                         <p className="text-xs text-gray-600">{option.desc}</p>
@@ -449,7 +464,7 @@ export default function Broadcast() {
                         {formData.targetAudience !== 'opt_in_only' && (
                             <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-4">
                                 <h3 className="font-semibold text-gray-900 text-sm">Filter Options</h3>
-                                
+
                                 {formData.targetAudience === 'vip_customers' && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <div>
@@ -598,7 +613,7 @@ export default function Broadcast() {
                         <div className="bg-purple-50 p-4 rounded-lg border border-purple-200">
                             <p className="text-xs text-purple-600 font-semibold mb-1">SUCCESS RATE</p>
                             <p className="text-3xl font-bold text-purple-900">
-                                {stats.overall?.totalSent && stats.overall?.totalSent + stats.overall?.totalFailed > 0 ? 
+                                {stats.overall?.totalSent && stats.overall?.totalSent + stats.overall?.totalFailed > 0 ?
                                     Math.round((stats.overall.totalSent / (stats.overall.totalSent + stats.overall.totalFailed)) * 100) : 0}%
                             </p>
                         </div>

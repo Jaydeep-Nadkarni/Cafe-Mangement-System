@@ -223,12 +223,19 @@ export default function Reports({ branch }) {
   };
 
   const processMenuTreemap = (items) => {
-    // Create treemap structure
+    // Create treemap structure with only items that have revenue
+    const validItems = items.filter(item => (item.revenue || 0) > 0);
+    
+    if (validItems.length === 0) {
+      setMenuTreemap([]);
+      return;
+    }
+
     const treeData = [
-      { id: 'root', parent: null, value: 0, name: 'Menu' }
+      { id: 'root', parent: null, value: validItems.reduce((sum, item) => sum + (item.revenue || 0), 0), name: 'Menu' }
     ];
 
-    items.forEach((item, index) => {
+    validItems.forEach((item, index) => {
       treeData.push({
         id: `item-${index}`,
         parent: 'root',

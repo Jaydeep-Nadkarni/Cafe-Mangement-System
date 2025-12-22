@@ -76,43 +76,79 @@ export default function Stats({ branch }) {
       const token = localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const [
-        realtimeRes,
-        revenueByPaymentRes,
-        tableHeatmapRes,
-        velocityRes,
-        paymentStatsRes,
-        peakHoursRes,
-        revenuePatternRes
-      ] = await Promise.all([
-        axios.get(`${API_URL}/api/branch/analytics/realtime?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/revenue-by-payment?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/payment-stats?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/peak-hours?range=${timeRange}`, { headers }),
-        axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`, { headers })
-      ]);
+      // Define all API calls with try-catch individually for resilience
+      let realtimeRes = null;
+      let revenueByPaymentRes = null;
+      let tableHeatmapRes = null;
+      let velocityRes = null;
+      let paymentStatsRes = null;
+      let peakHoursRes = null;
+      let revenuePatternRes = null;
 
-      console.log('[Stats] Revenue Pattern Response:', revenuePatternRes.data);
-      console.log('[Stats] Peak Hours Response:', peakHoursRes.data);
-      console.log('[Stats] Realtime Stats:', realtimeRes.data);
+      try {
+        realtimeRes = await axios.get(`${API_URL}/api/branch/analytics/realtime?range=${timeRange}`, { headers });
+        console.log('[Stats] Realtime Stats:', realtimeRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch realtime stats:', err.message);
+        realtimeRes = { data: { totalRevenue: 0, totalOrders: 0, avgOrderValue: 0, activeOrders: 0, tableOccupancyRate: 0, avgTurnaroundTime: 0, availableTables: 0, totalTables: 0 } };
+      }
 
+      try {
+        revenueByPaymentRes = await axios.get(`${API_URL}/api/branch/analytics/revenue-by-payment?range=${timeRange}`, { headers });
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch revenue by payment:', err.message);
+        revenueByPaymentRes = { data: { breakdown: [] } };
+      }
+
+      try {
+        tableHeatmapRes = await axios.get(`${API_URL}/api/branch/analytics/table-heatmap?range=${timeRange}`, { headers });
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch table heatmap:', err.message);
+        tableHeatmapRes = { data: { heatmap: [] } };
+      }
+
+      try {
+        velocityRes = await axios.get(`${API_URL}/api/branch/analytics/item-velocity?range=${timeRange}`, { headers });
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch menu velocity:', err.message);
+        velocityRes = { data: { items: [] } };
+      }
+
+      try {
+        paymentStatsRes = await axios.get(`${API_URL}/api/branch/analytics/payment-stats?range=${timeRange}`, { headers });
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch payment stats:', err.message);
+        paymentStatsRes = { data: { successRate: 0, failedCount: 0, pendingCount: 0 } };
+      }
+
+      try {
+        peakHoursRes = await axios.get(`${API_URL}/api/branch/analytics/peak-hours?range=${timeRange}`, { headers });
+        console.log('[Stats] Peak Hours Response:', peakHoursRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch peak hours:', err.message);
+        peakHoursRes = { data: { hourlyPattern: [] } };
+      }
+
+      try {
+        revenuePatternRes = await axios.get(`${API_URL}/api/branch/analytics/revenue-pattern?range=${timeRange}&type=hourly`, { headers });
+        console.log('[Stats] Revenue Pattern Response:', revenuePatternRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch revenue pattern:', err.message);
+        revenuePatternRes = { data: { pattern: [] } };
+      }
+
+      // Update state with whatever data we have
       setRealtimeStats(realtimeRes.data);
       setPaymentBreakdown(revenueByPaymentRes.data.breakdown || []);
       setTableHeatmap(tableHeatmapRes.data.heatmap || []);
       setMenuVelocity(velocityRes.data.items || []);
-      setPaymentStats(paymentStatsRes.data);
+      setPaymentStats(paymentStatsRes.data || {});
 
-      // Set peak hours data - filter to only show hours with activity
       const hourlyData = peakHoursRes.data.hourlyPattern || [];
       setPeakHours(hourlyData);
-      console.log('[Stats] Setting peakHours:', hourlyData);
 
-      // Set revenue pattern data
       const patternData = revenuePatternRes.data.pattern || [];
       setRevenuePattern(patternData);
-      console.log('[Stats] Setting revenuePattern:', patternData);
 
       // Generate order distribution for box plot
       const orders = realtimeRes.data?.recentOrders || [];
@@ -133,12 +169,13 @@ export default function Stats({ branch }) {
 
       setLoading(false);
       setRefreshing(false);
+      setError(null); // Clear any previous errors
     } catch (error) {
       console.error('Error fetching analytics:', error);
       const errorMessage = error.response?.status === 401
         ? 'Authentication failed. Please log in again.'
-        : error.response?.data?.message || 'Failed to load analytics data';
-      setError(errorMessage);
+        : error.response?.data?.message || 'Failed to load some analytics data. Showing available data.';
+      setError(null); // Don't show error if we have partial data
       setLoading(false);
       setRefreshing(false);
     }

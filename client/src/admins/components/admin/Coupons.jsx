@@ -72,7 +72,10 @@ export default function Coupons() {
     const fetchCoupons = async () => {
         try {
             setLoading(true);
-            const res = await axios.get(`${API_URL}/api/admin/coupons`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/coupons`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setCoupons(res.data);
             setLoading(false);
         } catch (error) {
@@ -83,7 +86,10 @@ export default function Coupons() {
 
     const fetchBranches = async () => {
         try {
-            const res = await axios.get(`${API_URL}/api/admin/branches`);
+            const token = localStorage.getItem('token');
+            const res = await axios.get(`${API_URL}/api/admin/branches`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setBranches(res.data);
         } catch (error) {
             console.error('Error fetching branches:', error);
@@ -93,12 +99,15 @@ export default function Coupons() {
     const handleSubmit = async (e) => {
         e.preventDefault();
         try {
+            const token = localStorage.getItem('token');
             const payload = { ...formData };
             if (payload.applicableBranches.includes('all')) {
-                payload.applicableBranches = []; // Empty array usually means all, or handle backend logic
+                payload.applicableBranches = [];
             }
 
-            await axios.post(`${API_URL}/api/admin/coupons`, payload);
+            await axios.post(`${API_URL}/api/admin/coupons`, payload, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setShowModal(false);
             fetchCoupons();
             resetForm();
@@ -111,7 +120,10 @@ export default function Coupons() {
     const handleDelete = async (id) => {
         if (!window.confirm('Are you sure you want to delete this coupon?')) return;
         try {
-            await axios.delete(`${API_URL}/api/admin/coupons/${id}`);
+            const token = localStorage.getItem('token');
+            await axios.delete(`${API_URL}/api/admin/coupons/${id}`, {
+                headers: { Authorization: `Bearer ${token}` }
+            });
             setCoupons(coupons.filter(c => c._id !== id));
         } catch (error) {
             console.error('Error deleting coupon:', error);
@@ -120,7 +132,11 @@ export default function Coupons() {
 
     const toggleStatus = async (id, currentStatus) => {
         try {
-            await axios.put(`${API_URL}/api/admin/coupons/${id}`, { isActive: !currentStatus });
+            const token = localStorage.getItem('token');
+            await axios.put(`${API_URL}/api/admin/coupons/${id}`,
+                { isActive: !currentStatus },
+                { headers: { Authorization: `Bearer ${token}` } }
+            );
             setCoupons(coupons.map(c => c._id === id ? { ...c, isActive: !currentStatus } : c));
         } catch (error) {
             console.error('Error updating status:', error);
@@ -361,11 +377,10 @@ export default function Coupons() {
                                             key={type.value}
                                             type="button"
                                             onClick={() => setFormData({ ...formData, couponType: type.value })}
-                                            className={`p-3 rounded-lg border-2 text-center transition ${
-                                                formData.couponType === type.value
-                                                    ? 'border-green-600 bg-green-50'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                            }`}
+                                            className={`p-3 rounded-lg border-2 text-center transition ${formData.couponType === type.value
+                                                ? 'border-green-600 bg-green-50'
+                                                : 'border-gray-200 hover:border-gray-300'
+                                                }`}
                                         >
                                             <div className="text-sm font-medium">{type.label}</div>
                                         </button>
@@ -507,6 +522,51 @@ export default function Coupons() {
                                     />
                                     <span className="text-sm font-medium text-gray-700">Restrict: One use per table per day</span>
                                 </label>
+                            </div>
+
+                            {/* Branch Selection */}
+                            <div className="space-y-4">
+                                <h4 className="font-semibold text-gray-900 flex items-center gap-2">
+                                    <Store className="w-5 h-5" /> Applicable Branches
+                                </h4>
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                                        <input
+                                            type="checkbox"
+                                            checked={formData.applicableBranches.length === 0}
+                                            onChange={(e) => {
+                                                if (e.target.checked) {
+                                                    setFormData({ ...formData, applicableBranches: [] });
+                                                }
+                                            }}
+                                            className="w-4 h-4 rounded border-gray-300"
+                                        />
+                                        <span className="text-sm font-medium text-gray-700">All Branches</span>
+                                    </label>
+                                    {branches.map(branch => (
+                                        <label key={branch._id} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
+                                            <input
+                                                type="checkbox"
+                                                checked={formData.applicableBranches.includes(branch._id)}
+                                                onChange={(e) => {
+                                                    if (e.target.checked) {
+                                                        setFormData({
+                                                            ...formData,
+                                                            applicableBranches: [...formData.applicableBranches, branch._id]
+                                                        });
+                                                    } else {
+                                                        setFormData({
+                                                            ...formData,
+                                                            applicableBranches: formData.applicableBranches.filter(id => id !== branch._id)
+                                                        });
+                                                    }
+                                                }}
+                                                className="w-4 h-4 rounded border-gray-300"
+                                            />
+                                            <span className="text-sm font-medium text-gray-700">{branch.name}</span>
+                                        </label>
+                                    ))}
+                                </div>
                             </div>
 
                             {/* Validity */}
