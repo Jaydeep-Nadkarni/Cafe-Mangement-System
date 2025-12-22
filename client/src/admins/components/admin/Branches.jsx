@@ -25,10 +25,11 @@ export default function Branches() {
         `${import.meta.env.VITE_API_URL}/api/admin/branches`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      setBranches(response.data.branches || []);
+      setBranches(Array.isArray(response.data) ? response.data : []);
       setLoading(false);
     } catch (error) {
       console.error('Error fetching branches:', error);
+      setBranches([]);
       setLoading(false);
     }
   };
@@ -175,7 +176,7 @@ export default function Branches() {
                 <td className="px-6 py-4 text-sm text-gray-900">{branch.name}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{branch.location}</td>
                 <td className="px-6 py-4 text-sm text-gray-600">{branch.contact}</td>
-                <td className="px-6 py-4 text-sm text-gray-600">{branch.manager || 'N/A'}</td>
+                <td className="px-6 py-4 text-sm text-gray-600">{typeof branch.manager === 'object' ? branch.manager?.username : branch.manager || 'N/A'}</td>
                 <td className="px-6 py-4 text-sm">
                   <span className={`inline-block px-3 py-1 rounded-full text-xs font-semibold ${
                     branch.isActive
@@ -200,7 +201,7 @@ export default function Branches() {
                         name: branch.name,
                         location: branch.location,
                         contact: branch.contact,
-                        manager: branch.manager || ''
+                        manager: typeof branch.manager === 'object' ? (branch.manager?.username || '') : (branch.manager || '')
                       });
                       setShowForm(true);
                     }}
