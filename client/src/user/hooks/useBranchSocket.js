@@ -18,13 +18,13 @@ import { useSocket } from '../context/SocketContext';
 export const useBranchSocket = (branchId, callbacks = {}) => {
   const socketContext = useSocket();
   
-  // Early return if context is not available
-  if (!socketContext) return;
-  
-  const { socket, joinBranchRoom, leaveBranchRoom } = socketContext;
+  // Safe access to socket context properties
+  const socket = socketContext?.socket;
+  const joinBranchRoom = socketContext?.joinBranchRoom;
+  const leaveBranchRoom = socketContext?.leaveBranchRoom;
 
   useEffect(() => {
-    if (!socket || !branchId) return;
+    if (!socket || !branchId || !joinBranchRoom || !leaveBranchRoom) return;
 
     // Join the branch room
     joinBranchRoom(branchId);
@@ -74,5 +74,5 @@ export const useBranchSocket = (branchId, callbacks = {}) => {
 
       leaveBranchRoom(branchId);
     };
-  }, [socket, branchId]); // Re-run if socket or branchId changes
+  }, [socket, branchId, joinBranchRoom, leaveBranchRoom]); // Re-run if socket or branchId changes
 };
