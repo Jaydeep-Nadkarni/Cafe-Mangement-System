@@ -55,13 +55,18 @@ const { getAIAnalysis: getAIAnalysisFromService, clearCache, getCacheStats } = r
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
   if (!userId) {
-    throw new Error('User ID is required');
+    const err = new Error('User ID is required');
+    err.statusCode = 400;
+    throw err;
   }
   
   const branch = await Branch.findOne({ manager: userId });
   if (!branch) {
     console.error(`No branch found for manager ID: ${userId}`);
-    throw new Error(`No branch assigned to this manager. User ID: ${userId}`);
+    const err = new Error(`Your account has not been assigned to a branch. Please contact your administrator.`);
+    err.statusCode = 404;
+    err.code = 'NO_BRANCH_ASSIGNED';
+    throw err;
   }
   return branch;
 };
@@ -216,20 +221,18 @@ const getBranchDetails = async (req, res) => {
       }
     } else {
       // Fallback to finding branch by manager
-      branch = await Branch.findOne({ manager: req.user._id });
-      if (!branch) {
-        console.warn(`Manager ${req.user._id} has no branch assigned`);
-        return res.status(404).json({ 
-          message: 'No branch assigned to this manager',
-          managerId: req.user._id 
-        });
+      try {
+        branch = await getManagerBranch(req.user._id);
+      } catch (error) {
+        return res.status(error.statusCode || 404).json({ message: error.message });
       }
     }
     
     res.json(branch);
   } catch (error) {
     console.error('Error in getBranchDetails:', error);
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
@@ -674,7 +677,8 @@ const getAlerts = async (req, res) => {
       .limit(50);
     res.json(alerts);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
@@ -732,7 +736,8 @@ const getMemos = async (req, res) => {
       .sort({ createdAt: -1 });
     res.json(memos);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
