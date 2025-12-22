@@ -32,8 +32,8 @@ export default function QRCodes() {
       setFetchingBranches(true);
       const token = localStorage.getItem('token');
       const response = await axios.get(
-        `${API_URL} /api/admin / branches`,
-        { headers: { Authorization: `Bearer ${token} ` } }
+        `${API_URL}/api/admin/branches`,
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setBranches(Array.isArray(response.data) ? response.data : []);
     } catch (error) {

@@ -12,7 +12,8 @@ import {
     Megaphone,
     CalendarClock,
     Filter,
-    Eye
+    Eye,
+    Calendar
 } from 'lucide-react';
 
 export default function Broadcast() {
@@ -354,8 +355,8 @@ export default function Broadcast() {
             {/* Status Messages */}
             {status && (
                 <div className={`mb-6 p-4 rounded-lg flex items-center gap-3 ${status.type === 'success'
-                        ? 'bg-green-50 border border-green-200'
-                        : 'bg-red-50 border border-red-200'
+                    ? 'bg-green-50 border border-green-200'
+                    : 'bg-red-50 border border-red-200'
                     }`}>
                     {status.type === 'success' ? (
                         <CheckCircle className={`w-5 h-5 ${status.type === 'success' ? 'text-green-600' : 'text-red-600'}`} />
@@ -404,8 +405,8 @@ export default function Broadcast() {
                                                 type="button"
                                                 onClick={() => setFormData(prev => ({ ...prev, broadcastType: type.value }))}
                                                 className={`p-3 rounded-lg border-2 flex items-center gap-2 transition-all ${formData.broadcastType === type.value
-                                                        ? 'border-blue-500 bg-blue-50'
-                                                        : 'border-gray-200 hover:border-gray-300'
+                                                    ? 'border-blue-500 bg-blue-50'
+                                                    : 'border-gray-200 hover:border-gray-300'
                                                     }`}
                                             >
                                                 <IconComponent className="w-4 h-4" />
@@ -449,8 +450,8 @@ export default function Broadcast() {
                                         type="button"
                                         onClick={() => setFormData(prev => ({ ...prev, targetAudience: option.value }))}
                                         className={`p-4 rounded-lg border-2 text-left transition-all ${formData.targetAudience === option.value
-                                                ? 'border-blue-500 bg-blue-50'
-                                                : 'border-gray-200 hover:border-gray-300'
+                                            ? 'border-blue-500 bg-blue-50'
+                                            : 'border-gray-200 hover:border-gray-300'
                                             }`}
                                     >
                                         <p className="font-semibold text-sm text-gray-900">{option.label}</p>
