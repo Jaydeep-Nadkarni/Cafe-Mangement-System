@@ -8,7 +8,7 @@
   --color-bg-cream: #FAFAFA;
   --color-text-main: #1A1A1A;
   --color-text-body: #5D5D5D;
-  
+
   --font-sans: "Inter", sans-serif;
   --font-heading: "Outfit", sans-serif;
   --font-mono: "Space Grotesk", monospace;
@@ -18,12 +18,17 @@
   html {
     @apply scroll-smooth;
   }
-  
+
   body {
     @apply antialiased bg-bg-cream text-text-body font-sans;
   }
 
-  h1, h2, h3, h4, h5, h6 {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
     @apply font-heading text-text-main;
   }
 }
@@ -32,66 +37,81 @@
   .shadow-soft {
     box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
   }
-  
+
   .shadow-card {
     box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05), 0 4px 6px -2px rgba(0, 0, 0, 0.025);
   }
-  
+
   .animate-fade-in {
     animation: fadeIn 0.2s ease-out;
   }
-  
+
   .animate-fade-in-up {
     animation: fadeInUp 0.3s ease-out;
   }
-  
+
   @keyframes fadeIn {
     from {
       opacity: 0;
     }
+
     to {
       opacity: 1;
     }
   }
-  
+
   @keyframes fadeInUp {
     from {
       opacity: 0;
       transform: translateY(10px);
     }
+
     to {
       opacity: 1;
       transform: translateY(0);
     }
   }
-  
+
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
   }
-  
+
   .scrollbar-hide::-webkit-scrollbar {
     display: none;
   }
-  
+
   .delay-100 {
     animation-delay: 100ms;
   }
-  
+
   .delay-200 {
     animation-delay: 200ms;
   }
 
   /* Wordle Animations */
   @keyframes flipIn {
-    0% { transform: rotateX(0); }
-    50% { transform: rotateX(-90deg); }
-    100% { transform: rotateX(0); }
+    0% {
+      transform: rotateX(0);
+    }
+
+    50% {
+      transform: rotateX(-90deg);
+    }
+
+    100% {
+      transform: rotateX(0);
+    }
   }
-  
+
   @keyframes flipOut {
-    0% { transform: rotateX(-90deg); }
-    100% { transform: rotateX(0); }
+    0% {
+      transform: rotateX(-90deg);
+    }
+
+    100% {
+      transform: rotateX(0);
+    }
   }
 
   .animate-flip {
@@ -103,29 +123,49 @@
   }
 
   @keyframes shake {
-    0%, 100% { transform: translateX(0); }
-    10%, 30%, 50%, 70%, 90% { transform: translateX(-4px); }
-    20%, 40%, 60%, 80% { transform: translateX(4px); }
+
+    0%,
+    100% {
+      transform: translateX(0);
+    }
+
+    10%,
+    30%,
+    50%,
+    70%,
+    90% {
+      transform: translateX(-4px);
+    }
+
+    20%,
+    40%,
+    60%,
+    80% {
+      transform: translateX(4px);
+    }
   }
 
   .animate-shake {
-    animation: shake 0.5s cubic-bezier(.36,.07,.19,.97) both;
+    animation: shake 0.5s cubic-bezier(.36, .07, .19, .97) both;
   }
 
   /* 3D Transform Utilities */
   .perspective-1000 {
     perspective: 1000px;
   }
-  
+
   .transform-style-3d {
     transform-style: preserve-3d;
   }
-  
+
   .rotate-x-0 {
     transform: rotateX(0deg);
   }
-  
+
   .rotate-x-180 {
     transform: rotateX(180deg);
   }
 }
+
+/* Import thermal printer styles for bill printing */
+@import './styles/thermal-print.css';
