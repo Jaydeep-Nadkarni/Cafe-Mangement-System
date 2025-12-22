@@ -16,7 +16,12 @@ import { useSocket } from '../context/SocketContext';
  * @param {Function} callbacks.onMemoCreated - Called when a new memo is created
  */
 export const useBranchSocket = (branchId, callbacks = {}) => {
-  const { socket, joinBranchRoom, leaveBranchRoom } = useSocket();
+  const socketContext = useSocket();
+  
+  // Early return if context is not available
+  if (!socketContext) return;
+  
+  const { socket, joinBranchRoom, leaveBranchRoom } = socketContext;
 
   useEffect(() => {
     if (!socket || !branchId) return;

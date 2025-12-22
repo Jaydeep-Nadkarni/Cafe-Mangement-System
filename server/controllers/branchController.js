@@ -206,14 +206,24 @@ const getBranchDetails = async (req, res) => {
       return res.status(401).json({ message: 'User not authenticated' });
     }
     
-    const branch = await Branch.findOne({ manager: req.user._id });
+    let branch;
     
-    if (!branch) {
-      console.warn(`Manager ${req.user._id} has no branch assigned`);
-      return res.status(404).json({ 
-        message: 'No branch assigned to this manager',
-        managerId: req.user._id 
-      });
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branch = await Branch.findById(req.query.branch);
+      if (!branch) {
+        return res.status(404).json({ message: 'Branch not found' });
+      }
+    } else {
+      // Fallback to finding branch by manager
+      branch = await Branch.findOne({ manager: req.user._id });
+      if (!branch) {
+        console.warn(`Manager ${req.user._id} has no branch assigned`);
+        return res.status(404).json({ 
+          message: 'No branch assigned to this manager',
+          managerId: req.user._id 
+        });
+      }
     }
     
     res.json(branch);
@@ -648,8 +658,18 @@ const getAnalytics = async (req, res) => {
 // @access  Manager
 const getAlerts = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
-    const alerts = await Alert.find({ branch: branch._id })
+    let branchId;
+    
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branchId = req.query.branch;
+    } else {
+      // Fallback to finding branch by manager
+      const branch = await getManagerBranch(req.user._id);
+      branchId = branch._id;
+    }
+    
+    const alerts = await Alert.find({ branch: branchId })
       .sort({ createdAt: -1 })
       .limit(50);
     res.json(alerts);
@@ -695,8 +715,18 @@ const deleteAlert = async (req, res) => {
 // @access  Manager
 const getMemos = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
-    const memos = await Memo.find({ branch: branch._id })
+    let branchId;
+    
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branchId = req.query.branch;
+    } else {
+      // Fallback to finding branch by manager
+      const branch = await getManagerBranch(req.user._id);
+      branchId = branch._id;
+    }
+    
+    const memos = await Memo.find({ branch: branchId })
       .populate('createdBy', 'username email')
       .populate('readByManagers.manager', 'username email')
       .sort({ createdAt: -1 });
