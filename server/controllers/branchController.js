@@ -27,6 +27,7 @@ const {
   getPeakDetection,
   getRealTimeStats,
   getHourlyRevenuePattern,
+  getMinuteRevenuePattern,
   getDailyRevenuePattern,
   getAIInsights
 } = require('../services/analyticsService');
@@ -905,7 +906,7 @@ const getRevenueByPayment = async (req, res) => {
     const timeRange = req.query.range || 'today';
     
     const data = await getRevenueByPaymentMethod(branch._id, timeRange);
-    res.json(data);
+    res.json({ breakdown: data || [] });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1003,14 +1004,19 @@ const getRevenuePattern = async (req, res) => {
     
     console.log(`[Controller] getRevenuePattern - Branch: ${branch._id}, Range: ${timeRange}, Type: ${type}`);
     
-    const data = type === 'hourly' 
-      ? await getHourlyRevenuePattern(branch._id, timeRange)
-      : await getDailyRevenuePattern(branch._id, timeRange);
+    let data;
+    if (timeRange === '15min') {
+      data = await getMinuteRevenuePattern(branch._id, timeRange);
+    } else if (type === 'daily') {
+      data = await getDailyRevenuePattern(branch._id, timeRange);
+    } else {
+      data = await getHourlyRevenuePattern(branch._id, timeRange);
+    }
     
     // For daily data, add label property
-    const pattern = type === 'daily' 
+    const pattern = (type === 'daily' && timeRange !== '15min') 
       ? data.map(item => ({ ...item, label: item.date }))
-      : data;  // Hourly already has label from service
+      : data;  // Hourly and Minute already have label from service
     
     console.log(`[Controller] getRevenuePattern response pattern length: ${pattern.length}`);
     

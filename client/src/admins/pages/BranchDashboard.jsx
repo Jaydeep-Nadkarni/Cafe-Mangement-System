@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../user/context/AuthContext';
-import { useBranchSocket } from '../../user/hooks/useBranchSocket';
 import axios from 'axios';
 
 // Components
@@ -43,6 +42,7 @@ export default function BranchDashboard() {
           // Store branch info in localStorage for Sidebar and other components
           if (branchRes.data._id) {
             localStorage.setItem('branchId', branchRes.data._id);
+            localStorage.setItem('branchName', branchRes.data.name);
           }
         }
       } catch (branchError) {
@@ -89,27 +89,14 @@ export default function BranchDashboard() {
     }
   };
 
-  // Real-time Updates
-  useBranchSocket(branch?._id, {
-    onNewOrder: (data) => {
+  // Set up polling for data refresh every 10 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
       fetchData();
-    },
-    onOrderStatusChange: (data) => {
-      fetchData();
-    },
-    onPaymentConfirmation: (data) => {
-      fetchData();
-    },
-    onTableMerge: (data) => {
-      fetchData();
-    },
-    onTableOccupancyChange: (data) => {
-      fetchData();
-    },
-    onOrderUpdate: (data) => {
-      fetchData();
-    }
-  });
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const renderContent = () => {
     if (loading) {

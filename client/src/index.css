@@ -89,6 +89,29 @@
     animation-delay: 200ms;
   }
 
+  /* Print Styles */
+  @media print {
+    body * {
+      visibility: hidden;
+    }
+    #printable-invoice, #printable-invoice * {
+      visibility: visible;
+    }
+    #printable-invoice {
+      position: absolute;
+      left: 0;
+      top: 0;
+      width: 100%;
+      margin: 0;
+      padding: 20px;
+      border: none !important;
+      box-shadow: none !important;
+    }
+    .print\:hidden {
+      display: none !important;
+    }
+  }
+
   /* Wordle Animations */
   @keyframes flipIn {
     0% {

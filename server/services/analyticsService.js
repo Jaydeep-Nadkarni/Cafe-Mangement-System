@@ -435,7 +435,21 @@ const getRevenueByPaymentMethod = async (branchId, timeRange = 'today') => {
     const matchStage = {
       branch: branchObjectId,
       paymentStatus: 'paid',
-      paidAt: { $gte: start, $lte: end }
+      $or: [
+        { paidAt: { $gte: start, $lte: end } },
+        { 
+          $and: [
+            { paidAt: { $exists: false } }, 
+            { createdAt: { $gte: start, $lte: end } }
+          ] 
+        },
+        { 
+          $and: [
+            { paidAt: null }, 
+            { createdAt: { $gte: start, $lte: end } }
+          ] 
+        }
+      ]
     };
 
     const result = await Order.aggregate([
@@ -449,6 +463,7 @@ const getRevenueByPaymentMethod = async (branchId, timeRange = 'today') => {
       },
       {
         $project: {
+          _id: 0,
           method: { $ifNull: ['$_id', 'cash'] },
           revenue: '$total',
           transactions: '$count'
@@ -457,11 +472,7 @@ const getRevenueByPaymentMethod = async (branchId, timeRange = 'today') => {
       { $sort: { revenue: -1 } }
     ]);
 
-    return result.map(r => ({
-      name: r.method,
-      value: r.revenue,
-      count: r.transactions
-    }));
+    return result;
   });
 };
 
@@ -542,16 +553,16 @@ const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
   console.log(`[getMenuItemVelocity] Branch: ${branchObjectId}, Range: ${timeRange}, Hours: ${hoursDiff}`);
   console.log(`[getMenuItemVelocity] Time: ${start.toISOString()} to ${end.toISOString()}`);
 
-  // Check if there are any paid orders in this period
+  // Check if there are any orders in this period
   const orderCount = await Order.countDocuments({
     branch: branchObjectId,
-    paymentStatus: 'paid',
+    status: { $ne: 'cancelled' },
     $or: [
-      { paidAt: { $gte: start, $lte: end } },  // Use paidAt if available
-      { createdAt: { $gte: start, $lte: end } }  // Fall back to createdAt
+      { paidAt: { $gte: start, $lte: end } },
+      { createdAt: { $gte: start, $lte: end } }
     ]
   });
-  console.log(`[getMenuItemVelocity] Found ${orderCount} paid orders in period`);
+  console.log(`[getMenuItemVelocity] Found ${orderCount} orders in period`);
 
   if (orderCount === 0) {
     console.log(`[getMenuItemVelocity] No data found, returning empty array`);
@@ -562,7 +573,7 @@ const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
     {
       $match: {
         branch: branchObjectId,
-        paymentStatus: 'paid',
+        status: { $ne: 'cancelled' },
         $or: [
           { paidAt: { $gte: start, $lte: end } },
           { createdAt: { $gte: start, $lte: end } }
@@ -574,7 +585,15 @@ const getMenuItemVelocity = async (branchId, timeRange = 'today') => {
       $group: {
         _id: '$items.menuItem',
         totalQuantity: { $sum: '$items.quantity' },
-        revenue: { $sum: { $multiply: ['$items.quantity', '$items.price'] } },
+        revenue: { 
+          $sum: { 
+            $cond: [
+              { $eq: ['$paymentStatus', 'paid'] },
+              { $multiply: ['$items.quantity', '$items.price'] },
+              0
+            ]
+          } 
+        },
         orderCount: { $sum: 1 }
       }
     },
@@ -631,43 +650,25 @@ const getPaymentReliability = async (branchId, timeRange = '7d') => {
       },
       {
         $group: {
-          _id: {
-            method: '$paymentMethod',
-            status: '$paymentStatus'
-          },
+          _id: '$paymentStatus',
           count: { $sum: 1 },
           totalAmount: { $sum: '$total' }
-        }
-      },
-      {
-        $group: {
-          _id: '$_id.method',
-          statuses: {
-            $push: {
-              status: '$_id.status',
-              count: '$count',
-              amount: '$totalAmount'
-            }
-          }
         }
       }
     ]);
 
-    return stats.map(stat => {
-      const paid = stat.statuses.find(s => s.status === 'paid') || { count: 0, amount: 0 };
-      const unpaid = stat.statuses.find(s => s.status === 'unpaid') || { count: 0, amount: 0 };
-      const total = paid.count + unpaid.count;
+    const paid = stats.find(s => s._id === 'paid') || { count: 0, totalAmount: 0 };
+    const unpaid = stats.find(s => s._id === 'unpaid') || { count: 0, totalAmount: 0 };
+    const total = paid.count + unpaid.count;
 
-      return {
-        method: stat._id || 'cash',
-        successRate: total > 0 ? (paid.count / total) * 100 : 0,
-        successCount: paid.count,
-        failureCount: unpaid.count,
-        totalAttempts: total,
-        successAmount: paid.amount,
-        failureAmount: unpaid.amount
-      };
-    });
+    return {
+      successRate: total > 0 ? (paid.count / total) * 100 : 0,
+      successCount: paid.count,
+      failedCount: 0, // We don't have a 'failed' status in the enum, maybe cancelled?
+      pendingCount: unpaid.count,
+      totalRevenue: paid.totalAmount,
+      totalAttempts: total
+    };
   });
 };
 
@@ -784,70 +785,74 @@ const getRealTimeStats = async (branchId, timeRange = '1h') => {
           $match: {
             branch: branchObjectId,
             paymentStatus: 'paid',
-            paidAt: { $gte: start, $lte: end }
+            $or: [
+              { paidAt: { $gte: start, $lte: end } },
+              { $and: [{ paidAt: { $exists: false } }, { createdAt: { $gte: start, $lte: end } }] },
+              { $and: [{ paidAt: null }, { createdAt: { $gte: start, $lte: end } }] }
+            ]
           }
         },
         {
           $group: {
             _id: null,
-            total: { $sum: '$total' },
+            total: { $sum: '$total' }
+          }
+        }
+      ]),
+
+      // Order status breakdown (non-cancelled)
+      Order.aggregate([
+        {
+          $match: {
+            branch: branchObjectId,
+            status: { $ne: 'cancelled' },
+            createdAt: { $gte: start, $lte: end }
+          }
+        },
+        {
+          $group: {
+            _id: '$status',
             count: { $sum: 1 }
           }
         }
       ]),
 
-      // Order status breakdown
-      Order.aggregate([
+      // Table occupancy
+      Table.aggregate([
         {
-          $match: {
-            branch: branchObjectId,
-            createdAt: { $gte: start, $lte: end }
-          }
+          $match: { branch: branchObjectId }
         },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
         }
-      }
-    ]),
+      ]),
 
-    // Table occupancy
-    Table.aggregate([
-      {
-        $match: { branch: branchObjectId }
-      },
-      {
-        $group: {
-          _id: '$status',
-          count: { $sum: 1 }
-        }
-      }
-    ]),
+      // Active orders count
+      Order.countDocuments({
+        branch: branchObjectId,
+        status: { $in: ['pending', 'in_progress'] }
+      })
+    ]);
 
-    // Active orders count
-    Order.countDocuments({
-      branch: branchObjectId,
-      status: { $in: ['pending', 'in_progress'] }
-    })
-  ]);
+    const revenueData = revenue[0] || { total: 0 };
+    const ordersByStatus = orders.reduce((acc, o) => {
+      acc[o._id] = o.count;
+      return acc;
+    }, {});
 
-  const revenueData = revenue[0] || { total: 0, count: 0 };
-  const ordersByStatus = orders.reduce((acc, o) => {
-    acc[o._id] = o.count;
-    return acc;
-  }, {});
+    const tablesByStatus = tableOccupancy.reduce((acc, t) => {
+      acc[t._id] = t.count;
+      return acc;
+    }, {});
 
-  const tablesByStatus = tableOccupancy.reduce((acc, t) => {
-    acc[t._id] = t.count;
-    return acc;
-  }, {});
+    const totalRevenue = revenueData.total || 0;
+    const totalOrders = orders.reduce((sum, o) => sum + o.count, 0);
+    const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
 
-  const totalRevenue = revenueData.total || 0;
-  const totalOrders = revenueData.count || 0;
-  const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
-
-  console.log(`[Analytics] Results - Revenue: ${totalRevenue}, Orders: ${totalOrders}, Active: ${activeOrders}`);
+    console.log(`[Analytics] Results - Revenue: ${totalRevenue}, Orders: ${totalOrders}, Active: ${activeOrders}`);
 
   return {
     // Legacy fields
@@ -888,7 +893,11 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
         $match: {
           branch: branchObjectId,
           paymentStatus: 'paid',
-          paidAt: { $gte: start, $lte: end }
+          $or: [
+            { paidAt: { $gte: start, $lte: end } },
+            { $and: [{ paidAt: { $exists: false } }, { createdAt: { $gte: start, $lte: end } }] },
+            { $and: [{ paidAt: null }, { createdAt: { $gte: start, $lte: end } }] }
+          ]
         }
       },
       {
@@ -896,7 +905,10 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
           // Add timezone offset to convert UTC to IST
           _id: { 
             $hour: { 
-              $add: ['$paidAt', timezoneOffsetHours * 60 * 60 * 1000] 
+              $add: [
+                { $ifNull: ['$paidAt', '$createdAt'] }, 
+                timezoneOffsetHours * 60 * 60 * 1000
+              ] 
             } 
           },
           revenue: { $sum: '$total' },
@@ -918,6 +930,70 @@ const getHourlyRevenuePattern = async (branchId, timeRange = 'today') => {
         revenue: existing?.revenue || 0,
         orders: existing?.orders || 0
       });
+    }
+
+    return result;
+  });
+};
+
+/**
+ * Get minute-by-minute revenue pattern (for short time ranges)
+ */
+const getMinuteRevenuePattern = async (branchId, timeRange = '15min') => {
+  const cacheKey = `minute_pattern_${branchId}_${timeRange}`;
+  
+  return getCachedData(cacheKey, async () => {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
+    const timezoneOffsetHours = 5.5;
+
+    const data = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          paymentStatus: 'paid',
+          $or: [
+            { paidAt: { $gte: start, $lte: end } },
+            { $and: [{ paidAt: { $exists: false } }, { createdAt: { $gte: start, $lte: end } }] },
+            { $and: [{ paidAt: null }, { createdAt: { $gte: start, $lte: end } }] }
+          ]
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $minute: {
+              $add: [
+                { $ifNull: ['$paidAt', '$createdAt'] },
+                timezoneOffsetHours * 60 * 60 * 1000
+              ]
+            }
+          },
+          revenue: { $sum: '$total' },
+          orders: { $sum: 1 }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Fill in missing minutes for the range
+    const result = [];
+    const startMinute = start.getMinutes();
+    const endMinute = end.getMinutes();
+    
+    // This is a bit tricky if it crosses an hour boundary, but for 15min it's usually fine
+    // A better way is to iterate by minute from start to end
+    let current = new Date(start);
+    while (current <= end) {
+      const minute = current.getMinutes();
+      const existing = data.find(d => d._id === minute);
+      result.push({
+        minute,
+        label: `${current.getHours()}:${minute.toString().padStart(2, '0')}`,
+        revenue: existing?.revenue || 0,
+        orders: existing?.orders || 0
+      });
+      current.setMinutes(current.getMinutes() + 1);
     }
 
     return result;
@@ -1514,6 +1590,7 @@ module.exports = {
   getPeakDetection,
   getRealTimeStats,
   getHourlyRevenuePattern,
+  getMinuteRevenuePattern,
   getDailyRevenuePattern,
   getAIInsights,
   getStatsCache,

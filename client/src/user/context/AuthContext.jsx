@@ -24,6 +24,7 @@ const saveSession = (user, token) => {
   localStorage.setItem(SESSION_STORAGE_KEYS.SESSION_ID, sessionId);
   localStorage.setItem(SESSION_STORAGE_KEYS.USER, JSON.stringify(user));
   localStorage.setItem(SESSION_STORAGE_KEYS.LOGIN_TIME, loginTime.toString());
+  localStorage.setItem('userName', user.name || user.username || 'Staff');
   
   return { sessionId, loginTime };
 };
@@ -34,6 +35,9 @@ const clearSession = () => {
   localStorage.removeItem(SESSION_STORAGE_KEYS.USER);
   localStorage.removeItem(SESSION_STORAGE_KEYS.LOGIN_TIME);
   localStorage.removeItem(SESSION_STORAGE_KEYS.LAST_ROUTE);
+  localStorage.removeItem('userName');
+  localStorage.removeItem('branchName');
+  localStorage.removeItem('branchId');
 };
 
 const restoreSession = () => {

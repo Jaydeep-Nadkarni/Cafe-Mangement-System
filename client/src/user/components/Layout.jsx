@@ -1,11 +1,11 @@
-import { useLocation } from 'react-router-dom';
+import { useLocation, Outlet } from 'react-router-dom';
 import { useContext } from 'react';
 import { GameContext } from '../context/GameContext';
 import Header from './Header';
 import BottomOrderBar from './BottomOrderBar';
 import BottomNav from './BottomNav';
 
-export default function Layout({ children }) {
+export default function Layout() {
   const location = useLocation();
   const gameContext = useContext(GameContext);
   const isWordleOpen = gameContext?.isWordleOpen || false;
@@ -23,7 +23,7 @@ export default function Layout({ children }) {
 
       {/* Main Content */}
       <main className={`flex-1 ${!hideNav ? 'pb-24' : 'pb-6'} max-w-7xl w-full mx-auto`}>
-        {children}
+        <Outlet />
       </main>
 
       {/* Bottom Navigation - Hide during Wordle */}

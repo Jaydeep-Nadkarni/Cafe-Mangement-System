@@ -6,7 +6,14 @@ const SocketContext = createContext(null);
 export const useSocket = () => {
   const context = useContext(SocketContext);
   if (!context) {
-    throw new Error('useSocket must be used within a SocketProvider');
+    // Return a default empty context instead of throwing
+    console.warn('useSocket called outside SocketProvider, returning null context');
+    return {
+      socket: null,
+      isConnected: false,
+      joinBranchRoom: () => {},
+      leaveBranchRoom: () => {}
+    };
   }
   return context;
 };

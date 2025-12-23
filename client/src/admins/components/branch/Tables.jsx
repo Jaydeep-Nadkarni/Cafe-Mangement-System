@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText, Clock, Printer, ArrowRightLeft } from 'lucide-react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { Plus, Users, MapPin, Edit2, Trash2, X, Check, AlertCircle, FileText, Clock, Printer, ArrowRightLeft, Eye, ChevronDown } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
+import Invoice from './Invoice';
 
 const getTimeSince = (dateString) => {
   if (!dateString) return '';
@@ -22,6 +23,10 @@ export default function Tables({ tables, onRefresh }) {
   const [editingTable, setEditingTable] = useState(null);
   const [selectedTable, setSelectedTable] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(null); // For printing/viewing invoice
+  const [moveKOT, setMoveKOT] = useState(false);
+  const [floorPlan, setFloorPlan] = useState('Default Layout');
+
   const [modalState, setModalState] = useState({
     isOpen: false,
     title: '',
@@ -36,7 +41,7 @@ export default function Tables({ tables, onRefresh }) {
   const [formData, setFormData] = useState({
     tableNumber: '',
     capacity: '',
-    location: 'indoor',
+    location: 'A/C',
     notes: '',
     currentOccupancy: 0
   });
@@ -47,7 +52,7 @@ export default function Tables({ tables, onRefresh }) {
     setFormData({
       tableNumber: '',
       capacity: '',
-      location: 'indoor',
+      location: 'A/C',
       notes: '',
       currentOccupancy: 0
     });
@@ -60,7 +65,7 @@ export default function Tables({ tables, onRefresh }) {
     setFormData({
       tableNumber: table.tableNumber,
       capacity: table.capacity,
-      location: table.location,
+      location: table.location || 'A/C',
       notes: table.notes || '',
       currentOccupancy: table.currentOccupancy || 0
     });
@@ -103,7 +108,8 @@ export default function Tables({ tables, onRefresh }) {
       'available': 'Mark this table as available?',
       'occupied': 'Mark this table as occupied?',
       'reserved': 'Mark this table as reserved?',
-      'paid': 'Mark this table as paid?'
+      'paid': 'Mark this table as paid?',
+      'printed': 'Mark this table as printed?'
     };
 
     const isDangerous = newStatus === 'maintenance';
@@ -164,35 +170,72 @@ export default function Tables({ tables, onRefresh }) {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'occupied': return 'bg-red-100 text-red-700 border-red-200';
-      case 'available': return 'bg-green-100 text-green-700 border-green-200';
-      case 'reserved': return 'bg-amber-100 text-amber-700 border-amber-200';
-      case 'maintenance': return 'bg-gray-100 text-gray-700 border-gray-200';
-      case 'paid': return 'bg-blue-100 text-blue-700 border-blue-200';
+      case 'occupied': return 'bg-blue-100 text-blue-700 border-blue-200'; // Running Table
+      case 'available': return 'bg-gray-100 text-gray-700 border-gray-200'; // Blank Table
+      case 'reserved': return 'bg-yellow-100 text-yellow-700 border-yellow-200'; // Running KOT Table
+      case 'maintenance': return 'bg-gray-200 text-gray-700 border-gray-300';
+      case 'paid': return 'bg-orange-100 text-orange-700 border-orange-200'; // Paid Table (Beige-ish)
+      case 'printed': return 'bg-green-100 text-green-700 border-green-200'; // Printed Table
       default: return 'bg-gray-100 text-gray-700';
     }
   };
 
   const getCardColor = (status) => {
     switch (status) {
-      case 'occupied': return 'bg-white border-red-500 shadow-sm hover:shadow-md';
-      case 'available': return 'bg-white border-green-500 shadow-sm hover:shadow-md';
-      case 'reserved': return 'bg-white border-amber-500 shadow-sm hover:shadow-md';
-      case 'maintenance': return 'bg-gray-50 border-gray-300 shadow-inner';
-      case 'paid': return 'bg-white border-blue-500 shadow-sm hover:shadow-md';
+      case 'occupied': return 'bg-blue-50 border-blue-200 shadow-sm'; // Running Table
+      case 'available': return 'bg-gray-50 border-gray-200 shadow-sm'; // Blank Table
+      case 'reserved': return 'bg-yellow-50 border-yellow-200 shadow-sm'; // Running KOT Table
+      case 'maintenance': return 'bg-gray-100 border-gray-300 shadow-inner';
+      case 'paid': return 'bg-[#FDF5E6] border-[#F5DEB3] shadow-sm'; // Paid Table (Beige)
+      case 'printed': return 'bg-green-50 border-green-200 shadow-sm'; // Printed Table
       default: return 'bg-white border-gray-200';
     }
   };
 
   const getStatusIndicator = (status) => {
     const colors = {
-      occupied: 'bg-red-500',
-      available: 'bg-green-500',
-      reserved: 'bg-amber-500',
+      occupied: 'bg-blue-400',
+      available: 'bg-gray-300',
+      reserved: 'bg-yellow-400',
       maintenance: 'bg-gray-400',
-      paid: 'bg-blue-500'
+      paid: 'bg-orange-300',
+      printed: 'bg-green-400'
     };
     return colors[status] || 'bg-gray-300';
+  };
+
+  // Group tables by location
+  const groupedTables = useMemo(() => {
+    const groups = {
+      'A/C': [],
+      'Non A/C': [],
+      'Bar': []
+    };
+    
+    tables.forEach(table => {
+      const loc = table.location || 'A/C';
+      if (!groups[loc]) groups[loc] = [];
+      groups[loc].push(table);
+    });
+    
+    return groups;
+  }, [tables]);
+
+  const handlePrintInvoice = (e, table) => {
+    e.stopPropagation();
+    if (table.currentOrders && table.currentOrders.length > 0) {
+      setShowInvoice(table.currentOrders[0]); // For now, just the first order
+      setTimeout(() => {
+        window.print();
+      }, 500);
+    }
+  };
+
+  const handleViewBill = (e, table) => {
+    e.stopPropagation();
+    if (table.currentOrders && table.currentOrders.length > 0) {
+      setShowInvoice(table.currentOrders[0]);
+    }
   };
 
   // Calculate stats for multiple orders
@@ -213,80 +256,185 @@ export default function Tables({ tables, onRefresh }) {
   };
 
   return (
-    <div className="h-full">
-      <div className="mb-6 flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">Table Management</h2>
-          <p className="text-gray-500">View and manage restaurant tables</p>
+    <div className="h-full bg-white p-6">
+      {/* Top Bar */}
+      <div className="flex flex-wrap justify-between items-center mb-8 gap-4">
+        <div className="flex gap-3">
+          <button className="bg-[#B22222] hover:bg-[#8B0000] text-white px-4 py-2 rounded-md flex items-center gap-2 font-medium transition-colors">
+            <Plus className="w-4 h-4" />
+            Table Reservation
+          </button>
+          <button className="bg-[#B22222] hover:bg-[#8B0000] text-white px-4 py-2 rounded-md flex items-center gap-2 font-medium transition-colors">
+            <Plus className="w-4 h-4" />
+            Contactless
+          </button>
+          <button 
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+            }}
+            className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md flex items-center gap-2 font-medium transition-colors"
+          >
+            <Plus className="w-4 h-4" />
+            Add Table
+          </button>
         </div>
-        <button
-          onClick={() => { resetForm(); setShowModal(true); }}
-          className="bg-green-600 hover:bg-green-700 text-white font-medium px-4 py-2.5 rounded-xl transition-colors flex items-center gap-2 shadow-lg shadow-green-200"
-        >
-          <Plus className="w-5 h-5" />
-          Add Table
-        </button>
-      </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {tables.map(table => {
-          const orderStats = getTableOrderStats(table);
-          // Calculate last activity
-          const lastActivity = table.currentOrders?.length > 0
-            ? table.currentOrders.reduce((latest, order) => {
-              const orderDate = new Date(order.updatedAt || order.createdAt);
-              return orderDate > latest ? orderDate : latest;
-            }, new Date(table.updatedAt))
-            : new Date(table.updatedAt);
-
-          const isOccupied = table.status === 'occupied' || table.status === 'paid';
-
-          return (
-            <div
-              key={table._id}
-              onClick={() => setSelectedTable(table)}
-              className={`relative p-3 rounded-lg border-l-4 transition-all duration-200 cursor-pointer group flex flex-col justify-between min-h-35 ${getCardColor(table.status)}`}
+        <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3">
+            <div 
+              className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors ${moveKOT ? 'bg-blue-500' : 'bg-gray-300'}`}
+              onClick={() => setMoveKOT(!moveKOT)}
             >
-              <div className="flex justify-between items-start mb-2">
-                <span className="text-2xl font-bold text-gray-800">
-                  {table.tableNumber}
-                </span>
-                <div className={`w-3 h-3 rounded-full ${getStatusIndicator(table.status)}`} title={table.status}></div>
-              </div>
-
-              {/* Middle Content */}
-              <div className="flex-1">
-                <div className="flex items-center gap-1 text-xs text-gray-500 mb-1">
-                  <Users className="w-3 h-3" />
-                  <span>{table.capacity}</span>
-                  <span className="mx-1">•</span>
-                  <span className="capitalize">{table.location}</span>
-                </div>
-
-                <div className="flex items-center gap-1 text-xs text-gray-400">
-                  <Clock className="w-3 h-3" />
-                  {getTimeSince(lastActivity)}
-                </div>
-              </div>
-
-              {/* Bottom: Financials */}
-              {isOccupied && orderStats.count > 0 && (
-                <div className="mt-3 pt-2 border-t border-gray-100 text-right">
-                  <div className="text-xs font-medium text-gray-500">
-                    {orderStats.unpaidAmount > 0 ? 'Unpaid' : 'Total'}
-                  </div>
-                  <div className={`font-bold ${orderStats.unpaidAmount > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                    {formatCurrency(orderStats.unpaidAmount > 0 ? orderStats.unpaidAmount : orderStats.totalAmount)}
-                  </div>
-                </div>
-              )}
+              <div className={`w-4 h-4 bg-white rounded-full transition-transform ${moveKOT ? 'translate-x-6' : 'translate-x-0'}`}></div>
             </div>
-          );
-        })}
+            <span className="text-sm font-medium text-gray-600">Move KOT/ Items</span>
+          </div>
+
+          <div className="flex items-center gap-4">
+            {/* Legend */}
+            <div className="flex items-center gap-4 text-xs font-medium text-gray-500">
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-gray-300"></div>
+                <span>Blank Table</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-blue-300"></div>
+                <span>Running Table</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-green-300"></div>
+                <span>Printed Table</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-orange-200"></div>
+                <span>Paid Table</span>
+              </div>
+              <div className="flex items-center gap-1.5">
+                <div className="w-3 h-3 rounded-full bg-yellow-400"></div>
+                <span>Running KOT Table</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 ml-4">
+              <span className="text-xs font-bold text-gray-500 uppercase">Floor Plan</span>
+              <div className="relative">
+                <button 
+                  className="flex items-center gap-2 px-3 py-1.5 border border-gray-200 rounded-md text-sm font-medium bg-white hover:bg-gray-50"
+                  onClick={() => {}}
+                >
+                  {floorPlan}
+                  <ChevronDown className="w-4 h-4 text-gray-400" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
+
+      {/* Table Sections */}
+      <div className="space-y-12">
+        {Object.entries(groupedTables).map(([location, locationTables]) => (
+          <div key={location}>
+            <h3 className="text-lg font-bold text-gray-800 mb-6">{location}</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-6">
+              {locationTables.map(table => {
+                const isOccupied = table.status !== 'available' && table.status !== 'maintenance';
+                const stats = getTableOrderStats(table);
+                const firstOrderTime = table.currentOrders?.[0]?.createdAt;
+                
+                return (
+                  <div
+                    key={table._id}
+                    onClick={() => setSelectedTable(table)}
+                    className={`relative aspect-square rounded-xl border-2 border-dashed flex flex-col items-center justify-center cursor-pointer transition-all hover:scale-105 group ${getCardColor(table.status)}`}
+                  >
+                    {/* Status Indicator Dot */}
+                    <div className={`absolute top-2 right-2 w-2.5 h-2.5 rounded-full ${getStatusIndicator(table.status)} shadow-sm`}></div>
+
+                    <span className="text-2xl font-bold text-gray-800">
+                      {table.tableNumber}
+                    </span>
+                    
+                    {isOccupied && (
+                      <>
+                        <div className="absolute bottom-2 left-2 flex flex-col">
+                          <span className="text-[10px] text-gray-500 font-medium flex items-center gap-0.5">
+                            <Clock className="w-2.5 h-2.5" />
+                            {getTimeSince(firstOrderTime)}
+                          </span>
+                        </div>
+                        <div className="absolute bottom-2 right-2">
+                          <span className="text-[10px] font-bold text-gray-700">
+                            {formatCurrency(stats.unpaidAmount)}
+                          </span>
+                        </div>
+
+                        {/* Hover Actions */}
+                        <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 rounded-xl">
+                          <button 
+                            onClick={(e) => handlePrintInvoice(e, table)}
+                            className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
+                            title="Print Invoice"
+                          >
+                            <Printer className="w-4 h-4 text-blue-600" />
+                          </button>
+                          <button 
+                            onClick={(e) => handleViewBill(e, table)}
+                            className="p-2 bg-white rounded-full shadow-md hover:bg-gray-50 transition-colors"
+                            title="View Order"
+                          >
+                            <Eye className="w-4 h-4 text-gray-600" />
+                          </button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Invoice Modal */}
+      {showInvoice && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full relative">
+            <button 
+              onClick={() => setShowInvoice(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-gray-200 transition-colors"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <div className="p-4">
+              <Invoice 
+                order={showInvoice} 
+                branchName={localStorage.getItem('branchName')} 
+                billerName={localStorage.getItem('userName')}
+              />
+              <div className="mt-6 flex gap-3 print:hidden">
+                <button 
+                  onClick={() => window.print()}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+                >
+                  <Printer className="w-5 h-5" />
+                  Print Invoice
+                </button>
+                <button 
+                  onClick={() => setShowInvoice(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Table Details Modal */}
-      {selectedTable && (
+      {selectedTable && !showInvoice && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in" onClick={() => setSelectedTable(null)}>
           <div className="bg-white rounded-xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e => e.stopPropagation()}>
             <div className="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
@@ -302,7 +450,10 @@ export default function Tables({ tables, onRefresh }) {
               {/* Quick Actions Grid */}
               <div className="grid grid-cols-2 gap-3 mb-6">
                 {/* Main Actions */}
-                <button className="flex items-center justify-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium">
+                <button 
+                  onClick={(e) => handleViewBill(e, selectedTable)}
+                  className="flex items-center justify-center gap-2 p-3 bg-blue-50 text-blue-700 rounded-lg hover:bg-blue-100 font-medium"
+                >
                   <FileText className="w-4 h-4" /> View Order
                 </button>
                 <button className="flex items-center justify-center gap-2 p-3 bg-purple-50 text-purple-700 rounded-lg hover:bg-purple-100 font-medium">
@@ -331,8 +482,8 @@ export default function Tables({ tables, onRefresh }) {
               {/* Status Management */}
               <div>
                 <h3 className="text-xs font-bold text-gray-500 uppercase mb-3">Set Status</h3>
-                <div className="grid grid-cols-4 gap-2">
-                  {['available', 'occupied', 'reserved', 'maintenance'].map(status => (
+                <div className="grid grid-cols-3 gap-2">
+                  {['available', 'occupied', 'reserved', 'maintenance', 'paid', 'printed'].map(status => (
                     <button
                       key={status}
                       disabled={selectedTable.status === status}
@@ -417,9 +568,9 @@ export default function Tables({ tables, onRefresh }) {
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
-                  <option value="indoor">Indoor</option>
-                  <option value="outdoor">Outdoor</option>
-                  <option value="counter">Counter</option>
+                  <option value="A/C">A/C</option>
+                  <option value="Non A/C">Non A/C</option>
+                  <option value="Bar">Bar</option>
                 </select>
               </div>
 
