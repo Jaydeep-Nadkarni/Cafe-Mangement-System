@@ -42,7 +42,9 @@ const {
   addCategory,
   updateCategory,
   deleteCategory,
-  getOrders
+  getOrders,
+  getCustomerPreferences,
+  updateCustomerPreferences
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -98,6 +100,10 @@ router.put('/menu/bulk', bulkUpdateMenuItems);
 router.post('/menu', addMenuItem);
 router.put('/menu/:id', updateMenuItem);
 router.delete('/menu/:id', deleteMenuItem);
+
+// Customer routes
+router.get('/customers/:phone', getCustomerPreferences);
+router.post('/customers/preferences', updateCustomerPreferences);
 router.post('/menu/:id/duplicate', duplicateMenuItem);
 router.put('/menu/:id/availability', updateItemAvailability);
 router.post('/tables/merge', mergeTables);

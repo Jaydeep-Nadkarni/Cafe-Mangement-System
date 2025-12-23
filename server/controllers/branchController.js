@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
 const Category = require('../models/Category');
+const CustomerPreferences = require('../models/CustomerPreferences');
 const auditService = require('../services/auditService');
 const { 
   emitToBranch, 
@@ -1432,6 +1433,52 @@ const getOrders = async (req, res) => {
   }
 };
 
+// @desc    Get customer preferences by phone
+// @route   GET /api/branch/customers/:phone
+// @access  Manager
+const getCustomerPreferences = async (req, res) => {
+  try {
+    const customer = await CustomerPreferences.findOne({ phone: req.params.phone });
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update customer preferences
+// @route   POST /api/branch/customers/preferences
+// @access  Manager
+const updateCustomerPreferences = async (req, res) => {
+  try {
+    const { phone, name, isFavorite, tags } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    let customer = await CustomerPreferences.findOne({ phone });
+
+    if (customer) {
+      if (name) customer.name = name;
+      if (isFavorite !== undefined) customer.isFavorite = isFavorite;
+      if (tags) customer.tags = tags;
+      if (!customer.branches.includes(branch._id)) {
+        customer.branches.push(branch._id);
+      }
+      await customer.save();
+    } else {
+      customer = await CustomerPreferences.create({
+        phone,
+        name,
+        isFavorite,
+        tags,
+        branches: [branch._id]
+      });
+    }
+
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -1473,5 +1520,7 @@ module.exports = {
   addCategory,
   updateCategory,
   deleteCategory,
-  getOrders
+  getOrders,
+  getCustomerPreferences,
+  updateCustomerPreferences
 };

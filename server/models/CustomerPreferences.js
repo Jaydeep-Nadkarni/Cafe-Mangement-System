@@ -31,6 +31,14 @@ const customerPreferencesSchema = new mongoose.Schema(
     // Customer Info
     name: String,
     email: String,
+    isFavorite: {
+      type: Boolean,
+      default: false
+    },
+    tags: {
+      type: [String],
+      default: []
+    },
     // Engagement Stats
     stats: {
       totalOrders: { type: Number, default: 0 },

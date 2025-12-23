@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, requireBranch } = require('../middleware/auth');
 const {
   createOrder,
+  updateOrder,
   getOrder,
   addItemsToOrder,
   updateItemQuantity,
@@ -24,6 +25,7 @@ router.use(protect);
 router.use(requireBranch);
 
 router.post('/', createOrder);
+router.put('/:id', updateOrder);
 router.post('/merge/preview', getMergePreview);
 router.post('/merge', mergeOrders);
 router.post('/session-checkout/:tableId', sessionCheckout);  // Session-based checkout
