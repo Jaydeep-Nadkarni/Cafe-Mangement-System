@@ -22,8 +22,9 @@ const orderSchema = new mongoose.Schema(
         menuItem: {
           type: mongoose.Schema.Types.ObjectId,
           ref: 'MenuItem',
-          required: true
+          required: false
         },
+        name: String, // For custom/open items
         quantity: {
           type: Number,
           required: true,
@@ -107,6 +108,10 @@ const orderSchema = new mongoose.Schema(
       default: null
     },
     customerPhone: {
+      type: String,
+      default: null
+    },
+    taxNumber: {
       type: String,
       default: null
     },

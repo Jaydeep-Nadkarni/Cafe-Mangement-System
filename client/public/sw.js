@@ -83,6 +83,7 @@ self.addEventListener('fetch', (event) => {
 
                     // Cache static assets
                     if (
+                        url.protocol.startsWith('http') &&
                         url.pathname.match(/\.(js|css|png|jpg|jpeg|svg|gif|woff|woff2|ttf|eot)$/)
                     ) {
                         caches.open(RUNTIME_CACHE).then((cache) => {

@@ -10,22 +10,36 @@ const calculateOrderTotals = async (items, couponCode = null) => {
 
   // 1. Validate items and calculate subtotal
   for (const item of items) {
-    const menuItem = await MenuItem.findById(item.menuItem);
-    if (!menuItem) {
-      throw new Error(`Menu item not found: ${item.menuItem}`);
-    }
-    
-    if (!menuItem.isAvailable) {
-      throw new Error(`Menu item is currently unavailable: ${menuItem.name}`);
+    let price = 0;
+    let name = '';
+    let menuItemId = null;
+
+    if (item.menuItem) {
+      const menuItem = await MenuItem.findById(item.menuItem);
+      if (!menuItem) {
+        throw new Error(`Menu item not found: ${item.menuItem}`);
+      }
+      
+      if (!menuItem.isAvailable) {
+        throw new Error(`Menu item is currently unavailable: ${menuItem.name}`);
+      }
+      price = menuItem.price;
+      name = menuItem.name;
+      menuItemId = menuItem._id;
+    } else {
+      // Custom/Open item
+      price = item.price || 0;
+      name = item.name || 'Custom Item';
     }
 
-    const itemTotal = menuItem.price * item.quantity;
+    const itemTotal = price * item.quantity;
     subtotal += itemTotal;
 
     processedItems.push({
-      menuItem: menuItem._id,
+      menuItem: menuItemId,
+      name: name,
       quantity: item.quantity,
-      price: menuItem.price,
+      price: price,
       specialInstructions: item.specialInstructions,
       status: 'pending'
     });

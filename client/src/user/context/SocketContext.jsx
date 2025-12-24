@@ -1,10 +1,21 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import io from 'socket.io-client';
 
-const SocketContext = createContext();
+const SocketContext = createContext(null);
 
 export const useSocket = () => {
-  return useContext(SocketContext);
+  const context = useContext(SocketContext);
+  if (!context) {
+    // Return a default empty context instead of throwing
+    console.warn('useSocket called outside SocketProvider, returning null context');
+    return {
+      socket: null,
+      isConnected: false,
+      joinBranchRoom: () => {},
+      leaveBranchRoom: () => {}
+    };
+  }
+  return context;
 };
 
 export const SocketProvider = ({ children }) => {

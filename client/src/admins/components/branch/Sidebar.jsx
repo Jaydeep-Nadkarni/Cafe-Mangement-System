@@ -25,8 +25,11 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, branchId,
 
   // Fetch unread counts
   useEffect(() => {
-    fetchUnreadCounts();
-  }, []);
+    // Only fetch if branchId is available
+    if (branchId) {
+      fetchUnreadCounts();
+    }
+  }, [branchId]);
 
   // Socket integration for real-time badge updates
   useBranchSocket(branchId, {
@@ -46,11 +49,19 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, branchId,
 
   const fetchUnreadCounts = async () => {
     try {
+      const currentBranchId = branchId || localStorage.getItem('branchId');
+      
+      // Skip if no branch ID available
+      if (!currentBranchId) {
+        setLoading(false);
+        return;
+      }
+      
       const [alertsRes, memosRes] = await Promise.all([
-        axios.get(`${API_URL}/api/branch/alerts?branch=${localStorage.getItem('branchId')}`, {
+        axios.get(`${API_URL}/api/branch/alerts?branch=${currentBranchId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         }),
-        axios.get(`${API_URL}/api/branch/memos?branch=${localStorage.getItem('branchId')}`, {
+        axios.get(`${API_URL}/api/branch/memos?branch=${currentBranchId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
         })
       ]);
@@ -76,9 +87,11 @@ export default function Sidebar({ activeTab, setActiveTab, branchName, branchId,
 
   // Listen for badge updates
   useEffect(() => {
+    if (!branchId) return;
+    
     const interval = setInterval(fetchUnreadCounts, 10000); // Refresh every 10 seconds
     return () => clearInterval(interval);
-  }, []);
+  }, [branchId]);
 
   const menuItems = [
     { id: 'orders', label: 'Orders', icon: ClipboardList },

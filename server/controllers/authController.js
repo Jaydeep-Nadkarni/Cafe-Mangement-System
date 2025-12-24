@@ -184,9 +184,19 @@ const refreshToken = async (req, res) => {
 
     const newAccessToken = generateToken(user._id, user.role);
     
-    // Optionally rotate refresh token here for extra security
+    // Optionally rotate refresh token for extra security
+    const newRefreshToken = generateRefreshToken(user._id, user.role);
+    setRefreshTokenCookie(res, newRefreshToken);
     
-    res.json({ token: newAccessToken });
+    res.json({ 
+      token: newAccessToken,
+      user: {
+        _id: user._id,
+        username: user.username,
+        email: user.email,
+        role: user.role
+      }
+    });
   } catch (error) {
     console.error('Refresh Token Error:', error);
     res.status(401).json({ message: 'Invalid refresh token' });

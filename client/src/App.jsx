@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { GameProvider } from './user/context/GameContext';
 import { useAuth } from './user/context/AuthContext';
 import { Layout, PageTransition } from './user/components';
@@ -16,41 +16,66 @@ import {
 } from './user/pages';
 import SplashScreen from './user/components/SplashScreen';
 
-// Protected Route Component
+// --- PROTECTED ROUTE COMPONENT ---
 const ProtectedRoute = ({ children, role }) => {
   const { user, loading } = useAuth();
-  
-  if (loading) return <div>Loading...</div>;
-  
+  const location = useLocation();
+
+  if (loading) return <LoadingSpinner message="Verifying credentials..." />;
+
   if (!user) {
-    return <Navigate to={role === 'admin' ? '/admin' : '/branch'} replace />;
+    // Redirect to the appropriate login page based on the intended destination
+    const loginPath = location.pathname.includes('/admin') ? '/admin' : '/branch';
+    return <Navigate to={loginPath} replace />;
   }
-  
+
+  // Admin access: Must be admin or super_admin
   if (role === 'admin' && !['admin', 'super_admin'].includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/menu" replace />;
   }
-  
+
+  // Branch access: Can be manager, admin, or super_admin
   if (role === 'branch' && !['manager', 'admin', 'super_admin'].includes(user.role)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/menu" replace />;
   }
-  
+
   return children;
 };
 
-// Wrapper for Customer Routes to include Layout
-const CustomerRoute = ({ children }) => {
-  return <Layout>{children}</Layout>;
+// --- ROUTE PERSISTENCE ---
+const RouteRestorer = ({ children }) => {
+  const { user, loading, saveLastRoute } = useAuth();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Only save routes that are "destinations" (Dashboards or App features)
+    const isLoginPath = ['/admin', '/branch'].includes(location.pathname);
+    const isRoot = location.pathname === '/';
+
+    if (!loading && user && !isLoginPath && !isRoot) {
+      saveLastRoute(location.pathname);
+    }
+  }, [location, user, loading, saveLastRoute]);
+
+  return children;
 };
+
+const LoadingSpinner = ({ message = "Loading..." }) => (
+  <div className="flex items-center justify-center min-h-screen bg-gray-50">
+    <div className="text-center">
+      <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-600 mx-auto mb-4"></div>
+      <p className="text-gray-600 font-medium">{message}</p>
+    </div>
+  </div>
+);
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
+  const { user, loading } = useAuth();
 
   useEffect(() => {
-    // Check if splash has been shown in this session
     const splashShown = sessionStorage.getItem('cafe_splash_shown');
-    if (splashShown) {
-      setShowSplash(false);
-    }
+    if (splashShown) setShowSplash(false);
   }, []);
 
   const handleSplashComplete = () => {
@@ -58,49 +83,77 @@ export default function App() {
     setShowSplash(false);
   };
 
-  if (showSplash) {
-    return <SplashScreen onComplete={handleSplashComplete} />;
-  }
+  if (showSplash) return <SplashScreen onComplete={handleSplashComplete} />;
 
   return (
     <GameProvider>
-      <Router
-        future={{
-          v7_startTransition: true,
-          v7_relativeSplatPath: true,
-        }}
-      >
-        <Routes>
-          {/* Customer Routes */}
-          <Route path="/menu" element={<CustomerRoute><PageTransition><MenuPage /></PageTransition></CustomerRoute>} />
-          <Route path="/games" element={<CustomerRoute><PageTransition><GamesPage /></PageTransition></CustomerRoute>} />
-          <Route path="/ai" element={<CustomerRoute><PageTransition><AIChatPage /></PageTransition></CustomerRoute>} />
-          <Route path="/order-summary" element={<CustomerRoute><PageTransition><OrderSummaryPage /></PageTransition></CustomerRoute>} />
-          <Route path="/payment-success" element={<CustomerRoute><PageTransition><PaymentSuccessPage /></PageTransition></CustomerRoute>} />
-          
-          {/* Auth Routes */}
-          <Route path="/admin" element={<AdminLogin />} />
-          <Route path="/branch" element={<BranchLogin />} />
-          
-          {/* Protected Dashboard Routes */}
-          <Route path="/admin/dashboard" element={
-            <ProtectedRoute role="admin">
-              <AdminDashboard />
-            </ProtectedRoute>
-          } />
-          <Route path="/branch/dashboard" element={
-            <ProtectedRoute role="branch">
-              <BranchDashboard />
-            </ProtectedRoute>
-          } />
-
-          {/* Default Redirect */}
-          <Route path="/" element={<Navigate to="/menu" replace />} />
-          <Route path="*" element={<Navigate to="/menu" replace />} />
-        </Routes>
+      <Router future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+        <RouteRestorer>
+          <AppRoutes />
+        </RouteRestorer>
       </Router>
     </GameProvider>
-  )
+  );
 }
 
+function AppRoutes() {
+  const { user, loading, getLastRoute } = useAuth();
+  const location = useLocation();
 
+  // 1. Handle Global Loading State
+  if (loading) return <LoadingSpinner message="Restoring session..." />;
+
+  // 2. Handle Initial Redirect (PWA behavior)
+  // If user lands on "/" and is logged in, send them to their last saved dashboard or menu
+  if (user && location.pathname === '/') {
+    const lastRoute = getLastRoute();
+    if (lastRoute) return <Navigate to={lastRoute} replace />;
+    
+    // Fallback based on role if no last route saved
+    if (['admin', 'super_admin'].includes(user.role)) return <Navigate to="/admin/dashboard" replace />;
+    if (user.role === 'manager') return <Navigate to="/branch/dashboard" replace />;
+  }
+
+  return (
+    <Routes>
+      {/* Auth Routes */}
+      <Route path="/admin" element={
+        user && ['admin', 'super_admin'].includes(user.role) 
+          ? <Navigate to="/admin/dashboard" replace /> 
+          : <AdminLogin />
+      } />
+      
+      <Route path="/branch" element={
+        user && ['manager', 'admin', 'super_admin'].includes(user.role)
+          ? <Navigate to="/branch/dashboard" replace /> 
+          : <BranchLogin />
+      } />
+
+      {/* Customer Experience (Inside Layout) */}
+      <Route element={<Layout />}>
+        <Route path="/menu" element={<PageTransition><MenuPage /></PageTransition>} />
+        <Route path="/games" element={<PageTransition><GamesPage /></PageTransition>} />
+        <Route path="/ai" element={<PageTransition><AIChatPage /></PageTransition>} />
+        <Route path="/order-summary" element={<PageTransition><OrderSummaryPage /></PageTransition>} />
+        <Route path="/payment-success" element={<PageTransition><PaymentSuccessPage /></PageTransition>} />
+      </Route>
+
+      {/* Protected Dashboards */}
+      <Route path="/admin/dashboard" element={
+        <ProtectedRoute role="admin">
+          <AdminDashboard />
+        </ProtectedRoute>
+      } />
+      
+      <Route path="/branch/dashboard" element={
+        <ProtectedRoute role="branch">
+          <BranchDashboard />
+        </ProtectedRoute>
+      } />
+
+      {/* Catch-all */}
+      <Route path="/" element={<Navigate to="/menu" replace />} />
+      <Route path="*" element={<Navigate to="/menu" replace />} />
+    </Routes>
+  );
+}

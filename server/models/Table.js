@@ -25,7 +25,7 @@ const tableSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['available', 'occupied', 'reserved', 'maintenance', 'paid'],
+      enum: ['available', 'occupied', 'reserved', 'maintenance', 'paid', 'printed'],
       default: 'available'
     },
     currentOrders: {

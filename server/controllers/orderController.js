@@ -240,7 +240,17 @@ const updateTableSessionStats = async (tableId) => {
 // @access  Manager
 const createOrder = async (req, res) => {
   try {
-    const { tableId, items, customerCount, chefNotes, sessionPerson, orderType = 'pay_later' } = req.body;
+    const { 
+      tableId, 
+      items, 
+      customerCount, 
+      chefNotes, 
+      sessionPerson, 
+      orderType = 'pay_later',
+      customerPhone,
+      customerName,
+      taxNumber
+    } = req.body;
 
     // Verify table belongs to manager's branch
     const table = await Table.findById(tableId).populate('branch');
@@ -285,6 +295,9 @@ const createOrder = async (req, res) => {
         existingOrder.tax += calculation.tax;
         existingOrder.total += calculation.total;
         existingOrder.sessionPerson = sessionPerson || existingOrder.sessionPerson;
+        existingOrder.customerPhone = customerPhone || existingOrder.customerPhone;
+        existingOrder.customerName = customerName || existingOrder.customerName;
+        existingOrder.taxNumber = taxNumber || existingOrder.taxNumber;
 
         savedOrder = await existingOrder.save();
 
@@ -312,7 +325,10 @@ const createOrder = async (req, res) => {
           chefNotes: chefNotes || '',
           sessionId: sessionId,
           sessionPerson: sessionPerson || 'Table Order',
-          orderType: 'pay_later'
+          orderType: 'pay_later',
+          customerPhone,
+          customerName,
+          taxNumber
         });
 
         savedOrder = await order.save();
@@ -1462,8 +1478,54 @@ const downloadBill = async (req, res) => {
   }
 };
 
+// @desc    Update order details (items, customer info, etc.)
+// @route   PUT /api/orders/:id
+// @access  Manager
+const updateOrder = async (req, res) => {
+  try {
+    const { items, customerPhone, customerName, taxNumber } = req.body;
+    const order = await Order.findById(req.params.id);
+
+    if (!order) {
+      return res.status(404).json({ message: 'Order not found' });
+    }
+
+    const validation = validateOrderForModification(order);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.message });
+    }
+
+    if (items) {
+      const calculation = await orderService.calculateOrderTotals(items);
+      order.items = calculation.items;
+      order.subtotal = calculation.subtotal;
+      order.tax = calculation.tax;
+      order.total = calculation.total;
+    }
+
+    if (customerPhone !== undefined) order.customerPhone = customerPhone;
+    if (customerName !== undefined) order.customerName = customerName;
+    if (taxNumber !== undefined) order.taxNumber = taxNumber;
+
+    const updatedOrder = await order.save();
+
+    emitToBranch(order.branch, 'order_updated', {
+      orderId: updatedOrder._id,
+      orderNumber: updatedOrder.orderNumber,
+      total: updatedOrder.total,
+      items: updatedOrder.items
+    });
+
+    res.json(updatedOrder);
+  } catch (error) {
+    console.error('Error updating order:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createOrder,
+  updateOrder,
   getOrder,
   addItemsToOrder,
   updateItemQuantity,

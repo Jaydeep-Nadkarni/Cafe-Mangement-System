@@ -3,13 +3,14 @@ import {
   Coffee, XCircle, MessageCircle, Printer, CheckCircle,
   Plus, Trash2, CreditCard, Banknote, Smartphone,
   ArrowRightLeft, AlertCircle, Search, X, RefreshCw, Calendar, Clock, ShieldCheck,
-  ChefHat, Truck, Package, DollarSign, Archive
+  ChefHat, Truck, Package, DollarSign, Archive, Eye
 } from 'lucide-react';
 import axios from 'axios';
 import { useBranchSocket } from '../../../user/hooks/useBranchSocket';
 import { formatCurrency, formatTime, formatDateTime } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
+import Invoice from './Invoice';
 
 // Helper to group items for display
 const groupOrderItems = (items) => {
@@ -44,6 +45,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [showHistory, setShowHistory] = useState(false);
+  const [showInvoice, setShowInvoice] = useState(null);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
   const [cashReceived, setCashReceived] = useState('');
   const [showMergeModal, setShowMergeModal] = useState(false);
@@ -1092,6 +1094,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                   </div>
                   <div className="flex gap-2">
                     <button
+                      onClick={() => setShowInvoice(selectedOrder)}
+                      className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                      title="Print Invoice"
+                    >
+                      <Printer className="w-5 h-5" />
+                    </button>
+                    <button
                       onClick={() => setShowMergeModal(true)}
                       className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                       title="Merge Order"
@@ -1657,6 +1666,42 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         isOpen={showHistory}
         onClose={() => setShowHistory(false)}
       />
+
+      {/* Invoice Modal */}
+      {showInvoice && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full relative">
+            <button 
+              onClick={() => setShowInvoice(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-gray-200 transition-colors"
+            >
+              <X className="w-8 h-8" />
+            </button>
+            <div className="p-4">
+              <Invoice 
+                order={showInvoice} 
+                branchName={localStorage.getItem('branchName')} 
+                billerName={localStorage.getItem('userName')}
+              />
+              <div className="mt-6 flex gap-3 print:hidden">
+                <button 
+                  onClick={() => window.print()}
+                  className="flex-1 bg-blue-600 text-white py-3 rounded-lg font-bold flex items-center justify-center gap-2 hover:bg-blue-700 transition-colors"
+                >
+                  <Printer className="w-5 h-5" />
+                  Print Invoice
+                </button>
+                <button 
+                  onClick={() => setShowInvoice(null)}
+                  className="flex-1 bg-gray-100 text-gray-700 py-3 rounded-lg font-bold hover:bg-gray-200 transition-colors"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -5,6 +5,7 @@ const Order = require('../models/Order');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
 const Category = require('../models/Category');
+const CustomerPreferences = require('../models/CustomerPreferences');
 const auditService = require('../services/auditService');
 const { 
   emitToBranch, 
@@ -27,6 +28,7 @@ const {
   getPeakDetection,
   getRealTimeStats,
   getHourlyRevenuePattern,
+  getMinuteRevenuePattern,
   getDailyRevenuePattern,
   getAIInsights
 } = require('../services/analyticsService');
@@ -55,13 +57,18 @@ const { getAIAnalysis: getAIAnalysisFromService, clearCache, getCacheStats } = r
 // Helper to get branch for logged in user
 const getManagerBranch = async (userId) => {
   if (!userId) {
-    throw new Error('User ID is required');
+    const err = new Error('User ID is required');
+    err.statusCode = 400;
+    throw err;
   }
   
   const branch = await Branch.findOne({ manager: userId });
   if (!branch) {
     console.error(`No branch found for manager ID: ${userId}`);
-    throw new Error(`No branch assigned to this manager. User ID: ${userId}`);
+    const err = new Error(`Your account has not been assigned to a branch. Please contact your administrator.`);
+    err.statusCode = 404;
+    err.code = 'NO_BRANCH_ASSIGNED';
+    throw err;
   }
   return branch;
 };
@@ -206,20 +213,28 @@ const getBranchDetails = async (req, res) => {
       return res.status(401).json({ message: 'User not authenticated' });
     }
     
-    const branch = await Branch.findOne({ manager: req.user._id });
+    let branch;
     
-    if (!branch) {
-      console.warn(`Manager ${req.user._id} has no branch assigned`);
-      return res.status(404).json({ 
-        message: 'No branch assigned to this manager',
-        managerId: req.user._id 
-      });
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branch = await Branch.findById(req.query.branch);
+      if (!branch) {
+        return res.status(404).json({ message: 'Branch not found' });
+      }
+    } else {
+      // Fallback to finding branch by manager
+      try {
+        branch = await getManagerBranch(req.user._id);
+      } catch (error) {
+        return res.status(error.statusCode || 404).json({ message: error.message });
+      }
     }
     
     res.json(branch);
   } catch (error) {
     console.error('Error in getBranchDetails:', error);
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
@@ -648,13 +663,24 @@ const getAnalytics = async (req, res) => {
 // @access  Manager
 const getAlerts = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
-    const alerts = await Alert.find({ branch: branch._id })
+    let branchId;
+    
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branchId = req.query.branch;
+    } else {
+      // Fallback to finding branch by manager
+      const branch = await getManagerBranch(req.user._id);
+      branchId = branch._id;
+    }
+    
+    const alerts = await Alert.find({ branch: branchId })
       .sort({ createdAt: -1 })
       .limit(50);
     res.json(alerts);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
@@ -695,14 +721,25 @@ const deleteAlert = async (req, res) => {
 // @access  Manager
 const getMemos = async (req, res) => {
   try {
-    const branch = await getManagerBranch(req.user._id);
-    const memos = await Memo.find({ branch: branch._id })
+    let branchId;
+    
+    // Check if branch ID is provided in query
+    if (req.query.branch) {
+      branchId = req.query.branch;
+    } else {
+      // Fallback to finding branch by manager
+      const branch = await getManagerBranch(req.user._id);
+      branchId = branch._id;
+    }
+    
+    const memos = await Memo.find({ branch: branchId })
       .populate('createdBy', 'username email')
       .populate('readByManagers.manager', 'username email')
       .sort({ createdAt: -1 });
     res.json(memos);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    const statusCode = error.statusCode || 500;
+    res.status(statusCode).json({ message: error.message });
   }
 };
 
@@ -870,7 +907,7 @@ const getRevenueByPayment = async (req, res) => {
     const timeRange = req.query.range || 'today';
     
     const data = await getRevenueByPaymentMethod(branch._id, timeRange);
-    res.json(data);
+    res.json({ breakdown: data || [] });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -968,14 +1005,19 @@ const getRevenuePattern = async (req, res) => {
     
     console.log(`[Controller] getRevenuePattern - Branch: ${branch._id}, Range: ${timeRange}, Type: ${type}`);
     
-    const data = type === 'hourly' 
-      ? await getHourlyRevenuePattern(branch._id, timeRange)
-      : await getDailyRevenuePattern(branch._id, timeRange);
+    let data;
+    if (timeRange === '15min') {
+      data = await getMinuteRevenuePattern(branch._id, timeRange);
+    } else if (type === 'daily') {
+      data = await getDailyRevenuePattern(branch._id, timeRange);
+    } else {
+      data = await getHourlyRevenuePattern(branch._id, timeRange);
+    }
     
     // For daily data, add label property
-    const pattern = type === 'daily' 
+    const pattern = (type === 'daily' && timeRange !== '15min') 
       ? data.map(item => ({ ...item, label: item.date }))
-      : data;  // Hourly already has label from service
+      : data;  // Hourly and Minute already have label from service
     
     console.log(`[Controller] getRevenuePattern response pattern length: ${pattern.length}`);
     
@@ -1391,6 +1433,52 @@ const getOrders = async (req, res) => {
   }
 };
 
+// @desc    Get customer preferences by phone
+// @route   GET /api/branch/customers/:phone
+// @access  Manager
+const getCustomerPreferences = async (req, res) => {
+  try {
+    const customer = await CustomerPreferences.findOne({ phone: req.params.phone });
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update customer preferences
+// @route   POST /api/branch/customers/preferences
+// @access  Manager
+const updateCustomerPreferences = async (req, res) => {
+  try {
+    const { phone, name, isFavorite, tags } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    let customer = await CustomerPreferences.findOne({ phone });
+
+    if (customer) {
+      if (name) customer.name = name;
+      if (isFavorite !== undefined) customer.isFavorite = isFavorite;
+      if (tags) customer.tags = tags;
+      if (!customer.branches.includes(branch._id)) {
+        customer.branches.push(branch._id);
+      }
+      await customer.save();
+    } else {
+      customer = await CustomerPreferences.create({
+        phone,
+        name,
+        isFavorite,
+        tags,
+        branches: [branch._id]
+      });
+    }
+
+    res.json(customer);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   getTables,
   getMenu,
@@ -1432,5 +1520,7 @@ module.exports = {
   addCategory,
   updateCategory,
   deleteCategory,
-  getOrders
+  getOrders,
+  getCustomerPreferences,
+  updateCustomerPreferences
 };

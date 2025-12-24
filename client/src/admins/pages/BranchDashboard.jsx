@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../../user/context/AuthContext';
-import { useBranchSocket } from '../../user/hooks/useBranchSocket';
 import axios from 'axios';
 
 // Components
@@ -36,23 +35,49 @@ export default function BranchDashboard() {
       const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
       // 1. Get Branch Details
-      const branchRes = await axios.get(`${API_URL}/api/branch/details`);
-      setBranch(branchRes.data);
+      try {
+        const branchRes = await axios.get(`${API_URL}/api/branch/details`);
+        if (branchRes.data) {
+          setBranch(branchRes.data);
+          // Store branch info in localStorage for Sidebar and other components
+          if (branchRes.data._id) {
+            localStorage.setItem('branchId', branchRes.data._id);
+            localStorage.setItem('branchName', branchRes.data.name);
+          }
+        }
+      } catch (branchError) {
+        if (branchError.response?.status === 404) {
+          throw new Error('Your account has not been assigned to a branch. Please contact your administrator.');
+        }
+        throw branchError;
+      }
 
       // 2. Get Tables (with active orders)
-      const tablesRes = await axios.get(`${API_URL}/api/branch/tables`);
-      setTables(tablesRes.data);
+      try {
+        const tablesRes = await axios.get(`${API_URL}/api/branch/tables`);
+        setTables(tablesRes.data || []);
+      } catch (tablesError) {
+        console.warn('Error fetching tables:', tablesError);
+        setTables([]);
+      }
 
       // 3. Get Menu (for inventory)
-      const menuRes = await axios.get(`${API_URL}/api/branch/menu`);
-      setMenu(menuRes.data);
+      try {
+        const menuRes = await axios.get(`${API_URL}/api/branch/menu`);
+        setMenu(menuRes.data || []);
+      } catch (menuError) {
+        console.warn('Error fetching menu:', menuError);
+        setMenu([]);
+      }
 
       setLoading(false);
     } catch (error) {
       console.error('Error fetching branch data:', error);
 
-      if (error.response?.status === 404) {
-        setError('Your account needs configuration. Contact admin.');
+      if (error.message.includes('not been assigned')) {
+        setError(error.message);
+      } else if (error.response?.status === 404) {
+        setError('Your account needs configuration. Please contact your administrator.');
       } else if (error.response?.status === 401) {
         setError('Your session has expired. Please log in again.');
         logout();
@@ -64,34 +89,14 @@ export default function BranchDashboard() {
     }
   };
 
-  // Real-time Updates
-  useBranchSocket(branch?._id, {
-    onNewOrder: (data) => {
-      fetchData();
-    },
-    onOrderStatusChange: (data) => {
-      fetchData();
-    },
-    onPaymentConfirmation: (data) => {
-      fetchData();
-    },
-    onTableMerge: (data) => {
-      fetchData();
-    },
-    onTableOccupancyChange: (data) => {
-      fetchData();
-    },
-    onOrderUpdate: (data) => {
-      fetchData();
-    }
-  });
-
-  // Store branch info in localStorage for Sidebar
+  // Set up polling for data refresh every 10 seconds
   useEffect(() => {
-    if (branch?._id) {
-      localStorage.setItem('branchId', branch._id);
-    }
-  }, [branch]);
+    const interval = setInterval(() => {
+      fetchData();
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
 
   const renderContent = () => {
     if (loading) {
