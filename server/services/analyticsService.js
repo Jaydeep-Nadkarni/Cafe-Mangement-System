@@ -1578,6 +1578,333 @@ const getStatsWithCache = async (branchId, timeRange = 'today') => {
   };
 };
 
+/**
+ * Get discount analytics
+ * Returns total discounts, discount trends, and breakdown by coupon
+ */
+const getDiscountAnalytics = async (branchId, timeRange = 'today') => {
+  try {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
+
+    // Get orders with discounts
+    const orders = await Order.find({
+      branch: branchObjectId,
+      status: { $ne: 'cancelled' },
+      paymentStatus: 'paid',
+      createdAt: { $gte: start, $lte: end },
+      discount: { $gt: 0 }
+    }).populate('coupon', 'code discountValue discountType');
+
+    // Calculate total discounts
+    const totalDiscounts = orders.reduce((sum, order) => sum + (order.discount || 0), 0);
+
+    // Breakdown by coupon
+    const discountByCoupon = {};
+    const discountTrends = [];
+    
+    orders.forEach(order => {
+      const couponCode = order.coupon?.code || 'Manual Discount';
+      if (!discountByCoupon[couponCode]) {
+        discountByCoupon[couponCode] = { code: couponCode, amount: 0, count: 0 };
+      }
+      discountByCoupon[couponCode].amount += order.discount;
+      discountByCoupon[couponCode].count += 1;
+    });
+
+    // Create time-based trends (hourly or daily)
+    const isHourly = ['15min', '1h', '6h', 'today'].includes(timeRange);
+    const groupByFormat = isHourly ? '%Y-%m-%d %H:00' : '%Y-%m-%d';
+    
+    const trends = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          status: { $ne: 'cancelled' },
+          paymentStatus: 'paid',
+          createdAt: { $gte: start, $lte: end },
+          discount: { $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: isHourly ? '%Y-%m-%d %H:00' : '%Y-%m-%d',
+              date: '$createdAt'
+            }
+          },
+          totalDiscount: { $sum: '$discount' },
+          orderCount: { $sum: 1 },
+          avgDiscount: { $avg: '$discount' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    return {
+      totalDiscounts,
+      orderCount: orders.length,
+      avgDiscountPerOrder: orders.length > 0 ? totalDiscounts / orders.length : 0,
+      discountByCoupon: Object.values(discountByCoupon).sort((a, b) => b.amount - a.amount),
+      trends: trends.map(t => ({
+        date: t._id,
+        amount: t.totalDiscount,
+        orderCount: t.orderCount,
+        avgDiscount: t.avgDiscount
+      }))
+    };
+  } catch (error) {
+    console.error('[Analytics] Error getting discount analytics:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get complementary amounts analytics
+ * Returns total complementary, trends, and breakdown by reason
+ */
+const getComplementaryAnalytics = async (branchId, timeRange = 'today') => {
+  try {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
+
+    // Get orders marked as complementary
+    const orders = await Order.find({
+      branch: branchObjectId,
+      isComplementary: true,
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    // Calculate total complementary amount
+    const totalComplementary = orders.reduce((sum, order) => sum + (order.complementaryAmount || 0), 0);
+
+    // Breakdown by reason
+    const complementaryByReason = {};
+    orders.forEach(order => {
+      const reason = order.complementaryReason || 'Not Specified';
+      if (!complementaryByReason[reason]) {
+        complementaryByReason[reason] = { reason, amount: 0, count: 0 };
+      }
+      complementaryByReason[reason].amount += order.complementaryAmount || 0;
+      complementaryByReason[reason].count += 1;
+    });
+
+    // Time-based trends
+    const trends = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          isComplementary: true,
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: ['15min', '1h', '6h', 'today'].includes(timeRange) ? '%Y-%m-%d %H:00' : '%Y-%m-%d',
+              date: '$createdAt'
+            }
+          },
+          totalAmount: { $sum: '$complementaryAmount' },
+          count: { $sum: 1 },
+          avgAmount: { $avg: '$complementaryAmount' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    return {
+      totalComplementary,
+      count: orders.length,
+      avgComplementaryAmount: orders.length > 0 ? totalComplementary / orders.length : 0,
+      complementaryByReason: Object.values(complementaryByReason).sort((a, b) => b.amount - a.amount),
+      trends: trends.map(t => ({
+        date: t._id,
+        amount: t.totalAmount,
+        count: t.count,
+        avgAmount: t.avgAmount
+      }))
+    };
+  } catch (error) {
+    console.error('[Analytics] Error getting complementary analytics:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get cancellation analytics
+ * Returns cancelled orders count, trends, and breakdown by reason
+ */
+const getCancellationAnalytics = async (branchId, timeRange = 'today') => {
+  try {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
+
+    // Get cancelled orders
+    const orders = await Order.find({
+      branch: branchObjectId,
+      status: 'cancelled',
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    // Calculate total cancelled amount and count
+    const totalCancelledAmount = orders.reduce((sum, order) => sum + (order.total || 0), 0);
+    const totalCancelledOrders = orders.length;
+
+    // Breakdown by reason
+    const cancellationByReason = {};
+    orders.forEach(order => {
+      const reason = order.cancellationReason || 'Not Specified';
+      if (!cancellationByReason[reason]) {
+        cancellationByReason[reason] = { reason, count: 0, totalAmount: 0 };
+      }
+      cancellationByReason[reason].count += 1;
+      cancellationByReason[reason].totalAmount += order.total || 0;
+    });
+
+    // Time-based trends
+    const trends = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          status: 'cancelled',
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: ['15min', '1h', '6h', 'today'].includes(timeRange) ? '%Y-%m-%d %H:00' : '%Y-%m-%d',
+              date: '$createdAt'
+            }
+          },
+          count: { $sum: 1 },
+          totalAmount: { $sum: '$total' },
+          avgAmount: { $avg: '$total' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    // Calculate cancellation rate
+    const totalOrders = await Order.countDocuments({
+      branch: branchObjectId,
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    const cancellationRate = totalOrders > 0 ? (totalCancelledOrders / totalOrders) * 100 : 0;
+
+    return {
+      totalCancelledOrders,
+      totalCancelledAmount,
+      cancellationRate,
+      avgCancelledAmount: totalCancelledOrders > 0 ? totalCancelledAmount / totalCancelledOrders : 0,
+      cancellationByReason: Object.values(cancellationByReason)
+        .sort((a, b) => b.count - a.count)
+        .map(item => ({
+          ...item,
+          percentage: totalCancelledOrders > 0 ? (item.count / totalCancelledOrders) * 100 : 0
+        })),
+      trends: trends.map(t => ({
+        date: t._id,
+        count: t.count,
+        totalAmount: t.totalAmount,
+        avgAmount: t.avgAmount
+      }))
+    };
+  } catch (error) {
+    console.error('[Analytics] Error getting cancellation analytics:', error);
+    throw error;
+  }
+};
+
+/**
+ * Get customer growth after coupon campaigns
+ * Returns customer acquisition/return metrics for coupon-using customers
+ */
+const getCouponCampaignGrowth = async (branchId, timeRange = '30d') => {
+  try {
+    const { start, end } = getTimeRange(timeRange);
+    const branchObjectId = toObjectId(branchId);
+
+    // Get all orders with coupons
+    const couponOrders = await Order.find({
+      branch: branchObjectId,
+      coupon: { $ne: null },
+      createdAt: { $gte: start, $lte: end }
+    }).populate('coupon', 'code');
+
+    // Get unique customers who used coupons
+    const couponCustomers = new Set(couponOrders.map(o => o.customerPhone).filter(Boolean));
+
+    // Get all orders from coupon users (to check repeat customers)
+    const couponUserOrders = await Order.find({
+      branch: branchObjectId,
+      customerPhone: { $in: Array.from(couponCustomers) },
+      createdAt: { $gte: start, $lte: end }
+    });
+
+    // Count new vs returning customers with coupons
+    const newCustomers = new Set();
+    const returningCustomers = new Set();
+
+    for (const phone of couponCustomers) {
+      const orderCount = couponUserOrders.filter(o => o.customerPhone === phone).length;
+      if (orderCount === 1) {
+        newCustomers.add(phone);
+      } else {
+        returningCustomers.add(phone);
+      }
+    }
+
+    // Calculate growth trend
+    const growthTrend = await Order.aggregate([
+      {
+        $match: {
+          branch: branchObjectId,
+          coupon: { $ne: null },
+          createdAt: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: {
+              format: ['30d', '7d'].includes(timeRange) ? '%Y-%m-%d' : '%Y-%m-%d %H:00',
+              date: '$createdAt'
+            }
+          },
+          uniqueCustomers: { $addToSet: '$customerPhone' },
+          orderCount: { $sum: 1 },
+          totalRevenue: { $sum: '$total' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+
+    return {
+      totalCouponUsers: couponCustomers.size,
+      newCustomers: newCustomers.size,
+      returningCustomers: returningCustomers.size,
+      returnRate: couponCustomers.size > 0 ? (returningCustomers.size / couponCustomers.size) * 100 : 0,
+      totalCouponOrders: couponOrders.length,
+      avgOrdersPerCustomer: couponCustomers.size > 0 ? couponOrders.length / couponCustomers.size : 0,
+      growthTrend: growthTrend.map(t => ({
+        date: t._id,
+        uniqueCustomers: t.uniqueCustomers.length,
+        orderCount: t.orderCount,
+        totalRevenue: t.totalRevenue
+      }))
+    };
+  } catch (error) {
+    console.error('[Analytics] Error getting coupon campaign growth:', error);
+    throw error;
+  }
+};
+
 module.exports = {
   getGlobalStats,
   getBranchPerformance,
@@ -1595,5 +1922,9 @@ module.exports = {
   getAIInsights,
   getStatsCache,
   applyStatsDelta,
-  getStatsWithCache
+  getStatsWithCache,
+  getDiscountAnalytics,
+  getComplementaryAnalytics,
+  getCancellationAnalytics,
+  getCouponCampaignGrowth
 };

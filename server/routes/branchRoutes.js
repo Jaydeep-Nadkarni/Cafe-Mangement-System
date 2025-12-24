@@ -4,10 +4,13 @@ const { protect, requireBranch } = require('../middleware/auth');
 const {
   getTables,
   getMenu,
+  bulkUpdateMenuAvailability,
+  updateMenuItemTemporaryChanges,
   updateItemAvailability,
   mergeTables,
   getBranchDetails,
   createTable,
+  getTableLocations,
   updateTable,
   deleteTable,
   updateTableStatus,
@@ -37,6 +40,10 @@ const {
   getAIAnalysis,
   clearAICache,
   getAICacheStats,
+  getDiscountAnalytics,
+  getComplementaryAnalytics,
+  getCancellationAnalytics,
+  getCouponGrowth,
   getCategories,
   getDynamicCategories,
   addCategory,
@@ -44,7 +51,9 @@ const {
   deleteCategory,
   getOrders,
   getCustomerPreferences,
-  updateCustomerPreferences
+  updateCustomerPreferences,
+  getBranchProfile,
+  updateBranchProfile
 } = require('../controllers/branchController');
 
 // All routes are protected and require branch manager role
@@ -64,6 +73,10 @@ router.get('/analytics/ai-data', getAIData);
 router.get('/analytics/ai-analysis', getAIAnalysis);
 router.delete('/analytics/ai-cache', clearAICache);
 router.get('/analytics/ai-cache-stats', getAICacheStats);
+router.get('/analytics/discounts', getDiscountAnalytics);
+router.get('/analytics/complementary', getComplementaryAnalytics);
+router.get('/analytics/cancellations', getCancellationAnalytics);
+router.get('/analytics/coupon-growth', getCouponGrowth);
 
 // Alerts
 router.get('/alerts', getAlerts);
@@ -91,13 +104,16 @@ router.put('/categories/:id', updateCategory);
 router.delete('/categories/:id', deleteCategory);
 
 router.get('/tables', getTables);
+router.get('/tables/locations', getTableLocations);
 router.post('/tables', createTable);
 router.put('/tables/:id', updateTable);
 router.delete('/tables/:id', deleteTable);
 router.put('/tables/:id/status', updateTableStatus);
 router.get('/menu', getMenu);
+router.put('/menu/bulk-availability', bulkUpdateMenuAvailability);
 router.put('/menu/bulk', bulkUpdateMenuItems);
 router.post('/menu', addMenuItem);
+router.put('/menu/:id/temporary-changes', updateMenuItemTemporaryChanges);
 router.put('/menu/:id', updateMenuItem);
 router.delete('/menu/:id', deleteMenuItem);
 
@@ -107,5 +123,9 @@ router.post('/customers/preferences', updateCustomerPreferences);
 router.post('/menu/:id/duplicate', duplicateMenuItem);
 router.put('/menu/:id/availability', updateItemAvailability);
 router.post('/tables/merge', mergeTables);
+
+// Branch Profile routes
+router.get('/profile', getBranchProfile);
+router.put('/profile', updateBranchProfile);
 
 module.exports = router;

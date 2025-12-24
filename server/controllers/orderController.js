@@ -2,8 +2,10 @@ const Order = require('../models/Order');
 const Table = require('../models/Table');
 const MenuItem = require('../models/MenuItem');
 const Branch = require('../models/Branch');
+const Admin = require('../models/Admin');
 const Alert = require('../models/Alert');
 const Memo = require('../models/Memo');
+const CustomerPreferences = require('../models/CustomerPreferences');
 const orderService = require('../services/orderService');
 const billService = require('../services/billService');
 const whatsappService = require('../services/whatsappService');
@@ -232,6 +234,53 @@ const updateTableSessionStats = async (tableId) => {
     await table.save();
   } catch (error) {
     console.error('Error updating table session stats:', error);
+  }
+};
+
+/**
+ * Helper function to update customer loyalty stats
+ * Called when order is paid
+ * @param {String} customerPhone - Customer phone number
+ * @param {Number} orderTotal - Total amount paid
+ */
+const updateCustomerLoyaltyStats = async (customerPhone, orderTotal) => {
+  try {
+    if (!customerPhone) return;
+
+    let customer = await CustomerPreferences.findOne({ phone: customerPhone });
+
+    if (!customer) {
+      customer = await CustomerPreferences.create({
+        phone: customerPhone,
+        totalOrderAmount: orderTotal,
+        totalOrders: 1,
+        lastOrderDate: new Date(),
+        loyaltyPoints: Math.floor(orderTotal / 100) // 1 point per ₹100 spent
+      });
+    } else {
+      // Update customer stats
+      customer.totalOrderAmount += orderTotal;
+      customer.totalOrders += 1;
+      customer.lastOrderDate = new Date();
+      
+      // Calculate and add loyalty points: 1 point per ₹100 spent
+      const newPoints = Math.floor(orderTotal / 100);
+      customer.loyaltyPoints += newPoints;
+
+      // Update stats object for backward compatibility
+      if (customer.stats) {
+        customer.stats.totalOrders = customer.totalOrders;
+        customer.stats.totalSpent = customer.totalOrderAmount;
+        customer.stats.lastOrderDate = customer.lastOrderDate;
+      }
+
+      await customer.save();
+    }
+
+    console.log(`Updated customer ${customerPhone}: +${Math.floor(orderTotal / 100)} loyalty points`);
+  } catch (error) {
+    console.error('Error updating customer loyalty stats:', error);
+    // Non-critical error - don't break order flow
   }
 };
 
@@ -597,7 +646,13 @@ const applyCoupon = async (req, res) => {
 // @access  Manager
 const checkoutOrder = async (req, res) => {
   try {
-    const { paymentMethod, amountPaid } = req.body;
+    const { paymentMethod, amountPaid, isSplit, splitType, splitPayments } = req.body;
+    
+    // Validate input
+    if (!paymentMethod || (!isSplit && !amountPaid && amountPaid !== 0)) {
+      return res.status(400).json({ message: 'Payment method and amount are required' });
+    }
+
     const order = await Order.findById(req.params.id).populate('table');
 
     if (!order) {
@@ -610,64 +665,88 @@ const checkoutOrder = async (req, res) => {
     }
 
     // Validate payment before allowing PAID status
-    if (amountPaid < order.total) {
-      return res.status(400).json({ message: 'Insufficient payment amount' });
+    const totalPaid = isSplit ? splitPayments.reduce((sum, p) => sum + p.amount, 0) : amountPaid;
+    if (totalPaid < order.total) {
+      return res.status(400).json({ 
+        message: `Insufficient payment amount. Required: ₹${order.total.toFixed(2)}, Paid: ₹${totalPaid.toFixed(2)}` 
+      });
     }
 
-    // Allow payment from any non-terminal state (billing-focused UI)
-    // Note: Previously required 'ready' status; managers can now process payment directly.
+    // Validate payment method is supported
+    const validPaymentMethods = ['cash', 'card', 'upi', 'wallet', 'online', 'mixed'];
+    if (!validPaymentMethods.includes(isSplit ? 'mixed' : paymentMethod)) {
+      return res.status(400).json({ message: 'Invalid payment method' });
+    }
+
+    // Create Payment record
+    const Payment = require('../models/Payment');
+    const payment = new Payment({
+      order: order._id,
+      branch: order.branch,
+      amount: order.total,
+      paymentMethod: isSplit ? 'mixed' : paymentMethod,
+      isSplit: isSplit || false,
+      splitType: splitType || null,
+      splitPayments: splitPayments || [],
+      status: 'completed',
+      completedAt: new Date()
+    });
+    await payment.save();
 
     // Update order with payment details
-    order.paymentMethod = paymentMethod;
+    order.paymentMethod = isSplit ? 'mixed' : paymentMethod;
     order.paymentStatus = 'paid';
-    order.paidAt = Date.now();
+    order.paidAt = new Date(); // Use new Date() instead of Date.now() for consistency
     order.status = 'paid';
 
     await order.save();
 
-    // COUNTER PAYMENT = SESSION CLOSURE (Most Important Rule)
-    // Counter payment (cash) represents end of dining - closes entire session
-    if (paymentMethod === 'cash' && order.table) {
+    // Update customer loyalty stats (1 point per ₹100 spent)
+    if (order.customerPhone) {
+      await updateCustomerLoyaltyStats(order.customerPhone, order.total);
+    }
+
+    // TABLE STATUS UPDATE: Ensure table becomes available after payment completion
+    if (order.table) {
       const table = await Table.findById(order.table);
       if (table) {
-        // Find ALL unpaid orders in the same session and mark them paid
-        const sessionOrders = await Order.find({
-          table: order.table._id || order.table,
-          paymentStatus: 'unpaid',
-          status: { $nin: ['closed', 'cancelled'] }
-        });
-        
-        for (const sessionOrder of sessionOrders) {
-          sessionOrder.paymentMethod = paymentMethod;
-          sessionOrder.paymentStatus = 'paid';
-          sessionOrder.paidAt = Date.now();
-          sessionOrder.status = 'paid';
-          await sessionOrder.save();
+        // If paymentMethod is cash, we close the whole session (legacy behavior)
+        if (paymentMethod === 'cash') {
+          const sessionOrders = await Order.find({
+            table: order.table._id || order.table,
+            paymentStatus: 'unpaid',
+            status: { $nin: ['closed', 'cancelled'] }
+          });
+          
+          for (const sessionOrder of sessionOrders) {
+            sessionOrder.paymentMethod = paymentMethod;
+            sessionOrder.paymentStatus = 'paid';
+            sessionOrder.paidAt = new Date(); // Use new Date() for consistency
+            sessionOrder.status = 'paid';
+            await sessionOrder.save();
+
+            if (sessionOrder.customerPhone) {
+              await updateCustomerLoyaltyStats(sessionOrder.customerPhone, sessionOrder.total);
+            }
+          }
+          
+          table.currentOrders = [];
+          table.status = 'available';
+          table.sessionStart = null;
+        } else {
+          // For other payment methods, remove this order from currentOrders
+          table.currentOrders = table.currentOrders.filter(
+            id => id.toString() !== order._id.toString()
+          );
+          
+          // If no more orders left in the session, set table to available
+          if (table.currentOrders.length === 0) {
+            table.status = 'available';
+            table.sessionStart = null;
+          }
         }
-        
-        // Clear all orders from the table (session is closed)
-        table.currentOrders = [];
-        table.status = 'available';
-        table.sessionStart = null;  // Reset session
 
         await table.save();
-
-        // Update session stats (will clear since empty)
-        await updateTableSessionStats(table._id);
-        
-        console.log(`[Session Closed] Table ${table.tableNumber}: ${sessionOrders.length + 1} orders paid, table freed`);
-      }
-    } else if (order.table) {
-      // ONLINE PAYMENT: Does NOT close session, table remains occupied
-      const table = await Table.findById(order.table);
-      if (table) {
-        // Remove only this order from currentOrders
-        table.currentOrders = table.currentOrders.filter(
-          id => id.toString() !== order._id.toString()
-        );
-        await table.save();
-        
-        // Update session stats
         await updateTableSessionStats(table._id);
       }
     }
@@ -734,19 +813,23 @@ const sessionCheckout = async (req, res) => {
     for (const order of unpaidOrders) {
       order.paymentMethod = paymentMethod;
       order.paymentStatus = 'paid';
-      order.paidAt = Date.now();
+      order.paidAt = new Date(); // Use new Date() for consistency
       order.status = 'paid';
       await order.save();
+      
+      // Update customer loyalty stats for each order
+      if (order.customerPhone) {
+        await updateCustomerLoyaltyStats(order.customerPhone, order.total);
+      }
+      
       totalItems += order.items.reduce((sum, item) => sum + item.quantity, 0);
     }
     
-    // COUNTER PAYMENT = SESSION CLOSURE
-    if (paymentMethod === 'cash') {
-      table.currentOrders = [];
-      table.status = 'available';
-      table.sessionStart = null;
-      await table.save();
-    }
+    // SESSION CLOSURE - Table becomes available after full session payment
+    table.currentOrders = [];
+    table.status = 'available';
+    table.sessionStart = null;
+    await table.save();
     
     // Update session stats
     await updateTableSessionStats(tableId);
@@ -988,7 +1071,19 @@ const updateItemQuantity = async (req, res) => {
 // @route   POST /api/orders/:id/cancel
 // @access  Manager
 const cancelOrder = async (req, res) => {
+  const { password, reason } = req.body;
+
   try {
+    // Verify password
+    const user = await Admin.findById(req.user._id).select('+password');
+    if (!user || !(await user.matchPassword(password))) {
+      return res.status(401).json({ message: 'Invalid password' });
+    }
+
+    if (!reason) {
+      return res.status(400).json({ message: 'Cancellation reason is required' });
+    }
+
     const order = await Order.findById(req.params.id).populate('table');
 
     if (!order) {
@@ -1002,7 +1097,11 @@ const cancelOrder = async (req, res) => {
 
     const previousStatus = order.status;
     const wasPaid = order.status === 'paid';
+    
     order.status = 'cancelled';
+    order.cancellationReason = reason;
+    order.cancelledBy = req.user._id;
+    
     await order.save();
 
     // Apply incremental stats delta for cancellation
@@ -1455,6 +1554,7 @@ const closeOrder = async (req, res) => {
 // @access  Manager
 const downloadBill = async (req, res) => {
   try {
+    const { splitIndex, splitType, splitCount } = req.query;
     const order = await Order.findById(req.params.id)
       .populate('items.menuItem')
       .populate('table');
@@ -1463,11 +1563,24 @@ const downloadBill = async (req, res) => {
       return res.status(404).json({ message: 'Order not found' });
     }
 
-    const pdfBuffer = await billService.generateThermalBill(order);
+    let pdfBuffer;
+    
+    if (splitIndex !== undefined && splitType) {
+      // Generate specific split bill
+      const bills = await billService.generateSplitBills(
+        order, 
+        splitType, 
+        parseInt(splitCount) || 2,
+        [] // For now, item split needs more logic to pass items
+      );
+      pdfBuffer = bills[parseInt(splitIndex)];
+    } else {
+      pdfBuffer = await billService.generateThermalBill(order);
+    }
 
     res.set({
       'Content-Type': 'application/pdf',
-      'Content-Disposition': `attachment; filename=Bill-${order.orderNumber || order._id}.pdf`,
+      'Content-Disposition': `attachment; filename=Bill-${order.orderNumber || order._id}${splitIndex !== undefined ? `-split-${parseInt(splitIndex)+1}` : ''}.pdf`,
       'Content-Length': pdfBuffer.length
     });
 
@@ -1483,7 +1596,27 @@ const downloadBill = async (req, res) => {
 // @access  Manager
 const updateOrder = async (req, res) => {
   try {
-    const { items, customerPhone, customerName, taxNumber } = req.body;
+    const { 
+      items, 
+      customerPhone, 
+      customerName, 
+      taxNumber,
+      customerGSTN,
+      tags,
+      isFavorite,
+      isComplementary,
+      complementaryAmount,
+      complementaryReason,
+      subtotal,
+      tax,
+      cgst,
+      sgst,
+      cgstRate,
+      sgstRate,
+      discount,
+      roundOff,
+      total
+    } = req.body;
     const order = await Order.findById(req.params.id);
 
     if (!order) {
@@ -1496,16 +1629,38 @@ const updateOrder = async (req, res) => {
     }
 
     if (items) {
-      const calculation = await orderService.calculateOrderTotals(items);
-      order.items = calculation.items;
-      order.subtotal = calculation.subtotal;
-      order.tax = calculation.tax;
-      order.total = calculation.total;
+      // If items are provided, we can either recalculate or trust the frontend
+      // For now, let's trust the frontend if totals are also provided, 
+      // otherwise use the service
+      if (total !== undefined) {
+        order.items = items;
+        order.subtotal = subtotal;
+        order.tax = tax;
+        order.cgst = cgst;
+        order.sgst = sgst;
+        order.cgstRate = cgstRate;
+        order.sgstRate = sgstRate;
+        order.discount = discount;
+        order.roundOff = roundOff;
+        order.total = total;
+      } else {
+        const calculation = await orderService.calculateOrderTotals(items);
+        order.items = calculation.items;
+        order.subtotal = calculation.subtotal;
+        order.tax = calculation.tax;
+        order.total = calculation.total;
+      }
     }
 
     if (customerPhone !== undefined) order.customerPhone = customerPhone;
     if (customerName !== undefined) order.customerName = customerName;
     if (taxNumber !== undefined) order.taxNumber = taxNumber;
+    if (customerGSTN !== undefined) order.customerGSTN = customerGSTN;
+    if (tags !== undefined) order.tags = tags;
+    if (isFavorite !== undefined) order.isFavorite = isFavorite;
+    if (isComplementary !== undefined) order.isComplementary = isComplementary;
+    if (complementaryAmount !== undefined) order.complementaryAmount = complementaryAmount;
+    if (complementaryReason !== undefined) order.complementaryReason = complementaryReason;
 
     const updatedOrder = await order.save();
 

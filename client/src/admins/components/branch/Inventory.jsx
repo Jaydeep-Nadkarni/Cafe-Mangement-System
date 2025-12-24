@@ -1,12 +1,165 @@
 import React, { useState, useEffect } from 'react';
 import { 
   Utensils, Search, Plus, Edit2, Trash2, X, Image as ImageIcon, 
-  Check, Copy, Filter, Tag, Settings
+  Check, Copy, Filter, Tag, Settings, Clock, Calendar
 } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency } from '../../../utils/formatCurrency';
 import { useSocket } from '../../../user/context/SocketContext';
 import ConfirmationModal from './ConfirmationModal';
+
+const TemporaryChangesModal = ({ isOpen, onClose, onSave, item }) => {
+  const [formData, setFormData] = useState({
+    active: false,
+    startDate: '',
+    endDate: '',
+    tempPrice: '',
+    tempName: '',
+    tempAvailability: true
+  });
+
+  useEffect(() => {
+    if (item && item.temporaryChanges) {
+      setFormData({
+        active: item.temporaryChanges.active || false,
+        startDate: item.temporaryChanges.startDate ? new Date(item.temporaryChanges.startDate).toISOString().slice(0, 16) : '',
+        endDate: item.temporaryChanges.endDate ? new Date(item.temporaryChanges.endDate).toISOString().slice(0, 16) : '',
+        tempPrice: item.temporaryChanges.tempPrice || '',
+        tempName: item.temporaryChanges.tempName || '',
+        tempAvailability: item.temporaryChanges.tempAvailability !== undefined ? item.temporaryChanges.tempAvailability : true
+      });
+    } else {
+      setFormData({
+        active: false,
+        startDate: '',
+        endDate: '',
+        tempPrice: '',
+        tempName: '',
+        tempAvailability: true
+      });
+    }
+  }, [item, isOpen]);
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    onSave(formData);
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4 backdrop-blur-sm">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="p-6 border-b flex justify-between items-center bg-gray-50">
+          <div className="flex items-center gap-3">
+            <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+              <Clock className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-gray-900">Temporary Changes</h3>
+              <p className="text-xs text-gray-500">Schedule price or name changes</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+            <X className="w-5 h-5 text-gray-400" />
+          </button>
+        </div>
+        
+        <form onSubmit={handleSubmit} className="p-6 space-y-5">
+          <div className="flex items-center justify-between p-3 bg-amber-50 rounded-xl border border-amber-100">
+            <div className="flex items-center gap-2">
+              <div className={`w-2 h-2 rounded-full ${formData.active ? 'bg-green-500 animate-pulse' : 'bg-gray-300'}`} />
+              <span className="text-sm font-bold text-amber-900">Enable Schedule</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setFormData({ ...formData, active: !formData.active })}
+              className={`relative w-12 h-6 rounded-full transition-colors ${formData.active ? 'bg-green-500' : 'bg-gray-300'}`}
+            >
+              <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${formData.active ? 'translate-x-6' : 'translate-x-0'}`} />
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Start Date & Time</label>
+              <input 
+                type="datetime-local"
+                required={formData.active}
+                value={formData.startDate}
+                onChange={(e) => setFormData({ ...formData, startDate: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-amber-500 outline-none font-bold text-gray-800 text-xs"
+              />
+            </div>
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">End Date & Time</label>
+              <input 
+                type="datetime-local"
+                required={formData.active}
+                value={formData.endDate}
+                onChange={(e) => setFormData({ ...formData, endDate: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-amber-500 outline-none font-bold text-gray-800 text-xs"
+              />
+            </div>
+          </div>
+
+          <div className="space-y-4 pt-2 border-t border-gray-100">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temporary Name (Optional)</label>
+              <input 
+                type="text"
+                placeholder={item?.name}
+                value={formData.tempName}
+                onChange={(e) => setFormData({ ...formData, tempName: e.target.value })}
+                className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-amber-500 outline-none font-bold text-gray-800"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Temp Price (₹)</label>
+                <input 
+                  type="number"
+                  placeholder={item?.price}
+                  value={formData.tempPrice}
+                  onChange={(e) => setFormData({ ...formData, tempPrice: e.target.value })}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-amber-500 outline-none font-bold text-gray-800"
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Availability</label>
+                <select
+                  value={formData.tempAvailability}
+                  onChange={(e) => setFormData({ ...formData, tempAvailability: e.target.value === 'true' })}
+                  className="w-full px-4 py-3 bg-gray-50 border-2 border-gray-100 rounded-xl focus:border-amber-500 outline-none font-bold text-gray-800"
+                >
+                  <option value="true">Available</option>
+                  <option value="false">Unavailable</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 px-6 py-3 bg-gray-100 text-gray-600 rounded-xl font-bold hover:bg-gray-200 transition-all"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="flex-1 px-6 py-3 bg-amber-600 text-white rounded-xl font-bold hover:bg-amber-700 shadow-lg shadow-amber-100 transition-all active:scale-95"
+            >
+              Save Changes
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+};
 
 const Drawer = ({ isOpen, onClose, title, children }) => {
   return (
@@ -171,6 +324,8 @@ export default function Inventory({ menu, setMenu }) {
   const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [useDynamicCategories, setUseDynamicCategories] = useState(true);
   const [branch, setBranch] = useState(null);
+  const [showTempModal, setShowTempModal] = useState(false);
+  const [selectedItemForTemp, setSelectedItemForTemp] = useState(null);
   const [modalState, setModalState] = useState({
     isOpen: false,
     title: '',
@@ -447,6 +602,29 @@ export default function Inventory({ menu, setMenu }) {
     }
   };
 
+  const handleSaveTempChanges = async (tempData) => {
+    try {
+      await axios.put(`${API_URL}/api/branch/menu/${selectedItemForTemp._id}/temporary-changes`, {
+        ...tempData
+      });
+      setShowTempModal(false);
+      setSelectedItemForTemp(null);
+      // Refresh menu to show updated temporary changes
+      const res = await axios.get(`${API_URL}/api/branch/menu`);
+      setMenu(res.data);
+    } catch (error) {
+      console.error('Error saving temporary changes:', error);
+      setModalState({
+        isOpen: true,
+        title: 'Error',
+        description: 'Failed to save temporary changes. Please try again.',
+        confirmText: 'OK',
+        isDangerous: true,
+        onConfirm: null
+      });
+    }
+  };
+
   // Bulk Actions
   const handleSelectAll = (e) => {
     if (e.target.checked) {
@@ -474,11 +652,18 @@ export default function Inventory({ menu, setMenu }) {
       isDangerous: action === 'delete',
       onConfirm: async () => {
         try {
-          await axios.put(`${API_URL}/api/branch/menu/bulk`, {
-            items: selectedItems,
-            action,
-            value
-          });
+          if (action === 'enable' || action === 'disable') {
+            await axios.put(`${API_URL}/api/branch/menu/bulk-availability`, {
+              itemIds: selectedItems,
+              isAvailable: action === 'enable'
+            });
+          } else {
+            await axios.put(`${API_URL}/api/branch/menu/bulk`, {
+              items: selectedItems,
+              action,
+              value
+            });
+          }
           // Refresh menu
           const res = await axios.get(`${API_URL}/api/branch/menu`);
           setMenu(res.data);
@@ -564,9 +749,9 @@ export default function Inventory({ menu, setMenu }) {
           <div className="flex items-center gap-2 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100 animate-in fade-in slide-in-from-right-4 duration-200">
             <span className="text-xs font-bold text-green-700">{selectedItems.length} selected</span>
             <div className="h-4 w-px bg-green-200 mx-1" />
-            <button onClick={() => handleBulkAction('availability', true)} className="text-xs font-medium text-green-700 hover:text-green-800 px-2 py-1 hover:bg-green-100 rounded">Enable</button>
-            <button onClick={() => handleBulkAction('availability', false)} className="text-xs font-medium text-amber-700 hover:text-amber-800 px-2 py-1 hover:bg-amber-100 rounded">Disable</button>
-            <button onClick={() => handleBulkAction('delete', true)} className="text-xs font-medium text-red-700 hover:text-red-800 px-2 py-1 hover:bg-red-100 rounded">Delete</button>
+            <button onClick={() => handleBulkAction('enable')} className="text-xs font-medium text-green-700 hover:text-green-800 px-2 py-1 hover:bg-green-100 rounded">Enable</button>
+            <button onClick={() => handleBulkAction('disable')} className="text-xs font-medium text-amber-700 hover:text-amber-800 px-2 py-1 hover:bg-amber-100 rounded">Disable</button>
+            <button onClick={() => handleBulkAction('delete')} className="text-xs font-medium text-red-700 hover:text-red-800 px-2 py-1 hover:bg-red-100 rounded">Delete</button>
           </div>
         )}
       </div>
@@ -651,6 +836,20 @@ export default function Inventory({ menu, setMenu }) {
                   </td>
                   <td className="p-4 text-right">
                     <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <button 
+                        onClick={() => {
+                          setSelectedItemForTemp(item);
+                          setShowTempModal(true);
+                        }}
+                        className={`p-1.5 rounded-lg transition-colors ${
+                          item.temporaryChanges?.active 
+                            ? 'text-amber-600 bg-amber-50 hover:bg-amber-100' 
+                            : 'text-gray-400 hover:text-amber-600 hover:bg-amber-50'
+                        }`}
+                        title="Temporary Changes"
+                      >
+                        <Clock className="w-4 h-4" />
+                      </button>
                       <button 
                         onClick={() => handleDuplicate(item._id)}
                         className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
@@ -936,6 +1135,16 @@ export default function Inventory({ menu, setMenu }) {
         cancelText={modalState.cancelText}
         isDangerous={modalState.isDangerous}
         isLoading={modalState.isLoading}
+      />
+
+      <TemporaryChangesModal
+        isOpen={showTempModal}
+        onClose={() => {
+          setShowTempModal(false);
+          setSelectedItemForTemp(null);
+        }}
+        onSave={handleSaveTempChanges}
+        item={selectedItemForTemp}
       />
     </div>
   );

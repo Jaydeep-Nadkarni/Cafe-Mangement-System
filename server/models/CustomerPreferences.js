@@ -49,6 +49,45 @@ const customerPreferencesSchema = new mongoose.Schema(
       broadcastsOpened: { type: Number, default: 0 },
       broadcastsClicked: { type: Number, default: 0 }
     },
+    // GST and Customer Info
+    gstNumber: {
+      type: String,
+      trim: true,
+      sparse: true
+    },
+    // Loyalty Program
+    loyaltyPoints: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    // Customer Spending
+    totalOrderAmount: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    totalOrders: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
+    lastOrderDate: {
+      type: Date,
+      default: null
+    },
+    // Preferences
+    discountPreference: {
+      type: String,
+      enum: ['percentage', 'fixed', 'none'],
+      default: 'none'
+    },
+    // Complimentary Items Tracking
+    complementaryTotal: {
+      type: Number,
+      default: 0,
+      min: 0
+    },
     // Opt-out tracking
     optedOut: {
       type: Boolean,

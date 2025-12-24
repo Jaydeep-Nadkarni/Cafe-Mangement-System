@@ -115,6 +115,85 @@ const getTables = async (req, res) => {
 // @desc    Get menu for the branch
 // @route   GET /api/branch/menu
 // @access  Manager
+// @desc    Bulk update item availability
+// @route   PUT /api/branch/menu/bulk-availability
+// @access  Manager
+const bulkUpdateMenuAvailability = async (req, res) => {
+  try {
+    const { ids, isAvailable } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    if (!ids || !Array.isArray(ids)) {
+      return res.status(400).json({ message: 'Item IDs are required' });
+    }
+
+    await MenuItem.updateMany(
+      { 
+        _id: { $in: ids },
+        $or: [{ branch: branch._id }, { branch: null }]
+      },
+      { $set: { isAvailable } }
+    );
+
+    emitToBranch(branch._id, 'menu_bulk_updated', {
+      ids,
+      isAvailable,
+      timestamp: new Date()
+    });
+
+    res.json({ message: `Successfully updated ${ids.length} items` });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Update temporary changes for a menu item
+// @route   PUT /api/branch/menu/:id/temporary-changes
+// @access  Manager
+const updateMenuItemTemporaryChanges = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { temporaryChanges } = req.body;
+    const branch = await getManagerBranch(req.user._id);
+
+    const menuItem = await MenuItem.findOne({ 
+      _id: id, 
+      $or: [{ branch: branch._id }, { branch: null }]
+    });
+
+    if (!menuItem) {
+      return res.status(404).json({ message: 'Item not found' });
+    }
+
+    menuItem.temporaryChanges = temporaryChanges;
+    await menuItem.save();
+
+    res.json(menuItem);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+const processTemporaryChanges = (items) => {
+  const now = new Date();
+  return items.map(item => {
+    const itemObj = item.toObject ? item.toObject() : item;
+    if (itemObj.temporaryChanges && itemObj.temporaryChanges.active) {
+      const { startDate, endDate, tempPrice, tempName, tempAvailability } = itemObj.temporaryChanges;
+      const start = new Date(startDate);
+      const end = new Date(endDate);
+
+      if (now >= start && now <= end) {
+        if (tempPrice !== null && tempPrice !== undefined) itemObj.price = tempPrice;
+        if (tempName) itemObj.name = tempName;
+        if (tempAvailability !== null && tempAvailability !== undefined) itemObj.isAvailable = tempAvailability;
+        itemObj.isTemporary = true;
+      }
+    }
+    return itemObj;
+  });
+};
+
 const getMenu = async (req, res) => {
   try {
     const branch = await getManagerBranch(req.user._id);
@@ -127,7 +206,8 @@ const getMenu = async (req, res) => {
       isDeleted: { $ne: true }
     }).sort({ sortOrder: 1, category: 1, name: 1 });
     
-    res.json(menuItems);
+    const processedMenu = processTemporaryChanges(menuItems);
+    res.json(processedMenu);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -235,6 +315,19 @@ const getBranchDetails = async (req, res) => {
     console.error('Error in getBranchDetails:', error);
     const statusCode = error.statusCode || 500;
     res.status(statusCode).json({ message: error.message });
+  }
+};
+
+// @desc    Get unique table locations for suggestions
+// @route   GET /api/branch/tables/locations
+// @access  Manager
+const getTableLocations = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const locations = await Table.distinct('location', { branch: branch._id });
+    res.json(locations.filter(l => l)); // Filter out null/empty
+  } catch (error) {
+    res.status(500).json({ message: error.message });
   }
 };
 
@@ -1127,6 +1220,74 @@ const getAICacheStats = async (req, res) => {
   }
 };
 
+// @desc    Get discount analytics
+// @route   GET /api/branch/analytics/discounts?range=today
+// @access  Manager
+const getDiscountAnalytics = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const discounts = await require('../services/analyticsService').getDiscountAnalytics(branch._id, timeRange);
+    
+    res.json(discounts);
+  } catch (error) {
+    console.error('[Controller] Error getting discount analytics:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get complementary amounts analytics
+// @route   GET /api/branch/analytics/complementary?range=today
+// @access  Manager
+const getComplementaryAnalytics = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const complementary = await require('../services/analyticsService').getComplementaryAnalytics(branch._id, timeRange);
+    
+    res.json(complementary);
+  } catch (error) {
+    console.error('[Controller] Error getting complementary analytics:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get cancellation analytics
+// @route   GET /api/branch/analytics/cancellations?range=today
+// @access  Manager
+const getCancellationAnalytics = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || 'today';
+    
+    const cancellations = await require('../services/analyticsService').getCancellationAnalytics(branch._id, timeRange);
+    
+    res.json(cancellations);
+  } catch (error) {
+    console.error('[Controller] Error getting cancellation analytics:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get coupon campaign growth metrics
+// @route   GET /api/branch/analytics/coupon-growth?range=30d
+// @access  Manager
+const getCouponGrowth = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    const timeRange = req.query.range || '30d';
+    
+    const growth = await require('../services/analyticsService').getCouponCampaignGrowth(branch._id, timeRange);
+    
+    res.json(growth);
+  } catch (error) {
+    console.error('[Controller] Error getting coupon growth analytics:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // ==================== CATEGORY MANAGEMENT ====================
 
 // @desc    Get dynamic categories derived from menu items
@@ -1345,16 +1506,20 @@ const deleteCategory = async (req, res) => {
 // @access  Manager
 const getOrders = async (req, res) => {
   try {
-    const { timeFilter, startDate, endDate } = req.query;
+    const { timeFilter, startDate, endDate, customerName, customerPhone, specificDate, timeRange } = req.query;
     const branch = await getManagerBranch(req.user._id);
 
     // Build time-based query
     let dateQuery = {};
     const now = new Date();
 
-    if (timeFilter) {
+    // Handle date filtering (legacy timeFilter or new parameters)
+    const effectiveTimeFilter = timeFilter || timeRange;
+    const effectiveStartDate = startDate || specificDate;
+
+    if (effectiveTimeFilter || effectiveStartDate) {
       let startTime;
-      switch (timeFilter) {
+      switch (effectiveTimeFilter) {
         case '1h':
           startTime = new Date(now.getTime() - 60 * 60 * 1000);
           break;
@@ -1367,9 +1532,15 @@ const getOrders = async (req, res) => {
         case 'today':
           startTime = new Date(now.setHours(0, 0, 0, 0));
           break;
+        case '7d':
+          startTime = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          break;
+        case '30d':
+          startTime = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          break;
         case 'custom':
-          if (startDate) {
-            startTime = new Date(startDate);
+          if (effectiveStartDate) {
+            startTime = new Date(effectiveStartDate);
           }
           if (endDate) {
             dateQuery.createdAt = {
@@ -1385,8 +1556,35 @@ const getOrders = async (req, res) => {
           break;
       }
 
-      if (timeFilter !== 'custom' && startTime) {
+      if (effectiveTimeFilter !== 'custom' && startTime) {
         dateQuery.createdAt = { $gte: startTime };
+      }
+    }
+
+    // Build search query for customer name and phone
+    let searchQuery = {};
+    if (customerName || customerPhone) {
+      const searchConditions = [];
+      
+      if (customerName) {
+        // Case-insensitive regex match for customer name
+        searchConditions.push({
+          customerName: { $regex: customerName, $options: 'i' }
+        });
+      }
+      
+      if (customerPhone) {
+        // Regex match for customer phone - allows partial match
+        searchConditions.push({
+          customerPhone: { $regex: customerPhone, $options: 'i' }
+        });
+      }
+
+      // If both provided, use OR; if only one, use that condition
+      if (searchConditions.length > 1) {
+        searchQuery.$or = searchConditions;
+      } else if (searchConditions.length === 1) {
+        searchQuery = searchConditions[0];
       }
     }
 
@@ -1394,7 +1592,8 @@ const getOrders = async (req, res) => {
     const orders = await Order.find({
       branch: branch._id,
       status: { $nin: ['merged', 'cancelled'] },
-      ...dateQuery
+      ...dateQuery,
+      ...searchQuery
     })
       .populate({
         path: 'table',
@@ -1439,7 +1638,36 @@ const getOrders = async (req, res) => {
 const getCustomerPreferences = async (req, res) => {
   try {
     const customer = await CustomerPreferences.findOne({ phone: req.params.phone });
-    res.json(customer);
+    
+    if (!customer) {
+      return res.json(null);
+    }
+
+    // Return customer data with calculated fields
+    const customerData = {
+      _id: customer._id,
+      phone: customer.phone,
+      name: customer.name,
+      email: customer.email,
+      isFavorite: customer.isFavorite,
+      tags: customer.tags,
+      gstNumber: customer.gstNumber,
+      loyaltyPoints: customer.loyaltyPoints,
+      totalOrderAmount: customer.totalOrderAmount,
+      totalOrders: customer.totalOrders,
+      lastOrderDate: customer.lastOrderDate,
+      discountPreference: customer.discountPreference,
+      complementaryTotal: customer.complementaryTotal,
+      preferences: customer.preferences,
+      subscriptions: customer.subscriptions,
+      optedOut: customer.optedOut,
+      stats: customer.stats,
+      branches: customer.branches,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt
+    };
+
+    res.json(customerData);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
@@ -1450,15 +1678,29 @@ const getCustomerPreferences = async (req, res) => {
 // @access  Manager
 const updateCustomerPreferences = async (req, res) => {
   try {
-    const { phone, name, isFavorite, tags } = req.body;
+    const { 
+      phone, 
+      name, 
+      email,
+      isFavorite, 
+      tags,
+      gstNumber,
+      discountPreference,
+      loyaltyPoints
+    } = req.body;
     const branch = await getManagerBranch(req.user._id);
 
     let customer = await CustomerPreferences.findOne({ phone });
 
     if (customer) {
-      if (name) customer.name = name;
+      if (name !== undefined) customer.name = name;
+      if (email !== undefined) customer.email = email;
       if (isFavorite !== undefined) customer.isFavorite = isFavorite;
-      if (tags) customer.tags = tags;
+      if (tags !== undefined) customer.tags = tags;
+      if (gstNumber !== undefined) customer.gstNumber = gstNumber;
+      if (discountPreference !== undefined) customer.discountPreference = discountPreference;
+      if (loyaltyPoints !== undefined) customer.loyaltyPoints = Math.max(0, loyaltyPoints);
+      
       if (!customer.branches.includes(branch._id)) {
         customer.branches.push(branch._id);
       }
@@ -1467,21 +1709,127 @@ const updateCustomerPreferences = async (req, res) => {
       customer = await CustomerPreferences.create({
         phone,
         name,
+        email,
         isFavorite,
         tags,
+        gstNumber,
+        discountPreference: discountPreference || 'none',
         branches: [branch._id]
       });
     }
 
-    res.json(customer);
+    // Return updated customer data with all fields
+    const customerData = {
+      _id: customer._id,
+      phone: customer.phone,
+      name: customer.name,
+      email: customer.email,
+      isFavorite: customer.isFavorite,
+      tags: customer.tags,
+      gstNumber: customer.gstNumber,
+      loyaltyPoints: customer.loyaltyPoints,
+      totalOrderAmount: customer.totalOrderAmount,
+      totalOrders: customer.totalOrders,
+      lastOrderDate: customer.lastOrderDate,
+      discountPreference: customer.discountPreference,
+      complementaryTotal: customer.complementaryTotal,
+      preferences: customer.preferences,
+      subscriptions: customer.subscriptions,
+      optedOut: customer.optedOut,
+      stats: customer.stats,
+      branches: customer.branches,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt
+    };
+
+    res.json(customerData);
   } catch (error) {
     res.status(500).json({ message: error.message });
+  }
+};
+
+// @desc    Get branch profile settings
+// @route   GET /api/branch/profile
+// @access  Manager
+const getBranchProfile = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    
+    const profileData = {
+      _id: branch._id,
+      name: branch.name,
+      branchCode: branch.branchCode,
+      fullAddress: branch.fullAddress || '',
+      phone: branch.phone || '',
+      mobileNumber: branch.mobileNumber || '',
+      email: branch.email || '',
+      gstNumber: branch.gstNumber || '',
+      cgstRate: branch.cgstRate || 0,
+      sgstRate: branch.sgstRate || 0,
+      logo: branch.logo || null
+    };
+    
+    res.json(profileData);
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
+  }
+};
+
+// @desc    Update branch profile settings
+// @route   PUT /api/branch/profile
+// @access  Manager
+const updateBranchProfile = async (req, res) => {
+  try {
+    const branch = await getManagerBranch(req.user._id);
+    
+    const { name, fullAddress, phone, mobileNumber, email, gstNumber, cgstRate, sgstRate, logo } = req.body;
+    
+    // Validate GST rates
+    if (cgstRate !== undefined && (cgstRate < 0 || cgstRate > 100)) {
+      return res.status(400).json({ message: 'CGST rate must be between 0 and 100' });
+    }
+    if (sgstRate !== undefined && (sgstRate < 0 || sgstRate > 100)) {
+      return res.status(400).json({ message: 'SGST rate must be between 0 and 100' });
+    }
+    
+    // Update fields
+    if (name) branch.name = name;
+    if (fullAddress !== undefined) branch.fullAddress = fullAddress;
+    if (phone !== undefined) branch.phone = phone;
+    if (mobileNumber !== undefined) branch.mobileNumber = mobileNumber;
+    if (email !== undefined) branch.email = email;
+    if (gstNumber !== undefined) branch.gstNumber = gstNumber;
+    if (cgstRate !== undefined) branch.cgstRate = cgstRate;
+    if (sgstRate !== undefined) branch.sgstRate = sgstRate;
+    if (logo !== undefined) branch.logo = logo;
+    
+    await branch.save();
+    
+    const profileData = {
+      _id: branch._id,
+      name: branch.name,
+      branchCode: branch.branchCode,
+      fullAddress: branch.fullAddress || '',
+      phone: branch.phone || '',
+      mobileNumber: branch.mobileNumber || '',
+      email: branch.email || '',
+      gstNumber: branch.gstNumber || '',
+      cgstRate: branch.cgstRate || 0,
+      sgstRate: branch.sgstRate || 0,
+      logo: branch.logo || null
+    };
+    
+    res.json({ success: true, message: 'Branch profile updated successfully', data: profileData });
+  } catch (error) {
+    res.status(error.statusCode || 500).json({ message: error.message });
   }
 };
 
 module.exports = {
   getTables,
   getMenu,
+  bulkUpdateMenuAvailability,
+  updateMenuItemTemporaryChanges,
   updateItemAvailability,
   addMenuItem,
   updateMenuItem,
@@ -1491,6 +1839,7 @@ module.exports = {
   mergeTables,
   getBranchDetails,
   createTable,
+  getTableLocations,
   updateTable,
   deleteTable,
   updateTableStatus,
@@ -1515,6 +1864,10 @@ module.exports = {
   getAIAnalysis,
   clearAICache,
   getAICacheStats,
+  getDiscountAnalytics,
+  getComplementaryAnalytics,
+  getCancellationAnalytics,
+  getCouponGrowth,
   getCategories,
   getDynamicCategories,
   addCategory,
@@ -1522,5 +1875,7 @@ module.exports = {
   deleteCategory,
   getOrders,
   getCustomerPreferences,
-  updateCustomerPreferences
+  updateCustomerPreferences,
+  getBranchProfile,
+  updateBranchProfile
 };

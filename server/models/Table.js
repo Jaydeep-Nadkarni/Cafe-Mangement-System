@@ -20,13 +20,19 @@ const tableSchema = new mongoose.Schema(
     },
     location: {
       type: String,
-      enum: ['indoor', 'outdoor', 'counter'],
       default: 'indoor'
     },
     status: {
       type: String,
       enum: ['available', 'occupied', 'reserved', 'maintenance', 'paid', 'printed'],
       default: 'available'
+    },
+    reservation: {
+      isReserved: { type: Boolean, default: false },
+      reservedBy: { type: String, default: '' },
+      reservedPhone: { type: String, default: '' },
+      reservationTime: { type: Date, default: null },
+      reservationNotes: { type: String, default: '' }
     },
     currentOrders: {
       type: [{

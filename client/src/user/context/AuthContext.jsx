@@ -38,6 +38,8 @@ const clearSession = () => {
   localStorage.removeItem('userName');
   localStorage.removeItem('branchName');
   localStorage.removeItem('branchId');
+  // Note: We intentionally do NOT clear 'branch_remember_code' and 'branch_remember_me' 
+  // so the user's branch code choice persists across sessions
 };
 
 const restoreSession = () => {

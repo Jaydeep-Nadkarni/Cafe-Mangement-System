@@ -11,6 +11,7 @@ import { formatCurrency, formatTime, formatDateTime } from '../../../utils/forma
 import ConfirmationModal from './ConfirmationModal';
 import OrderHistoryModal from './OrderHistoryModal';
 import Invoice from './Invoice';
+import OrderModal from './OrderModal';
 
 // Helper to group items for display
 const groupOrderItems = (items) => {
@@ -44,6 +45,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     const [selectedTableForModal, setSelectedTableForModal] = useState(null);
 
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [showInvoice, setShowInvoice] = useState(null);
   const [paymentMode, setPaymentMode] = useState('cash'); // cash, card, upi
@@ -76,6 +78,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     onConfirm: null
   });
 
+  // Search and filter state
+  const [searchCustomerName, setSearchCustomerName] = useState('');
+  const [searchCustomerPhone, setSearchCustomerPhone] = useState('');
+  const [searchStartDate, setSearchStartDate] = useState('');
+  const [searchEndDate, setSearchEndDate] = useState('');
+
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
   // Determine branch from tables (for socket room)
@@ -100,6 +108,20 @@ export default function Orders({ tables, menu = [], onRefresh }) {
         }
       }
 
+      // Add search parameters
+      if (searchCustomerName) {
+        params.customerName = searchCustomerName;
+      }
+      if (searchCustomerPhone) {
+        params.customerPhone = searchCustomerPhone;
+      }
+      if (searchStartDate) {
+        params.specificDate = searchStartDate;
+      }
+      if (searchEndDate) {
+        params.endDate = searchEndDate;
+      }
+
       const response = await axios.get(`${API_URL}/api/branch/orders`, {
         headers: { Authorization: `Bearer ${token}` },
         params
@@ -120,7 +142,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_URL, timeFilter, customStartDate, customEndDate]);
+  }, [API_URL, timeFilter, customStartDate, customEndDate, searchCustomerName, searchCustomerPhone, searchStartDate, searchEndDate]);
 
   // Initial load and when time filter changes
   useEffect(() => {
@@ -476,16 +498,57 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   };
 
   const handleCheckout = async () => {
-    if (paymentMode === 'cash' && (!cashReceived || parseFloat(cashReceived) < selectedOrder.total)) {
+    // Validate payment mode
+    if (!paymentMode) {
       setModalState({
         isOpen: true,
         title: 'Error',
-        description: 'Please enter valid cash amount',
+        description: 'Please select a payment method',
         confirmText: 'OK',
         isDangerous: true,
         onConfirm: null
       });
       return;
+    }
+
+    // Validate cash payment amount
+    if (paymentMode === 'cash') {
+      if (!cashReceived) {
+        setModalState({
+          isOpen: true,
+          title: 'Error',
+          description: 'Please enter the amount received',
+          confirmText: 'OK',
+          isDangerous: true,
+          onConfirm: null
+        });
+        return;
+      }
+
+      const receivedAmount = parseFloat(cashReceived);
+      if (isNaN(receivedAmount)) {
+        setModalState({
+          isOpen: true,
+          title: 'Error',
+          description: 'Please enter a valid amount',
+          confirmText: 'OK',
+          isDangerous: true,
+          onConfirm: null
+        });
+        return;
+      }
+
+      if (receivedAmount < selectedOrder.total) {
+        setModalState({
+          isOpen: true,
+          title: 'Error',
+          description: `Insufficient amount. Order total: ${formatCurrency(selectedOrder.total)}, Received: ${formatCurrency(receivedAmount)}`,
+          confirmText: 'OK',
+          isDangerous: true,
+          onConfirm: null
+        });
+        return;
+      }
     }
 
     setModalState({
@@ -498,11 +561,14 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       onConfirm: async () => {
         try {
           setLoading(true);
+          const token = localStorage.getItem('token');
           await axios.post(`${API_URL}/api/orders/${selectedOrder._id}/checkout`, {
             paymentMethod: paymentMode,
             amountPaid: paymentMode === 'cash' ? parseFloat(cashReceived) : selectedOrder.total
-          });
+          }, { headers: { Authorization: `Bearer ${token}` } });
+          
           setSelectedOrder(null);
+          setCashReceived('');
 
           // Trigger payment confirmation event for real-time update
           window.dispatchEvent(new CustomEvent('payment_confirmed', {
@@ -511,13 +577,22 @@ export default function Orders({ tables, menu = [], onRefresh }) {
 
           fetchOrders(true); // Soft refresh
           onRefresh();
-          setModalState({ ...modalState, isOpen: false });
+          
+          setModalState({
+            isOpen: true,
+            title: 'Success',
+            description: 'Payment completed successfully!',
+            confirmText: 'OK',
+            isDangerous: false,
+            onConfirm: () => setModalState({ ...modalState, isOpen: false })
+          });
         } catch (error) {
           console.error('Checkout failed:', error);
+          const errorMessage = error?.response?.data?.message || 'Payment processing failed. Please try again.';
           setModalState({
             isOpen: true,
             title: 'Error',
-            description: 'Payment processing failed. Please try again.',
+            description: errorMessage,
             confirmText: 'OK',
             isDangerous: true,
             onConfirm: null
@@ -783,6 +858,145 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </div>
         </div>
 
+        {/* Search and Filter Section */}
+        <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Customer Name Search */}
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-2">Customer Name</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={searchCustomerName}
+                  onChange={(e) => setSearchCustomerName(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      fetchOrders();
+                    }
+                  }}
+                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchCustomerName && (
+                  <button
+                    onClick={() => setSearchCustomerName('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Customer Phone Search */}
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+              <div className="relative">
+                <Smartphone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="tel"
+                  placeholder="Search by phone..."
+                  value={searchCustomerPhone}
+                  onChange={(e) => setSearchCustomerPhone(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      fetchOrders();
+                    }
+                  }}
+                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchCustomerPhone && (
+                  <button
+                    onClick={() => setSearchCustomerPhone('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Start Date */}
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-2">Start Date</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={searchStartDate}
+                  onChange={(e) => setSearchStartDate(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      fetchOrders();
+                    }
+                  }}
+                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchStartDate && (
+                  <button
+                    onClick={() => setSearchStartDate('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* End Date */}
+            <div className="flex flex-col">
+              <label className="text-sm font-medium text-gray-700 mb-2">End Date</label>
+              <div className="relative">
+                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="date"
+                  value={searchEndDate}
+                  onChange={(e) => setSearchEndDate(e.target.value)}
+                  onKeyPress={(e) => {
+                    if (e.key === 'Enter') {
+                      fetchOrders();
+                    }
+                  }}
+                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                />
+                {searchEndDate && (
+                  <button
+                    onClick={() => setSearchEndDate('')}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Search Action Buttons */}
+          <div className="flex gap-2 mt-4 justify-end">
+            <button
+              onClick={() => {
+                setSearchCustomerName('');
+                setSearchCustomerPhone('');
+                setSearchStartDate('');
+                setSearchEndDate('');
+                setTimeFilter('today');
+              }}
+              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+            >
+              Clear
+            </button>
+            <button
+              onClick={() => fetchOrders()}
+              disabled={loading}
+              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              Search
+            </button>
+          </div>
+        </div>
+
         {/* Time filter buttons - REMOVED for Table-First enforcement */}
         {/* <div className="flex flex-wrap gap-2 items-center">
           <Clock className="w-4 h-4 text-gray-400" />
@@ -818,7 +1032,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             return (
               <div
                 key={order._id}
-                onClick={() => setSelectedOrder(order)}
+                onClick={() => {
+                  setSelectedOrder(order);
+                  setShowOrderModal(true);
+                }}
                 className={`bg-white rounded-xl shadow-sm border cursor-pointer hover:shadow-md transition-all ${colors.border} ${colors.bg}`}
               >
                 <div className={`p-4 border-b flex justify-between items-center ${colors.header}`}>
@@ -845,7 +1062,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       <div key={idx} className="flex justify-between text-sm">
                         <span className="text-gray-600 flex items-center gap-2">
                           <span className="font-bold text-gray-900">{item.quantity}x</span>
-                          {item.menuItem?.name || 'Unknown Item'}
+                          {item.menuItem?.name || item.name || 'Unnamed Item'}
                         </span>
                       </div>
                     ))}
@@ -1702,6 +1919,20 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </div>
         </div>
       )}
+
+      {/* Order Modal */}
+      <OrderModal
+        isOpen={showOrderModal}
+        order={selectedOrder}
+        branchId={branchId}
+        onClose={() => {
+          setShowOrderModal(false);
+          setSelectedOrder(null);
+        }}
+        onUpdate={() => {
+          fetchOrders(true);
+        }}
+      />
     </div>
   );
 }

@@ -10,7 +10,10 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
     const [customStart, setCustomStart] = useState('');
     const [customEnd, setCustomEnd] = useState('');
     const [searchTerm, setSearchTerm] = useState('');
+    const [customerNameSearch, setCustomerNameSearch] = useState('');
+    const [customerPhoneSearch, setCustomerPhoneSearch] = useState('');
     const [paymentFilter, setPaymentFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
     const tableRef = useRef();
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -44,11 +47,28 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
     };
 
     const filteredOrders = orders.filter(order => {
+        // Search by order ID or table number
         const matchesSearch =
             order.orderNumber?.toLowerCase().includes(searchTerm.toLowerCase()) ||
             order.table?.tableNumber?.toString().includes(searchTerm);
+        
+        // Search by customer name
+        const matchesCustomerName = !customerNameSearch || 
+            order.customerDetails?.name?.toLowerCase().includes(customerNameSearch.toLowerCase()) ||
+            order.customer?.name?.toLowerCase().includes(customerNameSearch.toLowerCase());
+        
+        // Search by customer phone
+        const matchesCustomerPhone = !customerPhoneSearch ||
+            order.customerDetails?.phone?.includes(customerPhoneSearch) ||
+            order.customer?.phone?.includes(customerPhoneSearch);
+        
+        // Payment status filter
         const matchesPayment = paymentFilter === 'all' || order.paymentStatus === paymentFilter;
-        return matchesSearch && matchesPayment;
+        
+        // Order status filter
+        const matchesStatus = statusFilter === 'all' || order.status === statusFilter;
+        
+        return matchesSearch && matchesCustomerName && matchesCustomerPhone && matchesPayment && matchesStatus;
     });
 
     const totalRevenue = filteredOrders.reduce((sum, o) => sum + o.total, 0);
@@ -267,77 +287,114 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                 </div>
 
                 {/* Filters Section */}
-                <div className="px-8 py-5 border-b border-slate-200 bg-white flex flex-wrap gap-4 items-center justify-between">
-                    <div className="flex items-center gap-3 flex-1 min-w-[300px]">
-                        <div className="relative flex-1">
+                <div className="px-8 py-5 border-b border-slate-200 bg-white">
+                    {/* Search Row */}
+                    <div className="flex flex-wrap gap-3 items-center mb-4">
+                        <div className="relative flex-1 min-w-[200px]">
                             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                             <input
                                 type="text"
-                                placeholder="Search by order ID or table number..."
+                                placeholder="Order ID or Table..."
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
                             />
                         </div>
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Customer Name..."
+                                value={customerNameSearch}
+                                onChange={(e) => setCustomerNameSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                            />
+                        </div>
+                        <div className="relative flex-1 min-w-[200px]">
+                            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <input
+                                type="text"
+                                placeholder="Phone Number..."
+                                value={customerPhoneSearch}
+                                onChange={(e) => setCustomerPhoneSearch(e.target.value)}
+                                className="w-full pl-9 pr-4 py-2.5 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none text-sm"
+                            />
+                        </div>
                     </div>
+                    
+                    {/* Filters Row */}
+                    <div className="flex flex-wrap gap-3 items-center justify-between">
+                        <div className="flex items-center gap-3">
+                            <select
+                                value={paymentFilter}
+                                onChange={(e) => setPaymentFilter(e.target.value)}
+                                className="border border-slate-300 rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                            >
+                                <option value="all">All Payments</option>
+                                <option value="paid">Paid</option>
+                                <option value="unpaid">Unpaid</option>
+                            </select>
 
-                    <div className="flex items-center gap-3">
-                        <select
-                            value={paymentFilter}
-                            onChange={(e) => setPaymentFilter(e.target.value)}
-                            className="border border-slate-300 rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-                        >
-                            <option value="all">All Payments</option>
-                            <option value="paid">Paid</option>
-                            <option value="unpaid">Unpaid</option>
-                        </select>
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="border border-slate-300 rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                            >
+                                <option value="all">All Status</option>
+                                <option value="active">Active</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
 
-                        <select
-                            value={dateRange}
-                            onChange={(e) => setDateRange(e.target.value)}
-                            className="border border-slate-300 rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
-                        >
-                            <option value="today">Today</option>
-                            <option value="yesterday">Yesterday</option>
-                            <option value="week">This Week</option>
-                            <option value="month">This Month</option>
-                            <option value="custom">Custom Range</option>
-                        </select>
+                            <select
+                                value={dateRange}
+                                onChange={(e) => setDateRange(e.target.value)}
+                                className="border border-slate-300 rounded-lg px-3 py-2.5 outline-none focus:ring-2 focus:ring-blue-500 text-sm font-medium"
+                            >
+                                <option value="today">Today</option>
+                                <option value="yesterday">Yesterday</option>
+                                <option value="week">This Week</option>
+                                <option value="month">This Month</option>
+                                <option value="custom">Custom Range</option>
+                            </select>
 
-                        {dateRange === 'custom' && (
-                            <div className="flex gap-2 items-center">
-                                <input 
-                                    type="date" 
-                                    value={customStart} 
-                                    onChange={e => setCustomStart(e.target.value)} 
-                                    className="border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                                <span className="text-slate-400">–</span>
-                                <input 
-                                    type="date" 
-                                    value={customEnd} 
-                                    onChange={e => setCustomEnd(e.target.value)} 
-                                    className="border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                                />
-                            </div>
-                        )}
+                            {dateRange === 'custom' && (
+                                <div className="flex gap-2 items-center">
+                                    <input 
+                                        type="date" 
+                                        value={customStart} 
+                                        onChange={e => setCustomStart(e.target.value)} 
+                                        className="border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                    <span className="text-slate-400">–</span>
+                                    <input 
+                                        type="date" 
+                                        value={customEnd} 
+                                        onChange={e => setCustomEnd(e.target.value)} 
+                                        className="border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            )}
+                        </div>
 
-                        <button
-                            onClick={fetchHistory}
-                            disabled={loading}
-                            className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors disabled:opacity-50"
-                            title="Refresh data"
-                        >
-                            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                        </button>
+                        <div className="flex items-center gap-2">
+                            <button
+                                onClick={fetchHistory}
+                                disabled={loading}
+                                className="p-2.5 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg transition-colors disabled:opacity-50"
+                                title="Refresh data"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                            </button>
 
-                        <button
-                            onClick={handlePrint}
-                            className="p-2.5 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-colors"
-                            title="Print report"
-                        >
-                            <Download className="w-4 h-4" />
-                        </button>
+                            <button
+                                onClick={handlePrint}
+                                className="p-2.5 bg-green-50 hover:bg-green-100 text-green-600 rounded-lg transition-colors"
+                                title="Print report"
+                            >
+                                <Download className="w-4 h-4" />
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -363,12 +420,14 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                             <table className="w-full">
                                 <thead className="bg-slate-50 sticky top-0 z-10">
                                     <tr className="border-b border-slate-200">
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/5">Date & Time</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/6">Order ID</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/12">Table</th>
-                                        <th className="px-6 py-4 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/6">Amount</th>
-                                        <th className="px-6 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/5">Payment Method</th>
-                                        <th className="px-6 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wide w-1/6">Status</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Date & Time</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Order ID</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Table</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Customer</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Phone</th>
+                                        <th className="px-4 py-4 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Amount</th>
+                                        <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Payment</th>
+                                        <th className="px-4 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200" ref={tableRef}>
@@ -377,29 +436,39 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                                             key={order._id} 
                                             className="hover:bg-slate-50 transition-colors duration-150"
                                         >
-                                            <td className="px-6 py-4 text-sm text-slate-700">
+                                            <td className="px-4 py-3 text-sm text-slate-700">
                                                 <div className="font-medium">{formatDate(order.createdAt)}</div>
                                                 <div className="text-xs text-slate-500">{formatTime(order.createdAt)}</div>
                                             </td>
-                                            <td className="px-6 py-4 text-sm">
+                                            <td className="px-4 py-3 text-sm">
                                                 <span className="font-mono font-semibold text-slate-900">#{order.orderNumber?.slice(-8)}</span>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-slate-700 font-medium">
-                                                {order.table?.tableNumber ? `Table ${order.table.tableNumber}` : '—'}
+                                            <td className="px-4 py-3 text-sm text-slate-700 font-medium">
+                                                {order.table?.tableNumber ? `T${order.table.tableNumber}` : '—'}
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-right">
+                                            <td className="px-4 py-3 text-sm text-slate-700">
+                                                <span className="font-medium">
+                                                    {order.customerDetails?.name || order.customer?.name || '—'}
+                                                </span>
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-slate-600">
+                                                {order.customerDetails?.phone || order.customer?.phone || '—'}
+                                            </td>
+                                            <td className="px-4 py-3 text-sm text-right">
                                                 <span className="font-bold text-slate-900">{formatCurrency(order.total)}</span>
                                             </td>
-                                            <td className="px-6 py-4 text-sm text-slate-600">
+                                            <td className="px-4 py-3 text-sm text-slate-600">
                                                 <span className="capitalize">{order.paymentMethod || 'Cash'}</span>
                                             </td>
-                                            <td className="px-6 py-4 text-center">
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold ${
+                                            <td className="px-4 py-3 text-center">
+                                                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-semibold ${
                                                     order.paymentStatus === 'paid'
                                                         ? 'bg-green-100 text-green-800'
+                                                        : order.status === 'cancelled'
+                                                        ? 'bg-red-100 text-red-800'
                                                         : 'bg-amber-100 text-amber-800'
                                                 }`}>
-                                                    {order.paymentStatus === 'paid' ? '✓ Paid' : 'Pending'}
+                                                    {order.status === 'cancelled' ? 'Cancelled' : order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
                                                 </span>
                                             </td>
                                         </tr>

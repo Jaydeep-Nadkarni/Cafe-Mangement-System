@@ -1,5 +1,8 @@
 import React from 'react';
-import { AlertCircle, Trash2, X } from 'lucide-react';
+import { 
+  AlertCircle, Trash2, X, CheckCircle, XCircle, 
+  AlertTriangle, Info, Zap, Gift, Lock, Eye
+} from 'lucide-react';
 
 /**
  * Reusable Confirmation Modal Component
@@ -161,6 +164,7 @@ export const ConfirmationModals = {
       description="Are you sure you want to proceed?"
       confirmText="Confirm"
       cancelText="Cancel"
+      icon={CheckCircle}
       {...props}
     />
   ),
@@ -175,7 +179,65 @@ export const ConfirmationModals = {
       confirmText="Cancel Order"
       cancelText="Keep Order"
       isDangerous={true}
-      icon={AlertCircle}
+      icon={AlertTriangle}
+      {...props}
+    />
+  ),
+
+  /**
+   * Success modal
+   */
+  Success: (props) => (
+    <ConfirmationModal
+      title="Success"
+      description="Action completed successfully!"
+      confirmText="OK"
+      cancelText={null}
+      icon={CheckCircle}
+      {...props}
+    />
+  ),
+
+  /**
+   * Error/Warning modal
+   */
+  Error: (props) => (
+    <ConfirmationModal
+      title="Error"
+      description="An error occurred. Please try again."
+      confirmText="OK"
+      cancelText={null}
+      isDangerous={true}
+      icon={XCircle}
+      {...props}
+    />
+  ),
+
+  /**
+   * Warning modal
+   */
+  Warning: (props) => (
+    <ConfirmationModal
+      title="Warning"
+      description="Please review before proceeding."
+      confirmText="Continue"
+      cancelText="Cancel"
+      isDangerous={true}
+      icon={AlertTriangle}
+      {...props}
+    />
+  ),
+
+  /**
+   * Info modal
+   */
+  Info: (props) => (
+    <ConfirmationModal
+      title="Information"
+      description="Here's some important information."
+      confirmText="Got It"
+      cancelText={null}
+      icon={Info}
       {...props}
     />
   )

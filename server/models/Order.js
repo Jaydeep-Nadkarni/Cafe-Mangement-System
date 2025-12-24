@@ -149,6 +149,59 @@ const orderSchema = new mongoose.Schema(
       type: String,
       default: ''
     },
+    cancellationReason: {
+      type: String,
+      default: null
+    },
+    cancelledBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Admin',
+      default: null
+    },
+    isComplementary: {
+      type: Boolean,
+      default: false
+    },
+    complementaryAmount: {
+      type: Number,
+      default: 0
+    },
+    complementaryReason: {
+      type: String,
+      default: null
+    },
+    customerGSTN: {
+      type: String,
+      default: null
+    },
+    tags: {
+      type: [String],
+      default: []
+    },
+    isFavorite: {
+      type: Boolean,
+      default: false
+    },
+    roundOff: {
+      type: Number,
+      default: 0
+    },
+    cgst: {
+      type: Number,
+      default: 0
+    },
+    sgst: {
+      type: Number,
+      default: 0
+    },
+    cgstRate: {
+      type: Number,
+      default: 0
+    },
+    sgstRate: {
+      type: Number,
+      default: 0
+    },
     // Session management for pay-later and pay-now scenarios
     sessionId: {
       type: String,
@@ -238,6 +291,58 @@ orderSchema.pre('save', async function(next) {
     // Validate orderNumber was generated
     if (!this.orderNumber) {
       throw new Error('Order number generation failed');
+    }
+
+    // Validate and ensure date fields are proper Date objects
+    const dateFields = ['completedAt', 'paidAt', 'mergedAt'];
+    dateFields.forEach(field => {
+      if (this[field]) {
+        const dateObj = new Date(this[field]);
+        if (isNaN(dateObj.getTime())) {
+          // Invalid date - set to null
+          console.warn(`Invalid date for field ${field}:`, this[field]);
+          this[field] = null;
+        } else {
+          // Ensure it's a proper Date object
+          this[field] = dateObj;
+        }
+      }
+    });
+
+    // Validate edit history dates
+    if (this.editHistory && Array.isArray(this.editHistory)) {
+      this.editHistory = this.editHistory.map(edit => {
+        if (edit.editedAt) {
+          const dateObj = new Date(edit.editedAt);
+          if (isNaN(dateObj.getTime())) {
+            console.warn('Invalid editedAt date:', edit.editedAt);
+            edit.editedAt = new Date();
+          } else {
+            edit.editedAt = dateObj;
+          }
+        } else {
+          edit.editedAt = new Date();
+        }
+        return edit;
+      });
+    }
+
+    // Validate merge history dates
+    if (this.mergeHistory && Array.isArray(this.mergeHistory)) {
+      this.mergeHistory = this.mergeHistory.map(merge => {
+        if (merge.mergedAt) {
+          const dateObj = new Date(merge.mergedAt);
+          if (isNaN(dateObj.getTime())) {
+            console.warn('Invalid mergedAt date:', merge.mergedAt);
+            merge.mergedAt = new Date();
+          } else {
+            merge.mergedAt = dateObj;
+          }
+        } else {
+          merge.mergedAt = new Date();
+        }
+        return merge;
+      });
     }
 
     // Calculate totals

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../user/context/AuthContext';
 import { Lock, Store, AlertCircle } from 'lucide-react';
@@ -6,13 +6,34 @@ import { Lock, Store, AlertCircle } from 'lucide-react';
 export default function BranchLogin() {
   const [branchCode, setBranchCode] = useState('');
   const [password, setPassword] = useState('');
+  const [rememberMe, setRememberMe] = useState(false);
   const { login, error } = useAuth();
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
 
+  // Load saved credentials if available
+  useEffect(() => {
+    const savedBranchCode = localStorage.getItem('branch_remember_code');
+    const savedRememberMe = localStorage.getItem('branch_remember_me') === 'true';
+    if (savedBranchCode && savedRememberMe) {
+      setBranchCode(savedBranchCode);
+      setRememberMe(true);
+    }
+  }, []);
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setIsLoading(true);
+    
+    // Handle Remember Me
+    if (rememberMe) {
+      localStorage.setItem('branch_remember_code', branchCode);
+      localStorage.setItem('branch_remember_me', 'true');
+    } else {
+      localStorage.removeItem('branch_remember_code');
+      localStorage.removeItem('branch_remember_me');
+    }
+    
     const result = await login({ branchCode, password }, 'branch');
     if (result.success) {
       navigate('/branch/dashboard');
@@ -63,6 +84,19 @@ export default function BranchLogin() {
                 onChange={(e) => setPassword(e.target.value)}
               />
             </div>
+          </div>
+
+          <div className="flex items-center">
+            <input
+              id="remember-me"
+              type="checkbox"
+              checked={rememberMe}
+              onChange={(e) => setRememberMe(e.target.checked)}
+              className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300 rounded cursor-pointer"
+            />
+            <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-900 cursor-pointer">
+              Remember Branch Code
+            </label>
           </div>
 
           <div>

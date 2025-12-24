@@ -57,6 +57,32 @@ const branchSchema = new mongoose.Schema(
     coordinates: {
       latitude: Number,
       longitude: Number
+    },
+    // GST and Profile fields
+    gstNumber: {
+      type: String,
+      trim: true,
+      sparse: true
+    },
+    cgstRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    sgstRate: {
+      type: Number,
+      default: 0,
+      min: 0,
+      max: 100
+    },
+    fullAddress: {
+      type: String,
+      trim: true
+    },
+    logo: {
+      type: String,
+      default: null
     }
   },
   { timestamps: true }

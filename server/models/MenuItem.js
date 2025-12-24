@@ -91,6 +91,14 @@ const menuItemSchema = new mongoose.Schema(
       type: String,
       default: null
     },
+    temporaryChanges: {
+      active: { type: Boolean, default: false },
+      startDate: { type: Date, default: null },
+      endDate: { type: Date, default: null },
+      tempPrice: { type: Number, default: null },
+      tempName: { type: String, default: null },
+      tempAvailability: { type: Boolean, default: null }
+    },
     sizes: {
       type: [{
         name: String,
