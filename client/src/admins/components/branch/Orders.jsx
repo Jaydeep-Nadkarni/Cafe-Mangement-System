@@ -61,9 +61,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   const [orders, setOrders] = useState([]);
   const [timeFilter, setTimeFilter] = useState('today');
   const [refreshing, setRefreshing] = useState(false);
-  const [showCustomDateModal, setShowCustomDateModal] = useState(false);
-  const [customStartDate, setCustomStartDate] = useState('');
-  const [customEndDate, setCustomEndDate] = useState('');
+  const [dateRange, setDateRange] = useState('today'); // 'today', '1hr', '3hr', '6hr'
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [viewMode, setViewMode] = useState('list'); // 'list' or 'table'
@@ -89,7 +87,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
   // Determine branch from tables (for socket room)
   const branchId = tables?.[0]?.branch?._id || tables?.[0]?.branch || null;
 
-  // Fetch all orders with time filter
+  // Fetch all orders with proper date filtering
   const fetchOrders = useCallback(async (isRefresh = false) => {
     try {
       if (isRefresh) {
@@ -99,14 +97,10 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       }
 
       const token = localStorage.getItem('token');
-      let params = { timeFilter };
-
-      if (timeFilter === 'custom' && customStartDate) {
-        params.startDate = customStartDate;
-        if (customEndDate) {
-          params.endDate = customEndDate;
-        }
-      }
+      
+      let params = {
+        timeFilter: dateRange // Send the timeFilter value directly
+      };
 
       // Add search parameters
       if (searchCustomerName) {
@@ -114,12 +108,6 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       }
       if (searchCustomerPhone) {
         params.customerPhone = searchCustomerPhone;
-      }
-      if (searchStartDate) {
-        params.specificDate = searchStartDate;
-      }
-      if (searchEndDate) {
-        params.endDate = searchEndDate;
       }
 
       const response = await axios.get(`${API_URL}/api/branch/orders`, {
@@ -142,12 +130,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [API_URL, timeFilter, customStartDate, customEndDate, searchCustomerName, searchCustomerPhone, searchStartDate, searchEndDate]);
+  }, [API_URL, dateRange, searchCustomerName, searchCustomerPhone]);
 
-  // Initial load and when time filter changes
+  // Initial fetch on mount and when dateRange or search filters change
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, [dateRange, searchCustomerName, searchCustomerPhone, fetchOrders]);
 
   // Real-time updates via webhook/polling simulation
   const handlePaymentUpdate = useCallback((event) => {
@@ -186,30 +174,12 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     fetchOrders(true);
   };
 
-  // Time filter options
-  const timeFilters = [
-    { value: '1h', label: '1 Hour' },
-    { value: '3h', label: '3 Hours' },
-    { value: '6h', label: '6 Hours' },
-    { value: 'today', label: 'Today' },
-    { value: 'custom', label: 'Custom' }
-  ];
-
-  // Apply custom date filter
-  const applyCustomFilter = () => {
-    if (!customStartDate) {
-      setModalState({
-        isOpen: true,
-        title: 'Error',
-        description: 'Please select a start date',
-        confirmText: 'OK',
-        isDangerous: true,
-        onConfirm: null
-      });
-      return;
-    }
-    setShowCustomDateModal(false);
-    fetchOrders();
+  // Date range labels for display
+  const dateRangeLabels = {
+    '1hr': 'Last 1 Hour',
+    '3hr': 'Last 3 Hours',
+    '6hr': 'Last 6 Hours',
+    'today': 'Today'
   };
 
   // Derived state
@@ -802,6 +772,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
     }
   };
 
+
   return (
     <div className="h-full">
       {/* Header with filters */}
@@ -858,17 +829,17 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </div>
         </div>
 
-        {/* Search and Filter Section */}
+        {/* Search and Filter Section - Single Line Layout */}
         <div className="bg-white rounded-lg border border-gray-200 p-4 mb-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="flex flex-col sm:flex-row gap-3 items-end">
             {/* Customer Name Search */}
-            <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700 mb-2">Customer Name</label>
+            <div className="flex-1 min-w-0">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5 block">Name</label>
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="Search by name..."
+                  placeholder="Search name..."
                   value={searchCustomerName}
                   onChange={(e) => setSearchCustomerName(e.target.value)}
                   onKeyPress={(e) => {
@@ -876,7 +847,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       fetchOrders();
                     }
                   }}
-                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 {searchCustomerName && (
                   <button
@@ -890,13 +861,13 @@ export default function Orders({ tables, menu = [], onRefresh }) {
             </div>
 
             {/* Customer Phone Search */}
-            <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700 mb-2">Phone Number</label>
+            <div className="flex-1 min-w-0">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5 block">Phone</label>
               <div className="relative">
-                <Smartphone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <Smartphone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                 <input
                   type="tel"
-                  placeholder="Search by phone..."
+                  placeholder="Search phone..."
                   value={searchCustomerPhone}
                   onChange={(e) => setSearchCustomerPhone(e.target.value)}
                   onKeyPress={(e) => {
@@ -904,7 +875,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
                       fetchOrders();
                     }
                   }}
-                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  className="pl-10 pr-4 py-2.5 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 />
                 {searchCustomerPhone && (
                   <button
@@ -917,114 +888,55 @@ export default function Orders({ tables, menu = [], onRefresh }) {
               </div>
             </div>
 
-            {/* Start Date */}
-            <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700 mb-2">Start Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={searchStartDate}
-                  onChange={(e) => setSearchStartDate(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      fetchOrders();
-                    }
-                  }}
-                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {searchStartDate && (
-                  <button
-                    onClick={() => setSearchStartDate('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+            {/* Time Range Dropdown */}
+            <div className="w-full sm:w-40">
+              <label className="text-xs font-semibold text-gray-600 uppercase tracking-wide mb-1.5 block">Time Period</label>
+              <select
+                value={dateRange}
+                onChange={(e) => setDateRange(e.target.value)}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white cursor-pointer"
+              >
+                <option value="1hr">Last 1 Hour</option>
+                <option value="3hr">Last 3 Hours</option>
+                <option value="6hr">Last 6 Hours</option>
+                <option value="today">Today</option>
+              </select>
             </div>
 
-            {/* End Date */}
-            <div className="flex flex-col">
-              <label className="text-sm font-medium text-gray-700 mb-2">End Date</label>
-              <div className="relative">
-                <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                <input
-                  type="date"
-                  value={searchEndDate}
-                  onChange={(e) => setSearchEndDate(e.target.value)}
-                  onKeyPress={(e) => {
-                    if (e.key === 'Enter') {
-                      fetchOrders();
-                    }
-                  }}
-                  className="pl-10 pr-8 py-2 w-full border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                />
-                {searchEndDate && (
-                  <button
-                    onClick={() => setSearchEndDate('')}
-                    className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+            {/* Action Buttons */}
+            <div className="flex gap-2 w-full sm:w-auto">
+              <button
+                onClick={() => {
+                  setSearchCustomerName('');
+                  setSearchCustomerPhone('');
+                  setDateRange('today');
+                }}
+                className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+              >
+                Reset
+              </button>
+              <button
+                onClick={() => fetchOrders()}
+                disabled={loading}
+                className="flex-1 sm:flex-none px-4 py-2.5 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                <Search className="w-4 h-4" />
+                {loading ? 'Loading...' : 'Search'}
+              </button>
             </div>
-          </div>
-
-          {/* Search Action Buttons */}
-          <div className="flex gap-2 mt-4 justify-end">
-            <button
-              onClick={() => {
-                setSearchCustomerName('');
-                setSearchCustomerPhone('');
-                setSearchStartDate('');
-                setSearchEndDate('');
-                setTimeFilter('today');
-              }}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-            >
-              Clear
-            </button>
-            <button
-              onClick={() => fetchOrders()}
-              disabled={loading}
-              className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg transition-colors disabled:opacity-50 flex items-center gap-2"
-            >
-              <Search className="w-4 h-4" />
-              Search
-            </button>
           </div>
         </div>
-
-        {/* Time filter buttons - REMOVED for Table-First enforcement */}
-        {/* <div className="flex flex-wrap gap-2 items-center">
-          <Clock className="w-4 h-4 text-gray-400" />
-          {timeFilters.map(filter => (
-            <button
-              key={filter.value}
-              onClick={() => {
-                setTimeFilter(filter.value);
-                if (filter.value === 'custom') {
-                  setShowCustomDateModal(true);
-                }
-              }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
-                timeFilter === filter.value
-                  ? 'bg-blue-600 text-white shadow-md'
-                  : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-300'
-              }`}
-            >
-              {filter.label}
-            </button>
-          ))}
-          {loading && (
-            <div className="ml-2 w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-          )}
-        </div> */}
       </div>
 
       {/* Orders Grid */}
+
+      {orders.length === 0 ? (
+        <div className="flex flex-col items-center justify-center h-full text-gray-500">
+          <Package className="w-16 h-16 mb-4" />
+          <h3 className="text-xl font-semibold">No Orders Found</h3>
+          <p className="text-center mt-2">There are no orders matching the current filters.</p>
+        </div>
+      ) : (
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {viewMode === 'list' ? (
           orders.filter(o => !o.isMerged).map(order => {
@@ -1290,6 +1202,7 @@ export default function Orders({ tables, menu = [], onRefresh }) {
           </>
         )}
       </div>
+      )}
 
       {/* Order Details Modal */}
       {selectedOrder && (

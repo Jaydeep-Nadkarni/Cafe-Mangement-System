@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { X, Calendar, Search, RefreshCw, Download, ChevronDown, TrendingUp } from 'lucide-react';
+import { X, Calendar, Search, RefreshCw, Download, ChevronDown, TrendingUp, Printer, Eye } from 'lucide-react';
 import axios from 'axios';
 import { formatCurrency, formatDate, formatDateTime, formatTime } from '../../../utils/formatCurrency';
 
@@ -14,6 +14,7 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
     const [customerPhoneSearch, setCustomerPhoneSearch] = useState('');
     const [paymentFilter, setPaymentFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [selectedInvoiceOrder, setSelectedInvoiceOrder] = useState(null);
     const tableRef = useRef();
 
     const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
@@ -428,6 +429,7 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                                         <th className="px-4 py-4 text-right text-xs font-semibold text-slate-600 uppercase tracking-wide">Amount</th>
                                         <th className="px-4 py-4 text-left text-xs font-semibold text-slate-600 uppercase tracking-wide">Payment</th>
                                         <th className="px-4 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wide">Status</th>
+                                        <th className="px-4 py-4 text-center text-xs font-semibold text-slate-600 uppercase tracking-wide">Invoice</th>
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-slate-200" ref={tableRef}>
@@ -471,6 +473,16 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                                                     {order.status === 'cancelled' ? 'Cancelled' : order.paymentStatus === 'paid' ? 'Paid' : 'Pending'}
                                                 </span>
                                             </td>
+                                            <td className="px-4 py-3 text-center">
+                                                <button
+                                                    onClick={() => setSelectedInvoiceOrder(order)}
+                                                    className="inline-flex items-center gap-1 px-2 py-1 text-xs bg-blue-50 hover:bg-blue-100 text-blue-600 rounded transition-colors"
+                                                    title="View Invoice"
+                                                >
+                                                    <Eye className="w-3 h-3" />
+                                                    View
+                                                </button>
+                                            </td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -491,6 +503,211 @@ export default function OrderHistoryModal({ isOpen, onClose, branchId }) {
                     </div>
                 </div>
             </div>
-        </div>
+
+            {/* Invoice Modal */}
+            {selectedInvoiceOrder && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
+                        {/* Invoice Header */}
+                        <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                            <h3 className="text-lg font-bold text-gray-900">Order Invoice</h3>
+                            <button
+                                onClick={() => setSelectedInvoiceOrder(null)}
+                                className="p-1 hover:bg-gray-200 rounded-lg transition-colors"
+                            >
+                                <X className="w-5 h-5" />
+                            </button>
+                        </div>
+
+                        {/* Invoice Content */}
+                        <div className="flex-1 overflow-y-auto p-6">
+                            {/* Invoice Header */}
+                            <div className="mb-6 pb-6 border-b border-gray-200">
+                                <div className="flex justify-between items-start mb-4">
+                                    <div>
+                                        <h2 className="text-2xl font-bold text-gray-900">Invoice</h2>
+                                        <p className="text-sm text-gray-500 mt-1">Order #{selectedInvoiceOrder.orderNumber}</p>
+                                    </div>
+                                    <div className="text-right">
+                                        <p className="text-sm text-gray-500">Invoice Date</p>
+                                        <p className="font-semibold text-gray-900">{formatDate(selectedInvoiceOrder.createdAt)}</p>
+                                    </div>
+                                </div>
+
+                                {/* Customer Details */}
+                                <div className="grid grid-cols-2 gap-6">
+                                    <div>
+                                        <p className="text-xs uppercase font-bold text-gray-500 mb-1">Customer</p>
+                                        <p className="font-medium text-gray-900">{selectedInvoiceOrder.customerDetails?.name || selectedInvoiceOrder.customer?.name || 'Walk-in Customer'}</p>
+                                        <p className="text-sm text-gray-600">{selectedInvoiceOrder.customerDetails?.phone || selectedInvoiceOrder.customer?.phone || 'N/A'}</p>
+                                    </div>
+                                    <div>
+                                        <p className="text-xs uppercase font-bold text-gray-500 mb-1">Table</p>
+                                        <p className="font-medium text-gray-900">{selectedInvoiceOrder.table?.tableNumber ? `Table ${selectedInvoiceOrder.table.tableNumber}` : 'No Table'}</p>
+                                        <p className="text-sm text-gray-600">{formatDateTime(selectedInvoiceOrder.createdAt)}</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Items Table */}
+                            <div className="mb-6">
+                                <table className="w-full">
+                                    <thead>
+                                        <tr className="border-b border-gray-200">
+                                            <th className="text-left py-2 px-2 text-xs font-bold text-gray-700 uppercase">Item</th>
+                                            <th className="text-center py-2 px-2 text-xs font-bold text-gray-700 uppercase w-12">Qty</th>
+                                            <th className="text-right py-2 px-2 text-xs font-bold text-gray-700 uppercase">Rate</th>
+                                            <th className="text-right py-2 px-2 text-xs font-bold text-gray-700 uppercase">Amount</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {selectedInvoiceOrder.items?.map((item, idx) => (
+                                            <tr key={idx} className="border-b border-gray-100">
+                                                <td className="py-3 px-2 text-sm text-gray-900">{item.menuItem?.name || item.name}</td>
+                                                <td className="py-3 px-2 text-sm text-center text-gray-700">{item.quantity}</td>
+                                                <td className="py-3 px-2 text-sm text-right text-gray-700">{formatCurrency(item.price)}</td>
+                                                <td className="py-3 px-2 text-sm text-right font-medium text-gray-900">{formatCurrency(item.price * item.quantity)}</td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            {/* Summary Section */}
+                            <div className="mb-6 pb-6 border-t border-gray-200 pt-6">
+                                <div className="flex justify-between mb-2">
+                                    <span className="text-gray-600">Subtotal</span>
+                                    <span className="font-medium text-gray-900">{formatCurrency(selectedInvoiceOrder.total)}</span>
+                                </div>
+                                {selectedInvoiceOrder.discount > 0 && (
+                                    <div className="flex justify-between mb-2 text-red-600">
+                                        <span>Discount</span>
+                                        <span className="font-medium">-{formatCurrency(selectedInvoiceOrder.discount)}</span>
+                                    </div>
+                                )}
+                                <div className="flex justify-between items-center pt-4 border-t border-gray-200">
+                                    <span className="font-bold text-gray-900">Total Amount</span>
+                                    <span className="text-2xl font-bold text-green-600">{formatCurrency(selectedInvoiceOrder.total)}</span>
+                                </div>
+                            </div>
+
+                            {/* Payment Info */}
+                            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                                <div className="flex justify-between mb-2">
+                                    <span className="text-sm font-medium text-gray-600">Payment Method</span>
+                                    <span className="text-sm font-bold text-gray-900 capitalize">{selectedInvoiceOrder.paymentMethod || 'Cash'}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                    <span className="text-sm font-medium text-gray-600">Status</span>
+                                    <span className={`text-sm font-bold ${selectedInvoiceOrder.paymentStatus === 'paid' ? 'text-green-600' : 'text-red-600'} capitalize`}>
+                                        {selectedInvoiceOrder.paymentStatus}
+                                    </span>
+                                </div>
+                            </div>
+
+                            {/* Footer Note */}
+                            <p className="text-xs text-gray-500 text-center border-t border-gray-200 pt-4">
+                                Thank you for your business! Please keep this invoice for your records.
+                            </p>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="px-6 py-4 border-t border-gray-200 bg-gray-50 flex gap-2 justify-end">
+                            <button
+                                onClick={() => {
+                                    const printWindow = window.open('', '', 'width=800,height=600');
+                                    const htmlContent = `
+                                        <!DOCTYPE html>
+                                        <html>
+                                        <head>
+                                            <title>Invoice ${selectedInvoiceOrder.orderNumber}</title>
+                                            <style>
+                                                body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+                                                .invoice { max-width: 600px; margin: 0 auto; }
+                                                .header { text-align: center; margin-bottom: 30px; border-bottom: 2px solid #333; padding-bottom: 20px; }
+                                                .header h1 { margin: 0; font-size: 28px; }
+                                                .header p { margin: 5px 0; color: #666; }
+                                                table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+                                                th, td { padding: 10px; text-align: left; border-bottom: 1px solid #ddd; }
+                                                th { background-color: #f5f5f5; font-weight: bold; }
+                                                .amount { text-align: right; }
+                                                .summary { margin: 30px 0; padding: 20px; border: 1px solid #ddd; }
+                                                .summary-row { display: flex; justify-content: space-between; margin-bottom: 10px; }
+                                                .total { font-size: 20px; font-weight: bold; color: #2ecc71; }
+                                                .footer { text-align: center; margin-top: 30px; color: #999; font-size: 12px; }
+                                            </style>
+                                        </head>
+                                        <body>
+                                            <div class="invoice">
+                                                <div class="header">
+                                                    <h1>INVOICE</h1>
+                                                    <p>Order #${selectedInvoiceOrder.orderNumber}</p>
+                                                    <p>Date: ${formatDate(selectedInvoiceOrder.createdAt)}</p>
+                                                </div>
+                                                <div style="margin-bottom: 20px;">
+                                                    <p><strong>Customer:</strong> ${selectedInvoiceOrder.customerDetails?.name || 'Walk-in'}</p>
+                                                    <p><strong>Table:</strong> ${selectedInvoiceOrder.table?.tableNumber ? 'Table ' + selectedInvoiceOrder.table.tableNumber : 'N/A'}</p>
+                                                    <p><strong>Phone:</strong> ${selectedInvoiceOrder.customerDetails?.phone || 'N/A'}</p>
+                                                </div>
+                                                <table>
+                                                    <tr>
+                                                        <th>Item</th>
+                                                        <th>Qty</th>
+                                                        <th>Rate</th>
+                                                        <th class="amount">Amount</th>
+                                                    </tr>
+                                                    ${selectedInvoiceOrder.items?.map(item => `
+                                                        <tr>
+                                                            <td>${item.menuItem?.name || item.name}</td>
+                                                            <td>${item.quantity}</td>
+                                                            <td>${formatCurrency(item.price)}</td>
+                                                            <td class="amount">${formatCurrency(item.price * item.quantity)}</td>
+                                                        </tr>
+                                                    `).join('')}
+                                                </table>
+                                                <div class="summary">
+                                                    <div class="summary-row">
+                                                        <span>Subtotal</span>
+                                                        <span>${formatCurrency(selectedInvoiceOrder.total)}</span>
+                                                    </div>
+                                                    <div class="summary-row total">
+                                                        <span>Total Amount</span>
+                                                        <span>${formatCurrency(selectedInvoiceOrder.total)}</span>
+                                                    </div>
+                                                    <div class="summary-row">
+                                                        <span>Payment Method</span>
+                                                        <span>${(selectedInvoiceOrder.paymentMethod || 'Cash').toUpperCase()}</span>
+                                                    </div>
+                                                    <div class="summary-row">
+                                                        <span>Status</span>
+                                                        <span>${selectedInvoiceOrder.paymentStatus.toUpperCase()}</span>
+                                                    </div>
+                                                </div>
+                                                <div class="footer">
+                                                    <p>Thank you for your business!</p>
+                                                </div>
+                                            </div>
+                                        </body>
+                                        </html>
+                                    `;
+                                    printWindow.document.write(htmlContent);
+                                    printWindow.document.close();
+                                    setTimeout(() => printWindow.print(), 250);
+                                }}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
+                            >
+                                <Printer className="w-4 h-4" />
+                                Print Invoice
+                            </button>
+                            <button
+                                onClick={() => setSelectedInvoiceOrder(null)}
+                                className="px-4 py-2 bg-gray-200 text-gray-900 rounded-lg hover:bg-gray-300 transition-colors text-sm font-medium"
+                            >
+                                Close
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}        </div>
     );
 }
