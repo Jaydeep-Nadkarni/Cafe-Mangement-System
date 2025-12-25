@@ -24,9 +24,31 @@ const paymentSchema = new mongoose.Schema(
     },
     paymentMethod: {
       type: String,
-      enum: ['cash', 'card', 'upi', 'wallet', 'online'],
+      enum: ['cash', 'card', 'upi', 'wallet', 'online', 'mixed'],
       required: [true, 'Payment method is required']
     },
+    isSplit: {
+      type: Boolean,
+      default: false
+    },
+    splitType: {
+      type: String,
+      enum: [null, 'equal', 'item'],
+      default: null
+    },
+    splitPayments: [{
+      method: {
+        type: String,
+        enum: ['cash', 'card', 'upi', 'wallet', 'online'],
+        required: true
+      },
+      amount: {
+        type: Number,
+        required: true
+      },
+      transactionId: String,
+      notes: String
+    }],
     paymentGateway: {
       type: String,
       enum: ['razorpay', 'stripe', 'paypal', 'manual'],

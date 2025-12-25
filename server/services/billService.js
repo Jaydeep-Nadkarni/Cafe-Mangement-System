@@ -40,6 +40,9 @@ const generateThermalBill = (order) => {
       // --- Order Info ---
       doc.font('Helvetica').fontSize(8);
       doc.text(`Order #: ${order._id.toString().slice(-6).toUpperCase()}`);
+      if (order.isSplitBill) {
+        doc.font('Helvetica-Bold').text(`SPLIT BILL: ${order.splitIndex} of ${order.totalSplits}`);
+      }
       const now = new Date();
       const day = String(now.getDate()).padStart(2, '0');
       const month = String(now.getMonth() + 1).padStart(2, '0');
@@ -110,6 +113,68 @@ const generateThermalBill = (order) => {
   });
 };
 
+/**
+ * Generate multiple split bill PDFs
+ * @param {Object} order - Original order
+ * @param {String} splitType - 'equal' or 'item'
+ * @param {Number} splitCount - Number of splits for 'equal'
+ * @param {Array} splitItems - Array of item arrays for 'item' split
+ * @returns {Promise<Array>} - Array of PDF buffers
+ */
+const generateSplitBills = async (order, splitType, splitCount = 2, splitItems = []) => {
+  const bills = [];
+
+  if (splitType === 'equal') {
+    const amountPerPerson = order.total / splitCount;
+    const subtotalPerPerson = order.subtotal / splitCount;
+    const taxPerPerson = order.tax / splitCount;
+    const discountPerPerson = order.discount / splitCount;
+
+    for (let i = 1; i <= splitCount; i++) {
+      const splitOrder = {
+        ...order,
+        _id: `${order._id}-split-${i}`,
+        subtotal: subtotalPerPerson,
+        tax: taxPerPerson,
+        discount: discountPerPerson,
+        total: amountPerPerson,
+        isSplitBill: true,
+        splitIndex: i,
+        totalSplits: splitCount
+      };
+      const buffer = await generateThermalBill(splitOrder);
+      bills.push(buffer);
+    }
+  } else if (splitType === 'item') {
+    for (let i = 0; i < splitItems.length; i++) {
+      const items = splitItems[i];
+      const subtotal = items.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+      const ratio = order.subtotal > 0 ? subtotal / order.subtotal : 0;
+      const tax = order.tax * ratio;
+      const discount = order.discount * ratio;
+      const total = subtotal + tax - discount;
+
+      const splitOrder = {
+        ...order,
+        _id: `${order._id}-split-${i + 1}`,
+        items,
+        subtotal,
+        tax,
+        discount,
+        total,
+        isSplitBill: true,
+        splitIndex: i + 1,
+        totalSplits: splitItems.length
+      };
+      const buffer = await generateThermalBill(splitOrder);
+      bills.push(buffer);
+    }
+  }
+
+  return bills;
+};
+
 module.exports = {
-  generateThermalBill
+  generateThermalBill,
+  generateSplitBills
 };

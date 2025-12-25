@@ -11,6 +11,7 @@ import { formatCurrency } from '../../../utils/formatCurrency';
 import ConfirmationModal from './ConfirmationModal';
 import Invoice from './Invoice';
 import OrderManagement from './OrderManagement';
+import OrderModal from './OrderModal';
 
 const getTimeSince = (dateString) => {
   if (!dateString) return '';
@@ -29,14 +30,26 @@ export default function Tables({ tables, onRefresh }) {
   const [showModal, setShowModal] = useState(false);
   const [editingTable, setEditingTable] = useState(null);
   const [selectedTable, setSelectedTable] = useState(null);
+  const [selectedOrderForModal, setSelectedOrderForModal] = useState(null);
+  const [showOrderModal, setShowOrderModal] = useState(false);
   const [loading, setLoading] = useState(false);
   const [showInvoice, setShowInvoice] = useState(null);
   const [moveKOT, setMoveKOT] = useState(false);
   const [viewMode, setViewMode] = useState('grid'); // grid, list, compact
   const [showReservationModal, setShowReservationModal] = useState(false);
+  const [reservationForm, setReservationForm] = useState({
+    tableNumber: '',
+    reservedBy: '',
+    reservedPhone: '',
+    reservationTime: '',
+    reservationNotes: ''
+  });
+  const [locations, setLocations] = useState([]);
   const [showQRModal, setShowQRModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [showOrderManagement, setShowOrderManagement] = useState(null);
+
+  const branchId = tables?.[0]?.branch?._id || tables?.[0]?.branch || null;
 
   const [modalState, setModalState] = useState({
     isOpen: false,
@@ -59,6 +72,20 @@ export default function Tables({ tables, onRefresh }) {
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
+  // Load locations for suggestions
+  useEffect(() => {
+    fetchLocations();
+  }, []);
+
+  const fetchLocations = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/branch/tables/locations`);
+      setLocations(res.data);
+    } catch (err) {
+      console.error('Error fetching locations:', err);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       tableNumber: '',
@@ -76,7 +103,7 @@ export default function Tables({ tables, onRefresh }) {
     setFormData({
       tableNumber: table.tableNumber,
       capacity: table.capacity,
-      location: table.location === 'A/C' || table.location === 'Bar' || table.location === 'Indoor' ? 'Indoor' : 'Outdoor',
+      location: table.location || 'Indoor',
       notes: table.notes || '',
       currentOccupancy: table.currentOccupancy || 0
     });
@@ -137,16 +164,16 @@ export default function Tables({ tables, onRefresh }) {
   const getStatusStyles = (status) => {
     switch (status) {
       case 'occupied': return {
-        card: 'bg-rose-50 border-rose-200 shadow-rose-100',
-        text: 'text-rose-700',
-        dot: 'bg-rose-500',
-        badge: 'bg-rose-100 text-rose-700'
+        card: 'bg-red-50 border-red-200 shadow-red-100',
+        text: 'text-red-700',
+        dot: 'bg-red-500',
+        badge: 'bg-red-100 text-red-700'
       };
       case 'available': return {
-        card: 'bg-emerald-50 border-emerald-200 shadow-emerald-100',
-        text: 'text-emerald-700',
-        dot: 'bg-emerald-500',
-        badge: 'bg-emerald-100 text-emerald-700'
+        card: 'bg-slate-50 border-slate-200 shadow-slate-100',
+        text: 'text-slate-700',
+        dot: 'bg-slate-500',
+        badge: 'bg-slate-100 text-slate-700'
       };
       case 'reserved': return {
         card: 'bg-amber-50 border-amber-200 shadow-amber-100',
@@ -155,10 +182,10 @@ export default function Tables({ tables, onRefresh }) {
         badge: 'bg-amber-100 text-amber-700'
       };
       case 'paid': return {
-        card: 'bg-blue-50 border-blue-200 shadow-blue-100',
-        text: 'text-blue-700',
-        dot: 'bg-blue-500',
-        badge: 'bg-blue-100 text-blue-700'
+        card: 'bg-emerald-50 border-emerald-200 shadow-emerald-100',
+        text: 'text-emerald-700',
+        dot: 'bg-emerald-500',
+        badge: 'bg-emerald-100 text-emerald-700'
       };
       case 'printed': return {
         card: 'bg-indigo-50 border-indigo-200 shadow-indigo-100',
@@ -183,9 +210,10 @@ export default function Tables({ tables, onRefresh }) {
   }, [tables, searchQuery]);
 
   const groupedTables = useMemo(() => {
-    const groups = { 'Indoor': [], 'Outdoor': [] };
+    const groups = {};
     filteredTables.forEach(table => {
-      const loc = table.location === 'A/C' || table.location === 'Bar' || table.location === 'Indoor' ? 'Indoor' : 'Outdoor';
+      const loc = table.location || 'Other';
+      if (!groups[loc]) groups[loc] = [];
       groups[loc].push(table);
     });
     return groups;
@@ -304,11 +332,11 @@ export default function Tables({ tables, onRefresh }) {
         {/* Legend */}
         <div className="flex flex-wrap items-center gap-6 mt-6 pt-6 border-t border-slate-100">
           {[
-            { label: 'Available', color: 'bg-emerald-500' },
-            { label: 'Occupied', color: 'bg-rose-500' },
+            { label: 'Available', color: 'bg-slate-500' },
+            { label: 'Occupied', color: 'bg-red-500' },
             { label: 'Reserved', color: 'bg-amber-500' },
             { label: 'Printed', color: 'bg-indigo-500' },
-            { label: 'Paid', color: 'bg-blue-500' }
+            { label: 'Paid', color: 'bg-emerald-500' }
           ].map(item => (
             <div key={item.label} className="flex items-center gap-2">
               <div className={`w-2.5 h-2.5 rounded-full ${item.color}`} />
@@ -408,17 +436,43 @@ export default function Tables({ tables, onRefresh }) {
                       {/* Hover Actions (Grid Only) */}
                       {viewMode === 'grid' && (
                         <div className="absolute inset-0 bg-white/80 backdrop-blur-[2px] opacity-0 group-hover:opacity-100 transition-all rounded-2xl flex items-center justify-center gap-3">
+                          {/* Print Bill - Only for occupied tables */}
+                          {isOccupied && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); handleViewBill(e, table); }}
+                              className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-600 hover:text-blue-600 transition-colors"
+                              title="Print Bill"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* View Order - Only for occupied tables */}
+                          {isOccupied && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setShowOrderManagement(table); }}
+                              className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-600 hover:text-emerald-600 transition-colors"
+                              title="View Order"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Create Order - Only for available tables */}
+                          {!isOccupied && table.status !== 'reserved' && (
+                            <button 
+                              onClick={(e) => { e.stopPropagation(); setShowOrderManagement(table); }}
+                              className="p-2.5 bg-emerald-500 rounded-xl shadow-lg text-white hover:bg-emerald-600 transition-colors"
+                              title="Create Order"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          )}
+                          {/* Edit Table - Always shown */}
                           <button 
                             onClick={(e) => { e.stopPropagation(); handleEdit(e, table); }}
-                            className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-600 hover:text-emerald-600 transition-colors"
+                            className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-600 hover:text-amber-600 transition-colors"
+                            title="Edit Table"
                           >
                             <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button 
-                            onClick={(e) => { e.stopPropagation(); handleDelete(e, table._id); }}
-                            className="p-2.5 bg-white rounded-xl shadow-lg border border-slate-100 text-slate-600 hover:text-rose-600 transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
                           </button>
                         </div>
                       )}
@@ -431,7 +485,7 @@ export default function Tables({ tables, onRefresh }) {
         ))}
       </div>
 
-      {/* Reservation Modal (Dummy) */}
+      {/* Reservation Modal */}
       {showReservationModal && (
         <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 animate-in zoom-in-95 duration-200">
@@ -446,15 +500,98 @@ export default function Tables({ tables, onRefresh }) {
                 <X className="w-6 h-6 text-slate-400" />
               </button>
             </div>
-            <div className="space-y-4">
-              <p className="text-slate-500 font-medium">This is a placeholder for the reservation management system. You can integrate your booking logic here.</p>
+            
+            <form onSubmit={async (e) => {
+              e.preventDefault();
+              setLoading(true);
+              try {
+                const table = tables.find(t => t.tableNumber === parseInt(reservationForm.tableNumber));
+                if (!table) {
+                  alert('Table not found');
+                  return;
+                }
+                await axios.put(`${API_URL}/api/branch/tables/${table._id}`, {
+                  status: 'reserved',
+                  reservation: {
+                    isReserved: true,
+                    reservedBy: reservationForm.reservedBy,
+                    reservedPhone: reservationForm.reservedPhone,
+                    reservationTime: reservationForm.reservationTime,
+                    reservationNotes: reservationForm.reservationNotes
+                  }
+                });
+                setShowReservationModal(false);
+                setReservationForm({ tableNumber: '', reservedBy: '', reservedPhone: '', reservationTime: '', reservationNotes: '' });
+                onRefresh();
+              } catch (error) {
+                console.error('Failed to reserve table:', error);
+              } finally {
+                setLoading(false);
+              }
+            }} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Table No.</label>
+                  <input
+                    required
+                    type="number"
+                    value={reservationForm.tableNumber}
+                    onChange={(e) => setReservationForm({ ...reservationForm, tableNumber: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-rose-500 outline-none font-bold text-slate-800"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Time</label>
+                  <input
+                    required
+                    type="datetime-local"
+                    value={reservationForm.reservationTime}
+                    onChange={(e) => setReservationForm({ ...reservationForm, reservationTime: e.target.value })}
+                    className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-rose-500 outline-none font-bold text-slate-800 text-xs"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Customer Name</label>
+                <input
+                  required
+                  type="text"
+                  value={reservationForm.reservedBy}
+                  onChange={(e) => setReservationForm({ ...reservationForm, reservedBy: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-rose-500 outline-none font-bold text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Phone Number</label>
+                <input
+                  required
+                  type="tel"
+                  value={reservationForm.reservedPhone}
+                  onChange={(e) => setReservationForm({ ...reservationForm, reservedPhone: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-rose-500 outline-none font-bold text-slate-800"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">Notes</label>
+                <textarea
+                  rows="2"
+                  value={reservationForm.reservationNotes}
+                  onChange={(e) => setReservationForm({ ...reservationForm, reservationNotes: e.target.value })}
+                  className="w-full px-4 py-3 bg-slate-50 border-2 border-slate-100 rounded-xl focus:border-rose-500 outline-none font-bold text-slate-800 resize-none"
+                />
+              </div>
+
               <button 
-                onClick={() => setShowReservationModal(false)}
-                className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all"
+                type="submit"
+                disabled={loading}
+                className="w-full py-4 bg-rose-600 text-white rounded-2xl font-black shadow-lg shadow-rose-100 hover:bg-rose-700 transition-all disabled:opacity-50"
               >
-                Got it
+                {loading ? 'Reserving...' : 'Confirm Reservation'}
               </button>
-            </div>
+            </form>
           </div>
         </div>
       )}
@@ -601,11 +738,11 @@ export default function Tables({ tables, onRefresh }) {
                 </div>
               </div>
 
-              {/* Active Order Summary */}
+              {/* Active Order Summary & Items */}
               {selectedTable.currentOrders && selectedTable.currentOrders.length > 0 && (
                 <div className="bg-slate-50 rounded-3xl p-6 border border-slate-100">
                   <h3 className="text-sm font-black text-slate-800 uppercase tracking-tight mb-4">Active Session</h3>
-                  <div className="space-y-3">
+                  <div className="space-y-3 mb-6">
                     <div className="flex justify-between items-center">
                       <span className="text-sm font-bold text-slate-500">Total Orders</span>
                       <span className="text-sm font-black text-slate-800">{selectedTable.currentOrders.length}</span>
@@ -618,6 +755,33 @@ export default function Tables({ tables, onRefresh }) {
                         )}
                       </span>
                     </div>
+                  </div>
+
+                  {/* Clickable Order Items */}
+                  <div className="space-y-2 border-t border-slate-200 pt-4">
+                    {selectedTable.currentOrders.map((order) => (
+                      <button
+                        key={order._id}
+                        onClick={() => {
+                          setSelectedOrderForModal(order);
+                          setShowOrderModal(true);
+                        }}
+                        className="w-full text-left p-3 bg-white rounded-xl hover:bg-emerald-50 border border-slate-200 hover:border-emerald-400 transition-all cursor-pointer group"
+                      >
+                        <div className="flex justify-between items-start">
+                          <div className="flex-1">
+                            <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Order #{order.orderNumber || order._id.slice(-6)}</div>
+                            <div className="text-sm font-bold text-slate-800 mt-1">{order.items?.length || 0} items</div>
+                          </div>
+                          <div className="text-right">
+                            <div className={`text-xs font-bold px-2 py-1 rounded-full ${order.paymentStatus === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'}`}>
+                              {order.paymentStatus}
+                            </div>
+                            <div className="text-sm font-black text-slate-800 mt-1">{formatCurrency(order.total)}</div>
+                          </div>
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 </div>
               )}
@@ -663,22 +827,16 @@ export default function Tables({ tables, onRefresh }) {
 
               <div className="space-y-2">
                 <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">Location</label>
-                <div className="grid grid-cols-2 gap-3">
-                  {['Indoor', 'Outdoor'].map(loc => (
-                    <button
-                      key={loc}
-                      type="button"
-                      onClick={() => setFormData({ ...formData, location: loc })}
-                      className={`py-4 rounded-2xl font-black transition-all border-2 ${
-                        formData.location === loc 
-                          ? 'bg-emerald-600 text-white border-emerald-600 shadow-lg shadow-emerald-100' 
-                          : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200'
-                      }`}
-                    >
-                      {loc}
-                    </button>
-                  ))}
-                </div>
+                <input
+                  list="locations-list"
+                  value={formData.location}
+                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                  className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-100 rounded-2xl focus:ring-4 focus:ring-emerald-500/10 focus:border-emerald-500 transition-all outline-none font-bold text-slate-800"
+                  placeholder="e.g. Indoor, Outdoor, Rooftop..."
+                />
+                <datalist id="locations-list">
+                  {locations.map(loc => <option key={loc} value={loc} />)}
+                </datalist>
               </div>
 
               <div className="space-y-2">
@@ -732,6 +890,24 @@ export default function Tables({ tables, onRefresh }) {
           table={showOrderManagement} 
           onClose={() => setShowOrderManagement(null)} 
           onRefresh={onRefresh}
+        />
+      )}
+
+      {/* Order Modal - Clickable from table orders */}
+      {showOrderModal && selectedOrderForModal && (
+        <OrderModal 
+          isOpen={showOrderModal}
+          order={selectedOrderForModal}
+          branchId={branchId}
+          onClose={() => {
+            setShowOrderModal(false);
+            setSelectedOrderForModal(null);
+          }}
+          onUpdate={() => {
+            setShowOrderModal(false);
+            setSelectedOrderForModal(null);
+            onRefresh?.();
+          }}
         />
       )}
     </div>

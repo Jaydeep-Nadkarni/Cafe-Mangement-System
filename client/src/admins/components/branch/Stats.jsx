@@ -10,7 +10,10 @@ import {
   AlertCircle,
   Activity,
   RefreshCw,
-  Download
+  Download,
+  Percent,
+  Trash2,
+  Gift
 } from 'lucide-react';
 import {
   LineChart, Line, BarChart, Bar, AreaChart, Area,
@@ -109,6 +112,12 @@ export default function Stats({ branch }) {
   const [peakHours, setPeakHours] = useState([]);
   const [revenuePattern, setRevenuePattern] = useState([]);
   const [orderDistribution, setOrderDistribution] = useState([]);
+  
+  // New analytics data for discounts, complementary, and cancellations
+  const [discountData, setDiscountData] = useState(null);
+  const [complementaryData, setComplementaryData] = useState(null);
+  const [cancellationData, setCancellationData] = useState(null);
+  const [couponGrowthData, setCouponGrowthData] = useState(null);
 
   // Chart refs for export
   const revenueChartRef = useRef(null);
@@ -191,6 +200,45 @@ export default function Stats({ branch }) {
         revenuePatternRes = { data: { pattern: [] } };
       }
 
+      // Fetch new analytics data
+      let discountRes = null;
+      let complementaryRes = null;
+      let cancellationRes = null;
+      let couponGrowthRes = null;
+
+      try {
+        discountRes = await axios.get(`${API_URL}/api/branch/analytics/discounts?range=${timeRange}`, { headers });
+        console.log('[Stats] Discount Analytics:', discountRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch discount analytics:', err.message);
+        discountRes = { data: { totalDiscounts: 0, orderCount: 0, avgDiscountPerOrder: 0, discountByCoupon: [], trends: [] } };
+      }
+
+      try {
+        complementaryRes = await axios.get(`${API_URL}/api/branch/analytics/complementary?range=${timeRange}`, { headers });
+        console.log('[Stats] Complementary Analytics:', complementaryRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch complementary analytics:', err.message);
+        complementaryRes = { data: { totalComplementary: 0, count: 0, avgComplementaryAmount: 0, complementaryByReason: [], trends: [] } };
+      }
+
+      try {
+        cancellationRes = await axios.get(`${API_URL}/api/branch/analytics/cancellations?range=${timeRange}`, { headers });
+        console.log('[Stats] Cancellation Analytics:', cancellationRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch cancellation analytics:', err.message);
+        cancellationRes = { data: { totalCancelledOrders: 0, totalCancelledAmount: 0, cancellationRate: 0, cancellationByReason: [], trends: [] } };
+      }
+
+      try {
+        const couponRange = timeRange === 'today' || timeRange === '1h' || timeRange === '6h' || timeRange === '15min' ? '7d' : timeRange;
+        couponGrowthRes = await axios.get(`${API_URL}/api/branch/analytics/coupon-growth?range=${couponRange}`, { headers });
+        console.log('[Stats] Coupon Growth Analytics:', couponGrowthRes.data);
+      } catch (err) {
+        console.warn('[Stats] Failed to fetch coupon growth analytics:', err.message);
+        couponGrowthRes = { data: { totalCouponUsers: 0, newCustomers: 0, returningCustomers: 0, returnRate: 0, growthTrend: [] } };
+      }
+
       // Update state with whatever data we have
       setRealtimeStats(realtimeRes.data);
       setPaymentBreakdown(revenueByPaymentRes.data.breakdown || []);
@@ -230,6 +278,12 @@ export default function Stats({ branch }) {
       });
 
       setRevenuePattern(formattedPattern);
+
+      // Set new analytics data
+      setDiscountData(discountRes.data);
+      setComplementaryData(complementaryRes.data);
+      setCancellationData(cancellationRes.data);
+      setCouponGrowthData(couponGrowthRes.data);
 
       // Generate order distribution for box plot
       const orders = realtimeRes.data?.recentOrders || [];
@@ -1267,6 +1321,244 @@ export default function Stats({ branch }) {
           ) : (
             <div className="h-[250px] flex items-center justify-center text-gray-400">
               No activity data for this period
+            </div>
+          )}
+        </ChartCard>
+      </Section>
+
+      {/* Section 6: Discounts & Complementary Items */}
+      <Section title="Discounts & Complementary Analysis" icon={<Percent className="w-5 h-5" />}>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+          {/* Discount KPIs */}
+          <KPICard
+            label="Total Discounts"
+            value={formatCurrency(discountData?.totalDiscounts || 0)}
+            icon={<Percent className="w-5 h-5 text-orange-600" />}
+            valueClassName="text-orange-600"
+          />
+          <KPICard
+            label="Avg Discount/Order"
+            value={formatCurrency(discountData?.avgDiscountPerOrder || 0)}
+            icon={<TrendingUp className="w-5 h-5 text-orange-600" />}
+          />
+          <KPICard
+            label="Discounted Orders"
+            value={discountData?.orderCount || 0}
+            icon={<ShoppingBag className="w-5 h-5 text-orange-600" />}
+          />
+
+          {/* Complementary KPIs */}
+          <KPICard
+            label="Complementary Amount"
+            value={formatCurrency(complementaryData?.totalComplementary || 0)}
+            icon={<Gift className="w-5 h-5 text-pink-600" />}
+            valueClassName="text-pink-600"
+          />
+          <KPICard
+            label="Avg Complementary"
+            value={formatCurrency(complementaryData?.avgComplementaryAmount || 0)}
+            icon={<TrendingUp className="w-5 h-5 text-pink-600" />}
+          />
+          <KPICard
+            label="Complementary Orders"
+            value={complementaryData?.count || 0}
+            icon={<ShoppingBag className="w-5 h-5 text-pink-600" />}
+          />
+
+          {/* Cancellation KPIs */}
+          <KPICard
+            label="Cancelled Orders"
+            value={cancellationData?.totalCancelledOrders || 0}
+            icon={<Trash2 className="w-5 h-5 text-red-600" />}
+            valueClassName="text-red-600"
+          />
+          <KPICard
+            label="Cancellation Rate"
+            value={`${(cancellationData?.cancellationRate || 0).toFixed(1)}%`}
+            icon={<AlertCircle className="w-5 h-5 text-red-600" />}
+          />
+          <KPICard
+            label="Cancelled Amount"
+            value={formatCurrency(cancellationData?.totalCancelledAmount || 0)}
+            icon={<DollarSign className="w-5 h-5 text-red-600" />}
+          />
+        </div>
+
+        {/* Discount Trends */}
+        <ChartCard title="Discount Trends" className="lg:col-span-2 mb-6">
+          {discountData?.trends && discountData.trends.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={discountData.trends}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="date" stroke="#666" />
+                <YAxis stroke="#666" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                  }}
+                  formatter={(value) => [formatCurrency(value), 'Amount']}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="amount"
+                  stroke="#f59e0b"
+                  strokeWidth={2}
+                  dot={{ fill: '#f59e0b', r: 4 }}
+                  name="Total Discount"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No discount data for this period
+            </div>
+          )}
+        </ChartCard>
+
+        {/* Cancellation Reasons Breakdown */}
+        <ChartCard title="Cancellation Reasons Breakdown" className="lg:col-span-2">
+          {cancellationData?.cancellationByReason && cancellationData.cancellationByReason.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={cancellationData.cancellationByReason}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="reason" stroke="#666" angle={-45} textAnchor="end" height={100} />
+                <YAxis stroke="#666" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                  }}
+                  formatter={(value) => [value, 'Count']}
+                />
+                <Legend />
+                <Bar dataKey="count" fill="#ef4444" name="Order Count" radius={[8, 8, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No cancellation data for this period
+            </div>
+          )}
+        </ChartCard>
+
+        {/* Complementary Reasons Breakdown */}
+        <ChartCard title="Complementary Items Breakdown" className="lg:col-span-2">
+          {complementaryData?.complementaryByReason && complementaryData.complementaryByReason.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={complementaryData.complementaryByReason}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ reason, count, percentage }) => 
+                    `${reason}: ${count} (${percentage?.toFixed(0) || 0}%)`
+                  }
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="count"
+                >
+                  {complementaryData.complementaryByReason.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={ITEM_COLORS[index % ITEM_COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip
+                  formatter={(value) => [value, 'Count']}
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                  }}
+                />
+              </PieChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No complementary data for this period
+            </div>
+          )}
+        </ChartCard>
+      </Section>
+
+      {/* Section 7: Coupon Campaign Growth */}
+      <Section title="Coupon Campaigns & Customer Growth" icon={<TrendingUp className="w-5 h-5" />}>
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-6">
+          <KPICard
+            label="Coupon Users"
+            value={couponGrowthData?.totalCouponUsers || 0}
+            icon={<Users className="w-5 h-5 text-purple-600" />}
+          />
+          <KPICard
+            label="New Customers"
+            value={couponGrowthData?.newCustomers || 0}
+            icon={<TrendingUp className="w-5 h-5 text-green-600" />}
+          />
+          <KPICard
+            label="Returning Customers"
+            value={couponGrowthData?.returningCustomers || 0}
+            icon={<Users className="w-5 h-5 text-blue-600" />}
+          />
+          <KPICard
+            label="Return Rate"
+            value={`${(couponGrowthData?.returnRate || 0).toFixed(1)}%`}
+            icon={<Percent className="w-5 h-5 text-indigo-600" />}
+          />
+        </div>
+
+        {/* Customer Growth Trend */}
+        <ChartCard title="Customer Growth After Coupon Campaigns" className="lg:col-span-2">
+          {couponGrowthData?.growthTrend && couponGrowthData.growthTrend.length > 0 ? (
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={couponGrowthData.growthTrend}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#e0e0e0" />
+                <XAxis dataKey="date" stroke="#666" />
+                <YAxis stroke="#666" />
+                <Tooltip
+                  contentStyle={{
+                    backgroundColor: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    boxShadow: '0 10px 15px -3px rgba(0,0,0,0.1)'
+                  }}
+                />
+                <Legend />
+                <Line
+                  type="monotone"
+                  dataKey="uniqueCustomers"
+                  stroke="#8b5cf6"
+                  strokeWidth={2}
+                  dot={{ fill: '#8b5cf6', r: 4 }}
+                  name="Unique Customers"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="orderCount"
+                  stroke="#06b6d4"
+                  strokeWidth={2}
+                  dot={{ fill: '#06b6d4', r: 4 }}
+                  name="Order Count"
+                />
+                <Line
+                  type="monotone"
+                  dataKey="totalRevenue"
+                  stroke="#10b981"
+                  strokeWidth={2}
+                  dot={{ fill: '#10b981', r: 4 }}
+                  name="Revenue"
+                  yAxisId="right"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="h-[300px] flex items-center justify-center text-gray-400">
+              No coupon campaign data for this period
             </div>
           )}
         </ChartCard>
