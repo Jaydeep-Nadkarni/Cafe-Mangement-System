@@ -65,6 +65,14 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
     gstApplicable: false,
     description: ''
   });
+  
+  const [showGSTNField, setShowGSTNField] = useState(false);
+  const [showTagsField, setShowTagsField] = useState(false);
+  const [showDiscountField, setShowDiscountField] = useState(false);
+  const [showComplementaryField, setShowComplementaryField] = useState(false);
+  const [menuItems, setMenuItems] = useState([]);
+  const [showInventoryModal, setShowInventoryModal] = useState(false);
+  const [selectedMenuItem, setSelectedMenuItem] = useState(null);
 
   const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000';
 
@@ -72,6 +80,7 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
   useEffect(() => {
     if (isOpen && branchId) {
       fetchBranchProfile();
+      fetchMenuItems();
     }
   }, [isOpen, branchId]);
 
@@ -110,6 +119,15 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
       setBranchGST(res.data.gstNumber || '');
     } catch (err) {
       console.error('Error fetching branch profile:', err);
+    }
+  };
+  
+  const fetchMenuItems = async () => {
+    try {
+      const response = await axios.get(`${API_URL}/api/branch/menu`);
+      setMenuItems(response.data.filter(item => item.isAvailable));
+    } catch (error) {
+      console.error('Error fetching menu items:', error);
     }
   };
 
@@ -417,9 +435,9 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex overflow-hidden">
         
         {/* Left Side - Order Items */}
-        <div className="flex-1 flex flex-col border-r border-gray-100">
+        <div className="flex-1 flex flex-col border-r border-gray-100 overflow-hidden">
           {/* Left Header */}
-          <div className="p-6 border-b border-gray-100">
+          <div className="p-6 border-b border-gray-100 flex-shrink-0">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-xl font-bold text-gray-900">Order #{order.orderNumber}</h2>
@@ -523,9 +541,9 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
         </div>
 
         {/* Right Side - Bill Summary */}
-        <div id="printable-bill" className="w-96 flex flex-col bg-gray-50">
+        <div id="printable-bill" className="w-96 flex flex-col bg-gray-50 overflow-hidden">
           {/* Right Header */}
-          <div className="p-6 bg-white border-b border-gray-100 flex items-center justify-between">
+          <div className="p-6 bg-white border-b border-gray-100 flex items-center justify-between flex-shrink-0">
             <h3 className="text-lg font-bold text-gray-900">Bill Summary</h3>
             <button
               onClick={onClose}
@@ -536,17 +554,56 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
           </div>
 
           {/* Customer Info */}
-          <div className="p-4 bg-white border-b border-gray-100">
+          <div className="p-4 bg-white border-b border-gray-100 flex-shrink-0 overflow-y-auto max-h-[40vh]">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Customer</p>
-              <button
-                onClick={() => setCustomerInfo({ ...customerInfo, isFavorite: !customerInfo.isFavorite })}
-                className={`p-1.5 rounded-lg transition-colors ${
-                  customerInfo.isFavorite ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'
-                }`}
-              >
-                <Star className={`w-4 h-4 ${customerInfo.isFavorite ? 'fill-current' : ''}`} />
-              </button>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowGSTNField(!showGSTNField)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    showGSTNField ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                  title="GST Number"
+                >
+                  <Hash className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowTagsField(!showTagsField)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    showTagsField ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                  title="Tags"
+                >
+                  <Tag className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowDiscountField(!showDiscountField)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    showDiscountField ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                  title="Discount"
+                >
+                  <Percent className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowComplementaryField(!showComplementaryField)}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    showComplementaryField ? 'bg-purple-100 text-purple-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                  title="Complementary"
+                >
+                  <Gift className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCustomerInfo({ ...customerInfo, isFavorite: !customerInfo.isFavorite })}
+                  className={`p-1.5 rounded-lg transition-colors ${
+                    customerInfo.isFavorite ? 'bg-yellow-100 text-yellow-600' : 'bg-gray-100 text-gray-400'
+                  }`}
+                  title="Mark as Favorite"
+                >
+                  <Star className={`w-4 h-4 ${customerInfo.isFavorite ? 'fill-current' : ''}`} />
+                </button>
+              </div>
             </div>
             
             <div className="space-y-3">
@@ -557,111 +614,119 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
               </div>
 
               {/* GSTN Field */}
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <Hash className="w-3 h-3 text-gray-400" />
-                  <label className="text-xs font-medium text-gray-600">GST Number</label>
-                </div>
-                <input
-                  type="text"
-                  value={customerInfo.gstn}
-                  onChange={(e) => setCustomerInfo({ ...customerInfo, gstn: e.target.value })}
-                  placeholder="Customer GSTIN"
-                  className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
-                />
-              </div>
-
-              {/* Tags */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Tag className="w-3 h-3 text-gray-400" />
-                  <label className="text-xs font-medium text-gray-600">Tags</label>
-                </div>
-                <div className="flex flex-wrap gap-1.5 mb-2">
-                  {customerInfo.tags.map(tag => (
-                    <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
-                      {tag}
-                      <button onClick={() => handleRemoveTag(tag)} className="hover:text-blue-900">
-                        <X className="w-3 h-3" />
-                      </button>
-                    </span>
-                  ))}
-                </div>
-                <div className="flex gap-1.5">
-                  <input
-                    type="text"
-                    value={newTag}
-                    onChange={(e) => setNewTag(e.target.value)}
-                    onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
-                    placeholder="Add tag..."
-                    className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded focus:border-emerald-500 focus:ring-0 outline-none"
-                  />
-                  <button
-                    onClick={handleAddTag}
-                    className="px-3 py-1 bg-emerald-500 text-white rounded text-xs font-medium hover:bg-emerald-600"
-                  >
-                    Add
-                  </button>
-                </div>
-              </div>
-
-              {/* Discount */}
-              <div>
-                <div className="flex items-center gap-2 mb-2">
-                  <Percent className="w-3 h-3 text-gray-400" />
-                  <label className="text-xs font-medium text-gray-600">Discount</label>
-                </div>
-                <div className="flex gap-2">
-                  <div className="flex-1 flex gap-1">
-                    <input
-                      type="number"
-                      min="0"
-                      value={discount}
-                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                      placeholder="0"
-                      className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
-                    />
-                    <select
-                      value={discountType}
-                      onChange={(e) => setDiscountType(e.target.value)}
-                      className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
-                    >
-                      <option value="amount">₹</option>
-                      <option value="percentage">%</option>
-                    </select>
+              {showGSTNField && (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <Hash className="w-3 h-3 text-gray-400" />
+                    <label className="text-xs font-medium text-gray-600">GST Number</label>
                   </div>
                   <input
                     type="text"
-                    value={couponCode}
-                    onChange={(e) => setCouponCode(e.target.value)}
-                    placeholder="Coupon"
-                    className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
+                    value={customerInfo.gstn}
+                    onChange={(e) => setCustomerInfo({ ...customerInfo, gstn: e.target.value })}
+                    placeholder="Customer GSTIN"
+                    className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
                   />
                 </div>
-              </div>
+              )}
+
+              {/* Tags */}
+              {showTagsField && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Tag className="w-3 h-3 text-gray-400" />
+                    <label className="text-xs font-medium text-gray-600">Tags</label>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {customerInfo.tags.map(tag => (
+                      <span key={tag} className="inline-flex items-center gap-1 px-2 py-0.5 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                        {tag}
+                        <button onClick={() => handleRemoveTag(tag)} className="hover:text-blue-900">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                  <div className="flex gap-1.5">
+                    <input
+                      type="text"
+                      value={newTag}
+                      onChange={(e) => setNewTag(e.target.value)}
+                      onKeyPress={(e) => e.key === 'Enter' && handleAddTag()}
+                      placeholder="Add tag..."
+                      className="flex-1 px-2 py-1 text-xs border border-gray-200 rounded focus:border-emerald-500 focus:ring-0 outline-none"
+                    />
+                    <button
+                      onClick={handleAddTag}
+                      className="px-3 py-1 bg-emerald-500 text-white rounded text-xs font-medium hover:bg-emerald-600"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Discount */}
+              {showDiscountField && (
+                <div>
+                  <div className="flex items-center gap-2 mb-2">
+                    <Percent className="w-3 h-3 text-gray-400" />
+                    <label className="text-xs font-medium text-gray-600">Discount</label>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1 flex gap-1">
+                      <input
+                        type="number"
+                        min="0"
+                        value={discount}
+                        onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
+                        placeholder="0"
+                        className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
+                      />
+                      <select
+                        value={discountType}
+                        onChange={(e) => setDiscountType(e.target.value)}
+                        className="px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
+                      >
+                        <option value="amount">₹</option>
+                        <option value="percentage">%</option>
+                      </select>
+                    </div>
+                    <input
+                      type="text"
+                      value={couponCode}
+                      onChange={(e) => setCouponCode(e.target.value)}
+                      placeholder="Coupon"
+                      className="w-20 px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-emerald-500 focus:ring-0 outline-none"
+                    />
+                  </div>
+                </div>
+              )}
 
               {/* Complementary */}
-              <div>
-                <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
-                  <input
-                    type="checkbox"
-                    checked={isComplementary}
-                    onChange={(e) => setIsComplementary(e.target.checked)}
-                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded"
-                  />
-                  <Gift className="w-4 h-4 text-purple-500" />
-                  <span className="text-xs font-medium text-gray-700">Mark as Complementary</span>
-                </label>
-                {isComplementary && (
-                  <textarea
-                    value={complementaryReason}
-                    onChange={(e) => setComplementaryReason(e.target.value)}
-                    placeholder="Reason for complementary..."
-                    className="w-full mt-2 px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-0 outline-none resize-none"
-                    rows="2"
-                  />
-                )}
-              </div>
+              {showComplementaryField && (
+                <div>
+                  <label className="flex items-center gap-2 cursor-pointer p-2 hover:bg-gray-50 rounded-lg">
+                    <input
+                      type="checkbox"
+                      checked={isComplementary}
+                      onChange={(e) => setIsComplementary(e.target.checked)}
+                      className="w-4 h-4 text-emerald-600 border-gray-300 rounded"
+                    />
+                    <Gift className="w-4 h-4 text-purple-500" />
+                    <span className="text-xs font-medium text-gray-700">Mark as Complementary</span>
+                  </label>
+                  {isComplementary && (
+                    <textarea
+                      value={complementaryReason}
+                      onChange={(e) => setComplementaryReason(e.target.value)}
+                      placeholder="Reason for complementary..."
+                      className="w-full mt-2 px-2 py-1.5 text-xs border border-gray-200 rounded-lg focus:border-purple-500 focus:ring-0 outline-none resize-none"
+                      rows="2"
+                    />
+                  )}
+                </div>
+              )}
             </div>
           </div>
 
@@ -729,13 +794,24 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
           <div className="p-4 bg-white border-t border-gray-100 no-print">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-bold text-gray-400 uppercase tracking-wide">Payment Method</p>
-              <button
-                onClick={handlePrint}
-                className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-500 transition-colors"
-                title="Print Bill"
-              >
-                <Printer className="w-4 h-4" />
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={handlePrint}
+                  className="px-3 py-1.5 bg-blue-50 text-blue-600 rounded-lg text-xs font-medium hover:bg-blue-100 flex items-center gap-1.5 transition-colors"
+                  title="Print Bill"
+                >
+                  <Printer className="w-4 h-4" />
+                  Print
+                </button>
+                <button
+                  onClick={() => alert('E-Bill feature coming soon!')}
+                  className="px-3 py-1.5 bg-purple-50 text-purple-600 rounded-lg text-xs font-medium hover:bg-purple-100 flex items-center gap-1.5 transition-colors"
+                  title="Send E-Bill"
+                >
+                  <MessageCircle className="w-4 h-4" />
+                  E-Bill
+                </button>
+              </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
               {[
@@ -1101,6 +1177,66 @@ export default function OrderModal({ isOpen, order, branchId, onClose, onUpdate 
                   {loading ? 'Processing...' : 'Cancel Order'}
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* Inventory Selection Modal */}
+      {showInventoryModal && (
+        <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[80vh] flex flex-col p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold text-gray-900">Select Menu Item</h3>
+              <button
+                onClick={() => setShowInventoryModal(false)}
+                className="p-2 hover:bg-gray-100 rounded-lg text-gray-400"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {menuItems.length === 0 ? (
+                <p className="text-center text-gray-500 py-8">No items available</p>
+              ) : (
+                <div className="grid grid-cols-2 gap-3">
+                  {menuItems.map((item) => (
+                    <button
+                      key={item._id}
+                      onClick={() => {
+                        handleAddItem({ 
+                          menuItem: item._id,
+                          name: item.name,
+                          price: item.price,
+                          gstRate: item.gstRate || 0,
+                          quantity: 1
+                        });
+                        setShowInventoryModal(false);
+                      }}
+                      className="p-4 border-2 border-gray-200 rounded-xl hover:border-emerald-500 hover:bg-emerald-50 transition-all text-left group"
+                    >
+                      {item.image && (
+                        <img 
+                          src={item.image} 
+                          alt={item.name}
+                          className="w-full h-24 object-cover rounded-lg mb-2"
+                        />
+                      )}
+                      <h4 className="font-bold text-gray-900 group-hover:text-emerald-600">{item.name}</h4>
+                      {item.description && (
+                        <p className="text-xs text-gray-500 mt-1 line-clamp-2">{item.description}</p>
+                      )}
+                      <div className="mt-2 flex items-center justify-between">
+                        <span className="text-sm font-bold text-gray-900">{formatCurrency(item.price)}</span>
+                        <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-600 rounded capitalize">
+                          {item.category}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
